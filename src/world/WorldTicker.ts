@@ -8,6 +8,13 @@ import { FluidSimulator } from './FluidSimulator';
 import { idx } from './ChunkData';
 import type { TreeType } from '../data/biomes';
 
+const IS_LOG = new Uint8Array(BlockRegistry.blocks.length);
+const IS_LEAVES = new Uint8Array(BlockRegistry.blocks.length);
+for (const b of BlockRegistry.blocks) {
+  if (b.key.endsWith('_log')) IS_LOG[b.id] = 1;
+  if (b.key.endsWith('_leaves')) IS_LEAVES[b.id] = 1;
+}
+
 const SAPLING_TREES: Record<string, TreeType> = { oak_sapling: 'oak', spruce_sapling: 'spruce', birch_sapling: 'birch', jungle_sapling: 'jungle', acacia_sapling: 'acacia', dark_oak_sapling: 'dark_oak' };
 
 /**
@@ -20,7 +27,58 @@ export class WorldTicker {
   readonly fluids = new FluidSimulator();
   randomTicksPerChunk = 12;
 
+  /** Feuilles à vérifier (décomposition après la coupe d'un tronc), avec délai aléatoire. */
+  private decay: { x: number; y: number; z: number; t: number }[] = [];
+
+  /** Branché par la session : démarre la chute animée d'un bloc. */
+  onFall: ((x: number, y: number, z: number, id: number) => void) | null = null;
+
   constructor(private spawner: EntitySpawner) {}
+
+  /** Appelé à chaque modification de bloc : un tronc retiré programme la vérification des feuilles voisines. */
+  blockChanged(e: { x: number; y: number; z: number; prev: number; id: number }, world: { getBlock(x: number, y: number, z: number): number }) {
+    if (!IS_LOG[e.prev] || e.id === e.prev) return;
+    for (let dy = -4; dy <= 5; dy++)
+      for (let dz = -5; dz <= 5; dz++)
+        for (let dx = -5; dx <= 5; dx++) {
+          const b = world.getBlock(e.x + dx, e.y + dy, e.z + dz);
+          if (b > 0 && IS_LEAVES[b]) this.decay.push({ x: e.x + dx, y: e.y + dy, z: e.z + dz, t: 1 + Math.random() * 12 });
+        }
+    if (this.decay.length > 4000) this.decay.splice(0, this.decay.length - 4000);
+  }
+
+  /** Vrai si un tronc est atteignable à moins de 6 pas à travers les feuilles (règle du jeu de référence). */
+  private connectedToLog(ctx: GameContext, x: number, y: number, z: number): boolean {
+    const w = ctx.world;
+    const seen = new Set<string>([`${x},${y},${z}`]);
+    let frontier: [number, number, number][] = [[x, y, z]];
+    for (let d = 0; d < 6 && frontier.length; d++) {
+      const next: [number, number, number][] = [];
+      for (const [cx, cy, cz] of frontier)
+        for (const [ox, oy, oz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+          const nx = cx + ox, ny = cy + oy, nz = cz + oz;
+          const k = `${nx},${ny},${nz}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          const b = w.getBlock(nx, ny, nz);
+          if (b < 0) return true; // chunk non chargé : prudence
+          if (IS_LOG[b]) return true;
+          if (IS_LEAVES[b]) next.push([nx, ny, nz]);
+        }
+      frontier = next;
+    }
+    return false;
+  }
+
+  private tryDecay(ctx: GameContext, x: number, y: number, z: number) {
+    const w = ctx.world;
+    const id = w.getBlock(x, y, z);
+    if (id <= 0 || !IS_LEAVES[id] || w.getMeta(x, y, z) & 1) return;
+    if (this.connectedToLog(ctx, x, y, z)) return;
+    w.setBlock(x, y, z, B.AIR);
+    for (const d of getDrops(id, 0, undefined)) this.spawner.spawnItem(d.id, d.count, x + 0.5, y + 0.3, z + 0.5);
+    if (Math.random() < 0.3) ctx.particles.blockBreak(x, y, z, id);
+  }
 
   tick(ctx: GameContext) {
     const w = ctx.world;
@@ -37,6 +95,18 @@ export class WorldTicker {
     }
     // 2) liquides
     this.fluids.tick(w);
+    // 2b) décomposition des feuilles (quelques vérifications par tick)
+    if (this.decay.length) {
+      let budget = 24;
+      for (let i = this.decay.length - 1; i >= 0 && budget > 0; i--) {
+        const d = this.decay[i];
+        d.t -= 0.05;
+        if (d.t > 0) continue;
+        this.decay.splice(i, 1);
+        budget--;
+        this.tryDecay(ctx, d.x, d.y, d.z);
+      }
+    }
     // 3) ticks aléatoires autour du joueur
     const p = ctx.player;
     const R = ctx.profile.simulationDistance;
@@ -66,19 +136,11 @@ export class WorldTicker {
       this.fluids.schedule(x, y, z, id);
       return;
     }
-    // gravité (chute instantanée jusqu'au premier support)
+    // gravité : le bloc devient une entité qui tombe (FallingBlocks)
     if (b.gravity) {
       const below = w.getBlock(x, y - 1, z);
-      if (below === B.AIR || (below > 0 && BlockRegistry.liquid[below])) {
-        let ty = y - 1;
-        while (ty > 0) {
-          const bb = w.getBlock(x, ty - 1, z);
-          if (bb !== B.AIR && !(bb > 0 && BlockRegistry.liquid[bb])) break;
-          ty--;
-        }
-        w.setBlock(x, y, z, B.AIR);
-        w.setBlock(x, ty, z, id);
-        ctx.particles.burst('dust', x + 0.5, ty + 0.5, z + 0.5, 4);
+      if (below === B.AIR || (below > 0 && (BlockRegistry.liquid[below] || BlockRegistry.replaceable[below]))) {
+        if (this.onFall) this.onFall(x, y, z, id);
         return;
       }
     }
@@ -132,6 +194,10 @@ export class WorldTicker {
   private randomTick(ctx: GameContext, x: number, y: number, z: number, id: number) {
     const w = ctx.world;
     const rain = ctx.raining();
+    if (IS_LEAVES[id]) {
+      if (Math.random() < 0.25) this.tryDecay(ctx, x, y, z);
+      return;
+    }
     if (SAPLING_TREES[BlockRegistry.get(id).key]) {
       if (this.lightAt(ctx, x, y, z) >= 9 && Math.random() < 0.12) this.growSapling(ctx, x, y, z, id);
       return;

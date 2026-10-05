@@ -22,6 +22,8 @@ export class Projectile extends Entity {
   object3d: THREE.Mesh;
   life = 6;
   stuck = false;
+  /** Flèche tirée par le joueur en survie : récupérable une fois plantée. */
+  pickable = false;
   constructor(readonly type: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, readonly damage: number, readonly fromPlayer: boolean) {
     super(0.15, 0.3);
     this.body.setPos(x, y, z);
@@ -48,7 +50,16 @@ export class Projectile extends Entity {
       this.removed = true;
       return;
     }
-    if (this.stuck) return;
+    if (this.stuck) {
+      if (this.pickable && !ctx.player.dead) {
+        const p = ctx.player;
+        if (Math.abs(p.x - this.x) < 1.3 && Math.abs(p.z - this.z) < 1.3 && this.y > p.y - 0.8 && this.y < p.y + 2.2 && p.inventory.add({ id: 'arrow', count: 1 }) === 0) {
+          this.removed = true;
+          ctx.audio.play('pop', { x: this.x, y: this.y, z: this.z, volume: 0.5, pitch: 1.4 });
+        }
+      }
+      return;
+    }
     const b = this.body;
     b.vy -= LOOK[this.type].gravity * dt;
     const sp = Math.hypot(b.vx, b.vy, b.vz);
@@ -69,7 +80,8 @@ export class Projectile extends Entity {
   impact(ctx: GameContext) {
     if (this.type === 'arrow' || this.type === 'player_arrow') {
       this.stuck = true;
-      this.life = Math.min(this.life, this.age + 4);
+      // comme dans le jeu de référence, une flèche plantée reste une minute
+      this.life = this.age + (this.pickable ? 60 : 4);
     } else {
       this.removed = true;
       ctx.particles.burst(this.type === 'boulder' ? 'dust' : this.type === 'crystal' ? 'crystal' : 'ice', this.x, this.y, this.z, 8);

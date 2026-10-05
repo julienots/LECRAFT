@@ -310,3 +310,9 @@ html.pixel-font .toast { font-size: 16px; }
 
 #ui > .mc-screen:not(:last-child), #ui > .gui-screen:not(:last-child) { visibility: hidden; }
 input.mc-input { border-radius: 0 !important; min-height: 0; margin: 0; }
+.gslot.dragged::after { content: ''; position: absolute; left: 1px; top: 1px; right: 1px; bottom: 1px; background: rgba(255, 255, 255, 0.45); pointer-events: none; }
+/* panorama 3D de l'écran titre (le paysage 2D reste visible tant que les chunks se chargent) */
+html.menu-3d #game-canvas { filter: blur(1.5px); }
+.title-screen .panorama { transition: opacity 1.2s; }
+html.pano-ready .title-screen .panorama { opacity: 0; }
+html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }

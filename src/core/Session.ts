@@ -17,6 +17,7 @@ import { WeatherRenderer } from '../render/WeatherRenderer';
 import { BlockHighlight } from '../render/BlockHighlight';
 import { HeldItem } from '../render/HeldItem';
 import { Explosions } from '../world/Explosions';
+import { FallingBlocks } from '../world/FallingBlocks';
 import { Monster } from '../entities/Monster';
 import { FACING_DIR, boundsOf, modelBoxes } from '../blocks/Shapes';
 import { CraftingSystem, tickFurnace, type FurnaceState } from '../crafting/CraftingSystem';
@@ -62,6 +63,7 @@ export class Session implements GameContext {
   readonly highlight: BlockHighlight;
   readonly held: HeldItem;
   readonly explosions: Explosions;
+  readonly falling: FallingBlocks;
   private plateTimer = 0;
   readonly crafting = new CraftingSystem();
   readonly progression = new Progression();
@@ -97,6 +99,7 @@ export class Session implements GameContext {
     this.entities = new EntityManager(() => this);
     this.entities.ctx = this;
     this.ticker = new WorldTicker(this.entities);
+    this.world.events.on('blockChanged', (e) => this.ticker.blockChanged(e, this.world));
     this.chunks = new ChunkManager(this.world, r.materials, game.saves, meta.id, {
       renderDistance: game.settings.renderDistance,
       jobsInFlight: this.profile.workerJobsInFlight,
@@ -119,7 +122,9 @@ export class Session implements GameContext {
     this.highlight = new BlockHighlight(game.textures);
     this.held = new HeldItem(game.textures);
     this.explosions = new Explosions(game.textures);
-    this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group);
+    this.falling = new FallingBlocks(game.textures);
+    this.ticker.onFall = (x, y, z, id) => this.falling.spawn(this, x, y, z, id);
+    this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group);
     this.controller = new PlayerController(this.player, game.input, game.settings);
     this.controller.onStep = (below) => {
       if (below > 0) this.audio.blockSound('step', BlockRegistry.get(below).sound, this.player.x, this.player.y, this.player.z);
@@ -458,6 +463,7 @@ export class Session implements GameContext {
     this.ticker.tick(this);
     this.tickFurnaces(dt);
     this.explosions.update(this, this.entities, dt);
+    this.falling.update(this, this.entities, dt);
     this.checkPressurePlate(dt);
     if (this.pendingMobs && this.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) {
       this.entities.load(this.pendingMobs.filter((m) => this.world.isLoaded(Math.floor(m.x), Math.floor(m.z))));
@@ -677,9 +683,10 @@ export class Session implements GameContext {
     this.highlight.dispose();
     this.held.dispose();
     this.explosions.dispose();
+    this.falling.clear();
     this.shadowTexture.dispose();
     this.iconTex.forEach((t) => t.dispose());
-    this.scene.remove(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group);
+    this.scene.remove(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group);
     this.audio.stopAmbience();
   }
 }

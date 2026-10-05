@@ -62,7 +62,9 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
     case 'door': {
       const open = (meta & 4) !== 0;
       // fermée : panneau du côté opposé à la direction regardée ; ouverte : pivotée d'un quart de tour
-      return [rotate(open ? [0, 0, 0, 3, 16, 16] : [0, 0, 13, 16, 16, 16], f)];
+      // bit 16 : charnière à droite (la porte ouverte se range contre l'autre montant)
+      const right = (meta & 16) !== 0;
+      return [rotate(open ? (right ? [13, 0, 0, 16, 16, 16] : [0, 0, 0, 3, 16, 16]) : [0, 0, 13, 16, 16, 16], f)];
     }
     case 'ladder':
       return [rotate([0, 0, 0, 16, 16, 1], f)];

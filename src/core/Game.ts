@@ -8,6 +8,7 @@ import { installPixelFont } from '../ui/FontBuilder';
 import { applyTheme } from '../ui/Theme';
 import { setWidgetClick } from '../ui/Mc';
 import { SAVE_VERSION } from './Config';
+import { MenuPanorama } from '../render/MenuPanorama';
 import { Renderer } from '../render/Renderer';
 import { AudioManager } from '../audio/AudioManager';
 import { SaveManager, type WorldMeta } from '../save/SaveManager';
@@ -49,6 +50,7 @@ export class Game {
   state: GameState = 'menu';
   lastThumbnail: string | null = null;
   private inventoryUI: InventoryUI | null = null;
+  private panorama: MenuPanorama | null = null;
   readonly debug = new DebugTools(this);
 
   constructor(readonly root: HTMLElement) {
@@ -107,7 +109,26 @@ export class Game {
   }
 
   // ---------- navigation ----------
+  /** Démarre (ou garde) le panorama 3D de l'écran titre. */
+  private startPanorama() {
+    if (!this.panorama) {
+      try {
+        this.panorama = new MenuPanorama(this.renderer, this.settings.renderDistance);
+      } catch (e) {
+        console.warn('Panorama indisponible', e);
+      }
+    }
+    document.documentElement.classList.add('menu-3d');
+  }
+
+  private stopPanorama() {
+    this.panorama?.dispose();
+    this.panorama = null;
+    document.documentElement.classList.remove('menu-3d', 'pano-ready');
+  }
+
   showMainMenu() {
+    this.startPanorama();
     this.state = 'menu';
     this.hud.show(false);
     this.touch.setVisible(false);
@@ -209,6 +230,7 @@ export class Game {
   }
 
   private async startWorld(meta: WorldMeta, state: WorldState | null, bonusChest = false) {
+    this.stopPanorama();
     this.audio.unlock();
     this.state = 'loading';
     this.settings.difficulty = state ? meta.difficulty : meta.difficulty;
@@ -393,6 +415,10 @@ export class Game {
       // en pause : rendu figé (aucune simulation, aucun rendu → économie batterie)
     } else if (this.state === 'menu') {
       this.audio.updateMusic(dt);
+      if (this.panorama) {
+        this.panorama.update(dt);
+        if (this.panorama.ready) document.documentElement.classList.add('pano-ready');
+      }
     }
   }
 }

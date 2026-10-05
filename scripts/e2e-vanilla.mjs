@@ -214,6 +214,70 @@ try {
   check('Explosion : cratère dans le sol', crater.air >= 5 && crater.left === 0, JSON.stringify(crater));
   await page.screenshot({ path: `${OUT}/vanilla-02-crater.png` });
 
+  // ---------- sable qui tombe (animation) ----------
+  await G(() => { const s = window.__lecraft.session, a = window.__a, w = s.world; s.player.gameMode = 'survival'; w.setBlock(a.x - 6, a.y + 5, a.z + 6, I('sand')); });
+  await wait(200);
+  const fallingNow = await G(() => window.__lecraft.session.falling.count);
+  await wait(1500);
+  const landed = await at(-6, 0, 6);
+  check('Sable : chute animée puis repos au sol', fallingNow === 1 && landed.id === (await ID('sand')), `en chute ${fallingNow}, posé ${landed.id}`);
+
+  // ---------- décomposition des feuilles ----------
+  await G(() => {
+    const s = window.__lecraft.session, a = window.__a, w = s.world;
+    for (let y = 0; y < 4; y++) w.setBlock(a.x + 6, a.y + y, a.z + 6, I('oak_log'));
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (dx || dz) w.setBlock(a.x + 6 + dx, a.y + 3, a.z + 6 + dz, I('oak_leaves'), 0);
+    w.setBlock(a.x + 6, a.y + 4, a.z + 6, I('oak_leaves'), 0);
+    w.setBlock(a.x + 5, a.y + 4, a.z + 6, I('oak_leaves'), 1); // posée par le joueur : persistante
+  });
+  await wait(300);
+  await G(() => { const s = window.__lecraft.session, a = window.__a; for (let y = 0; y < 4; y++) s.world.setBlock(a.x + 6, a.y + y, a.z + 6, 0); });
+  let leaves = 99;
+  for (let i = 0; i < 40 && leaves > 1; i++) {
+    await wait(500);
+    leaves = await G(() => { const s = window.__lecraft.session, a = window.__a; let n = 0; for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = 3; dy <= 4; dy++) if (String(s.world.getBlock(a.x + 6 + dx, a.y + dy, a.z + 6 + dz)) === String(I('oak_leaves'))) n++; return n; });
+  }
+  check('Feuilles sans tronc : décomposition (sauf celles posées par le joueur)', leaves === 1, `feuilles restantes : ${leaves}`);
+
+  // ---------- flèches récupérables ----------
+  const arrowBack = await G(() => {
+    const s = window.__lecraft.session, p = s.player, a = window.__a;
+    p.inventory.clear();
+    const pr = s.entities.spawnProjectile('player_arrow', a.x + 0.5, a.y + 1.5, a.z - 1.5, 0, -10, 0, 2, true);
+    pr.pickable = true;
+    p.body.setPos(a.x + 0.5, a.y, a.z + 2.5);
+    return true;
+  });
+  await wait(800);
+  await G(() => { const s = window.__lecraft.session, a = window.__a; s.player.body.setPos(a.x + 0.5, a.y, a.z - 1.3); });
+  await wait(800);
+  const arrows = await G(() => window.__lecraft.session.player.inventory.count('arrow'));
+  check('Flèche plantée : ramassée en marchant dessus', arrowBack && arrows === 1, `flèches : ${arrows}`);
+
+  // ---------- glisser pour répartir ----------
+  await G(() => { const g = window.__lecraft, inv = g.session.player.inventory; inv.clear(); inv.slots[9] = { id: 'cobblestone', count: 30 }; inv.changed(); g.openInventory('hand'); });
+  await wait(300);
+  const box = async (n) => { const b = await page.locator('.gui .gslot').nth(n).boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
+  const cdp = await page.context().newCDPSession(page);
+  const touchAt = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+  const [sx, sy] = await box(9);
+  await touchAt('touchStart', sx, sy); await touchAt('touchEnd'); await wait(450);
+  const pts = [await box(10), await box(11), await box(12)];
+  await touchAt('touchStart', ...pts[0]);
+  for (const [x, y] of pts) { await touchAt('touchMove', x, y); await wait(60); }
+  await touchAt('touchEnd'); await wait(200);
+  const spread = await G(() => window.__lecraft.session.player.inventory.slots.slice(10, 13).map((s) => s?.count ?? 0));
+  check('Glisser sur 3 cases : le stack est réparti (10/10/10)', spread.join(',') === '10,10,10', spread.join(','));
+  await page.keyboard.press('Escape');
+  await wait(200);
+
+  // ---------- charnière des portes (double porte) ----------
+  await G(() => { window.__lecraft.session.player.yaw = 0; });
+  await useOn('oak_door', -6, -1, 3);
+  await useOn('oak_door', -5, -1, 3);
+  const dl = await at(-6, 0, 3), dr = await at(-5, 0, 3);
+  check('Double porte : la seconde a la charnière opposée', ((dl.meta & 16) === 0) !== ((dr.meta & 16) === 0), `${dl.meta} / ${dr.meta}`);
+
   // ---------- pack de ressources ----------
   const magenta = Buffer.from([255, 0, 255, 255]);
   const cyan = Buffer.from([0, 255, 255, 255]);

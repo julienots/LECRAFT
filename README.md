@@ -62,10 +62,10 @@ complet piloté par de vrais événements tactiles dans Chromium (même moteur q
 | Structures | villages, maisons abandonnées, ruines, tours (escalier), temples (piège + salle cachée), sanctuaire de givre, camps, mines, donjons (salles, couloirs, pièges, cages, coffres, chef), repaire du golem |
 | Monde vivant | Cycle jour/crépuscule/nuit/aube, pluie, orage avec éclairs/tonnerre, neige selon le biome, eau et lave qui s'écoulent (sources infinies, obsidienne), sable/gravier qui tombent, plantes qui exigent un support |
 | Agriculture / élevage | Houe, terre cultivable (hydratation), blé, carottes, pommes de terre, canne à sucre, pousses → arbres (dont chêne noir 2×2), poudre d'os ; nourrir, attirer, reproduire, bébés qui grandissent |
-| Mécaniques vanilla | lit (dormir la nuit, point de réapparition, monstres proches), portes, seaux (eau, lave, lait), briquet + TNT (mèche, explosion, cratère, réaction en chaîne), piège à plaque de pression des temples, cisailles, boussole, coffre bonus |
+| Mécaniques vanilla | décomposition des feuilles, sable/gravier qui tombent (animés), flèches récupérables, lit (dormir la nuit, point de réapparition, monstres proches), portes (charnière, doubles portes), seaux (eau, lave, lait), briquet + TNT (mèche, explosion, cratère, réaction en chaîne), piège à plaque de pression des temples, cisailles, boussole, coffre bonus |
 | Progression | XP et niveaux (cœurs bonus), 18 succès, statistiques, biomes visités, collection d'objets rares |
 | Sauvegarde | IndexedDB (format v2), plusieurs mondes (nom, seed, date, temps de jeu, miniature), sauvegarde auto/manuelle/à la mise en arrière-plan, checksums, copie de secours automatique, copie manuelle d'un monde |
-| Interface | Menus du jeu de référence : écran titre (Solo, Options…, Quitter le jeu, phrase d'accueil jaune), Sélectionner un monde (Jouer / Créer / Modifier / Supprimer / Recréer / Annuler), Créer un nouveau monde (mode, difficulté, graine, coffre bonus), Menu du jeu, Options (Graphismes, Musique et sons, Commandes, Packs de ressources…), Progrès, Statistiques, « Vous êtes mort ! » avec score ; boutons pierre, curseurs, **police pixel** générée ; HUD classique (barre d'objets, cœurs, faim, armure, bulles, XP) |
+| Interface | Menus du jeu de référence : écran titre avec **panorama 3D** d'un vrai monde généré (Solo, Options…, Quitter le jeu, phrase d'accueil jaune), Sélectionner un monde (Jouer / Créer / Modifier / Supprimer / Recréer / Annuler), Créer un nouveau monde (mode, difficulté, graine, coffre bonus), Menu du jeu, Options (Graphismes, Musique et sons, Commandes, Packs de ressources…), Progrès, Statistiques, « Vous êtes mort ! » avec score ; boutons pierre, curseurs, **police pixel** générée ; HUD classique (barre d'objets, cœurs, faim, armure, bulles, XP) |
 | Audio | ~100 effets synthétisés (dont portes, explosions, seaux, cisailles, XP) (blocs par matériau, pas, armes, créatures, météo, menus), ambiances (vent, oiseaux, grillons, grotte, pluie), musique générative jour/nuit/menu |
 | Performance | Détection LOW/MEDIUM/HIGH (GPU, cœurs, mémoire, écran), ajustement dynamique de la résolution puis de la distance, limitation 30/45/60 FPS, pools (modèles, particules), libération des ressources WebGL |
 
@@ -414,7 +414,7 @@ poser / ouvrir / manger / utiliser (maintenir pour poser en continu, maintenir p
 `•••` en bout de hotbar = inventaire ; ❚❚ pause ; bouton **Retour Android** = fermer / pause / reprendre.
 **Inventaire** : toucher = prendre/poser/échanger le stack (clic gauche), appui long = prendre la moitié /
 poser un seul objet (clic droit), double toucher = transfert rapide (Maj + clic), toucher hors de la
-fenêtre = jeter ; bouton vert = livre de recettes (toucher une recette remplit la grille, appui long = autant que possible).
+fenêtre = jeter ; tenir un stack et glisser sur plusieurs cases = le répartir (après un appui long : un objet par case) ; bouton vert = livre de recettes (toucher une recette remplit la grille, appui long = autant que possible).
 Personnalisation : sensibilité, inversion, taille du joystick et des boutons, mode gaucher,
 saut automatique, et **déplacement libre des boutons** (Paramètres → Contrôles → Personnaliser).
 
@@ -434,8 +434,10 @@ npm run build && npm run preview &   # puis, dans un autre terminal :
 npm run e2e                      # 39 vérifications pilotées par de vrais événements tactiles (CDP)
 npm run e2e:gameplay             # 23 vérifications : agriculture, élevage, fourneau à cases, structures,
                                  # coffres, liquides, lave, météo, apparitions nocturnes, boss, mémoire
-npm run e2e:vanilla              # 21 vérifications : dalles, porte, lit et sommeil, seaux, poudre d'os,
-                                 # cisailles, échelle, TNT et explosion, import/retrait d'un pack de ressources
+npm run e2e:vanilla              # 26 vérifications : dalles, porte, lit et sommeil, seaux, poudre d'os,
+                                 # cisailles, échelle, TNT et explosion, sable qui tombe, décomposition des
+                                 # feuilles, flèches récupérées, glisser pour répartir, double porte,
+                                 # import/retrait d'un pack de ressources
 npm run screens                  # captures 16:9, 20:9, petit écran, tablette, portrait
 npm run perf                     # coûts CPU par frame
 ```
@@ -480,10 +482,8 @@ Ces éléments ne sont **pas** réalisés (ou partiellement) — ils ne sont pas
 - **Non reproduits du jeu de référence** (volontairement ou faute de temps) : Creeper et autres créatures
   à design protégé, Nether, End, circuits de redstone, enchantements, alambics, villageois et commerce,
   feu qui se propage, mode multijoueur, Realms. Le briquet n'allume que la TNT.
-- **TODO** : décomposition des feuilles, animation de chute du sable (la chute est instantanée),
-  récupération des flèches tirées, charnières de portes (toujours à gauche), glisser-déposer pour
-  répartir un stack sur plusieurs cases, panorama 3D de l'écran titre (remplacé par un paysage animé),
-  rendu 3D du coffre et du lit en main.
+- **TODO** : rendu 3D du coffre et du lit tenus en main, animation d'ouverture du coffre,
+  flèches texturées (pavé coloré actuellement).
 - **Mondes de la version 1** : l'identifiant des blocs a changé avec la refonte vanilla ; un ancien
   monde est signalé « incompatible » et peut être **recréé avec la même graine**.
 - La lumière est recalculée par chunk avec une marge de 14 blocs : une source lumineuse située à plus

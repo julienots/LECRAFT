@@ -108,6 +108,7 @@ export class EntityManager implements EntitySpawner {
     const p = new Projectile(kind, x, y, z, vx, vy, vz, damage, fromPlayer);
     this.entities.push(p);
     this.group.add(p.object3d);
+    return p;
   }
 
   // ---------- requêtes ----------

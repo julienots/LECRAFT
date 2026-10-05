@@ -354,12 +354,28 @@ export class PlayerInteraction {
       const f = t.ny === 0 && !replace ? facingOf(-t.nx, -t.nz) : look;
       return this.validate(mk(x, y, z, f));
     }
-    if (b.shape === 'door') return this.validate(mk(x, y, z, look, [[x, y + 1, z, block, look | 8]]));
+    if (b.shape === 'door') {
+      // charnière : porte voisine à gauche → double porte en miroir ; sinon côté du clic
+      const [dx, dz] = FACING_DIR[look];
+      const lx = dz, lz = -dx; // gauche du joueur
+      const w2 = this.ctx.world;
+      let right: boolean;
+      if (w2.getBlock(x + lx, y, z + lz) === block && !(w2.getMeta(x + lx, y, z + lz) & 16)) right = true;
+      else if (w2.getBlock(x - lx, y, z - lz) === block) right = false;
+      else {
+        const fx = t.px - Math.floor(t.px), fz = t.pz - Math.floor(t.pz);
+        const along = -lx !== 0 ? (-lx > 0 ? fx : 1 - fx) : -lz > 0 ? fz : 1 - fz;
+        right = along > 0.5;
+      }
+      const h = right ? 16 : 0;
+      return this.validate(mk(x, y, z, look | h, [[x, y + 1, z, block, look | 8 | h]]));
+    }
     if (b.shape === 'bed') {
       const [dx, dz] = FACING_DIR[look];
       return this.validate(mk(x, y, z, look, [[x + dx, y, z + dz, block, look | 4]]));
     }
-    return this.validate(mk(x, y, z, b.orientable ? opposite(look) : 0));
+    // feuilles posées par le joueur : persistantes (ne se décomposent pas)
+    return this.validate(mk(x, y, z, b.orientable ? opposite(look) : b.key.endsWith('_leaves') ? 1 : 0));
   }
 
   private validate(pv: PlacementPreview, merging = false): PlacementPreview {
@@ -512,7 +528,8 @@ export class PlayerInteraction {
     }
     const [ox, oy, oz, dx, dy, dz] = this.eye();
     const sp = 12 + charge * 22;
-    this.entities.spawnProjectile('player_arrow', ox + dx * 0.5, oy + dy * 0.5 - 0.1, oz + dz * 0.5, dx * sp, dy * sp, dz * sp, 2 + charge * 7, true);
+    const arrow = this.entities.spawnProjectile('player_arrow', ox + dx * 0.5, oy + dy * 0.5 - 0.1, oz + dz * 0.5, dx * sp, dy * sp, dz * sp, 2 + charge * 7, true);
+    arrow.pickable = !p.creative;
     ctx.audio.play('bow');
     if (!p.creative) p.inventory.damageSelected(1);
   }

@@ -148,6 +148,7 @@ export class InventoryUI {
     root.addEventListener('pointermove', (e) => {
       this.pointer = { x: e.clientX, y: e.clientY };
       this.placeCursor();
+      this.dragOver(e.clientX, e.clientY);
     });
     this.screen = { el: root, onBack: () => (game.closeInventory(), true) };
     this.buildSide();
@@ -244,8 +245,53 @@ export class InventoryUI {
     const d = el('div', { class: 'gslot', style: `left:${sl.x - o}px;top:${sl.y - o}px;width:${size}px;height:${size}px` });
     if (sl.big) d.style.padding = `${o}px`;
     sl.el = d;
-    this.bindPress(d, (kind) => this.onSlot(sl, kind));
+    this.bindPress(d, (kind) => this.onSlot(sl, kind), sl);
+    this.slotByEl.set(d, sl);
     return d;
+  }
+
+  // ---------- glisser pour répartir (comme le glisser du jeu de référence) ----------
+  private slotByEl = new WeakMap<Element, GuiSlot>();
+  private drag: { slots: GuiSlot[]; one: boolean; firstDone?: boolean } | null = null;
+
+  private dragOver(x: number, y: number) {
+    if (!this.drag || !this.carried) return;
+    let e = document.elementFromPoint(x, y);
+    while (e && !this.slotByEl.has(e)) e = e.parentElement;
+    const sl = e ? this.slotByEl.get(e) : undefined;
+    if (!sl || sl.take || this.drag.slots.includes(sl)) return;
+    const cur = sl.get();
+    if (sl.accept && !sl.accept(this.carried)) return;
+    if (cur && !canMerge(cur, this.carried)) return;
+    if (this.drag.slots.length >= this.carried.count && !this.drag.one) return;
+    this.drag.slots.push(sl);
+    for (const d of this.drag.slots) d.el?.classList.add('dragged');
+  }
+
+  /** Termine un glisser sur plusieurs cases ; retourne vrai s'il a eu lieu. */
+  private finishDrag(): boolean {
+    const d = this.drag;
+    this.drag = null;
+    this.slots.forEach((s) => s.el?.classList.remove('dragged'));
+    if (!d || d.slots.length < 2 || !this.carried) return false;
+    const c = this.carried;
+    const per = d.one ? 1 : Math.max(1, Math.floor(c.count / d.slots.length));
+    for (const [i, sl] of d.slots.entries()) {
+      if (c.count <= 0) break;
+      if (i === 0 && d.firstDone) continue;
+      const cur = sl.get();
+      const room = cur ? this.maxFor(sl, cur) - cur.count : this.maxFor(sl, c);
+      const k = Math.min(per, room, c.count);
+      if (k <= 0) continue;
+      if (cur) cur.count += k;
+      else sl.set({ ...c, count: k });
+      c.count -= k;
+    }
+    if (c.count <= 0) this.carried = null;
+    this.lastTap.slot = null;
+    this.click();
+    this.afterChange();
+    return true;
   }
 
   /** Gestion unifiée toucher / souris : 'tap' | 'long' | 'double' | 'right' | 'shift'. */
@@ -259,8 +305,15 @@ export class InventoryUI {
       this.pointer = { x: e.clientX, y: e.clientY };
       fired = false;
       downAt = performance.now();
+      if (target && !target.take && this.carried) this.drag = { slots: [target], one: e.button === 2 };
       if (e.pointerType === 'mouse') return;
       t = window.setTimeout(() => {
+        if (this.drag && this.drag.slots.length >= 2) return;
+        // appui long sans glisser : clic droit ; s'il y a ensuite un glisser, il dépose un objet par case
+        if (this.drag) {
+          this.drag.one = true;
+          this.drag.firstDone = true;
+        }
         fired = true;
         cb('long', e);
         this.game.platform.haptic('light');
@@ -273,6 +326,7 @@ export class InventoryUI {
       e.preventDefault();
       e.stopPropagation();
       clearTimeout(t);
+      if (this.finishDrag()) return;
       if (fired) return;
       if (e.pointerType === 'mouse') {
         if (e.button === 2) cb('right', e);
