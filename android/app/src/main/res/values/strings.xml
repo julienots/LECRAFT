@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LeCraft</string>
+    <string name="title_activity_main">LeCraft</string>
+    <string name="package_name">com.lecraft.game</string>
+    <string name="custom_url_scheme">com.lecraft.game</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#4b9a3a</color>
+    <color name="colorPrimaryDark">#10151c</color>
+    <color name="colorAccent">#6fcf5a</color>
+    <color name="game_background">#10151c</color>
+</resources>
