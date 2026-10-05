@@ -3,7 +3,7 @@ import type { SpecialBlock } from '../world/ChunkData';
 
 /** Messages thread principal -> worker. */
 export type ToWorker =
-  | { type: 'init'; seed: number }
+  | { type: 'init'; seed: number; addonBlocks?: import('../blocks/Block').BlockDef[] }
   | { type: 'load'; cx: number; cz: number; saved?: { blocks: Uint8Array; meta: Uint8Array } }
   | { type: 'unload'; cx: number; cz: number }
   | { type: 'set'; edits: Int32Array } // [x,y,z,id,meta]*

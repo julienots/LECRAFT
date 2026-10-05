@@ -6,6 +6,7 @@ import type { DayCycle } from '../world/DayCycle';
 import type { QualityProfile } from './Config';
 import type { SkinProvider } from '../render/MobModels';
 import type { Mob } from '../entities/Mob';
+import type { GameRules } from '../commands/Commands';
 
 export interface DamageInfo {
   kind: 'player' | 'projectile' | 'environment';
@@ -35,6 +36,7 @@ export interface SoundFx {
 export interface HudApi {
   toast(text: string, kind?: 'info' | 'achievement' | 'warn'): void;
   setBoss(name: string | null, frac?: number, phase?: number): void;
+  showTitle?(text: string, kind: 'title' | 'subtitle' | 'actionbar'): void;
 }
 export interface StatsApi {
   inc(stat: string, n?: number): void;
@@ -57,6 +59,8 @@ export interface GameContext {
   shadowTexture: THREE.Texture | null;
   /** Textures des skins de créatures (générées ou pack de ressources). */
   skins: SkinProvider;
+  /** Règles du jeu (/gamerule). */
+  gamerules: GameRules;
   iconTexture(itemId: string): THREE.Texture;
   /** Pluie active (pour l'IA/brûlure solaire). */
   raining(): boolean;

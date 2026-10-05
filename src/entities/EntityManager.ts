@@ -254,6 +254,7 @@ export class EntityManager implements EntitySpawner {
     const p = ctx.player;
     const w = ctx.world;
     const peaceful = ctx.player.difficulty === 'peaceful';
+    if (!ctx.gamerules.doMobSpawning) return;
     const hostileCap = Math.round(cap * 0.6), passiveCap = Math.round(cap * 0.4);
     const pick = (minR: number, maxR: number) => {
       const a = Math.random() * Math.PI * 2, r = minR + Math.random() * (maxR - minR);

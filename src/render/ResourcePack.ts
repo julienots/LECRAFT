@@ -8,14 +8,14 @@
 const DB = 'lecraft-packs';
 const STORE = 'files';
 
-interface ZipEntry {
+export interface ZipEntry {
   name: string;
   method: number;
   compSize: number;
   offset: number;
 }
 
-function readEntries(buf: ArrayBuffer): ZipEntry[] {
+export function readEntries(buf: ArrayBuffer): ZipEntry[] {
   const dv = new DataView(buf);
   // fin du répertoire central
   let eocd = -1;
@@ -42,7 +42,7 @@ function readEntries(buf: ArrayBuffer): ZipEntry[] {
   return out;
 }
 
-async function extract(buf: ArrayBuffer, e: ZipEntry): Promise<Uint8Array> {
+export async function extract(buf: ArrayBuffer, e: ZipEntry): Promise<Uint8Array> {
   const dv = new DataView(buf);
   const nameLen = dv.getUint16(e.offset + 26, true), extraLen = dv.getUint16(e.offset + 28, true);
   const start = e.offset + 30 + nameLen + extraLen;
@@ -120,7 +120,7 @@ export async function removePack(): Promise<void> {
 
 /** Images du pack installé (chemin relatif à textures/ → bitmap). */
 export class LoadedPack {
-  constructor(readonly info: PackInfo, private images: Map<string, ImageBitmap>) {}
+  constructor(readonly info: PackInfo, readonly images: Map<string, ImageBitmap>) {}
 
   get(path: string): ImageBitmap | undefined {
     return this.images.get(path);

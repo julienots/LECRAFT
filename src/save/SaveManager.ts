@@ -12,6 +12,8 @@ export interface WorldMeta {
   gameMode: GameMode;
   difficulty: Difficulty;
   version: number;
+  /** Commandes de triche autorisées (option « Activer les triches »). */
+  cheats?: boolean;
 }
 
 interface StateRecord {

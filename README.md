@@ -71,6 +71,43 @@ complet piloté par de vrais événements tactiles dans Chromium (même moteur q
 
 Les éléments **non réalisés** sont listés honnêtement dans [Limites connues / TODO](#16-limites-connues--todo).
 
+### Commandes (chat)
+
+Bouton 💬 (ou touche **T**, **/** au clavier) : chat avec historique et **autocomplétion**. Syntaxe du
+jeu de référence, identifiants avec ou sans `minecraft:`, coordonnées absolues, relatives `~` et
+locales `^`, sélecteurs `@s @p @a @r @e[type=…,r=…,c=…]` :
+
+`/help` `/give` `/clear` `/tp` `/time set|add|query` `/weather` `/gamemode` `/difficulty` `/kill`
+`/summon` `/setblock` `/fill` (replace, hollow, outline, keep, destroy) `/effect` `/xp` `/spawnpoint`
+`/setworldspawn` `/seed` `/say` `/me` `/tell` `/list` `/title` `/locate structure` `/gamerule`
+`/function` `/playsound` `/execute as|at … [positioned x y z] run …`.
+
+Règles (`/gamerule`) : `keepInventory`, `doDaylightCycle`, `doWeatherCycle`, `doMobSpawning`,
+`tntExplodes`, `showCoordinates`, `naturalRegeneration`, `fallDamage`, `doImmediateRespawn`.
+Les commandes de triche suivent l'option **Activer les triches** du monde (création ou « Modifier »).
+
+### Add-ons de l'édition mobile (.mcaddon / .mcpack)
+
+**Options… → Add-ons (.mcaddon)… → Importer un add-on…**, puis « Redémarrer pour appliquer ».
+Les `.mcaddon` (y compris avec des `.mcpack` imbriqués) et `.mcpack` sont lus sur l'appareil et
+stockés localement ; chaque add-on peut être activé, désactivé ou supprimé.
+
+| Pris en charge | Détail |
+|---|---|
+| Packs de ressources | remplacement des textures du jeu (`textures/blocks`, `items`, `entity`, noms Bedrock convertis), `terrain_texture.json`, `item_texture.json`, `blocks.json`, textes `fr_FR.lang` / `en_US.lang`, PNG et TGA |
+| Blocs | identifiant, texture (material_instances, par face), dureté (`destructible_by_mining`), lumière, rendu opaque/alpha_test/blend, collision, friction, table de butin |
+| Objets | icône, nom, taille de pile, nourriture, dégâts, durabilité, outils (`digger`, tags `is_pickaxe`…), armures (`wearable`), combustible, poseur de bloc, onglet créatif |
+| Recettes | `recipe_shaped`, `recipe_shapeless`, `recipe_furnace` (ingrédients vanilla, tags et objets d'add-ons) |
+| Entités | santé, vitesse, attaque, hostilité (famille `monster`, ciblage du joueur), taille, reproduction, butin, vol, brûlure au soleil, attaque à distance ; **géométrie Bedrock** (`*.geo.json`, formats 1.8 et 1.12+, UV par face) et texture de l'entité client ; animations de marche par nom d'os ; **œufs d'apparition** ; règles d'apparition (surface/souterrain, luminosité, troupeau, biomes) |
+| Fonctions | fichiers `.mcfunction` (`/function nom`), `tick.json` exécuté à chaque tick |
+
+**Non pris en charge** (signalé à l'import) : scripts JavaScript (`@minecraft/server`, `@minecraft/server-ui`),
+animations et contrôleurs Molang (seule la marche est animée), géométries de blocs personnalisées
+(affichées en cube), événements et groupes de composants dynamiques (seuls ceux appliqués à
+l'apparition sont lus), dimensions, biomes et structures personnalisés, packs de skins.
+Les blocs d'add-ons gardent un identifiant stable : si un add-on est retiré, ses blocs deviennent
+des « blocs inconnus » sans corrompre les mondes. Limite : 256 blocs au total (125 pour les add-ons).
+
 ### Packs de ressources
 
 **Options… → Packs de ressources… → Importer un pack…** accepte :
@@ -418,8 +455,13 @@ fenêtre = jeter ; tenir un stack et glisser sur plusieurs cases = le répartir 
 Personnalisation : sensibilité, inversion, taille du joystick et des boutons, mode gaucher,
 saut automatique, et **déplacement libre des boutons** (Paramètres → Contrôles → Personnaliser).
 
+**Croix directionnelle (classique)** : Options… → Commandes… → « Commandes tactiles : Croix ».
+Flèches avant/arrière/gauche/droite, diagonales avant qui apparaissent en avançant, case centrale =
+s'accroupir, double appui sur avant = sprint ; on peut glisser d'une flèche à l'autre.
+
 **Clavier/souris** : ZQSD/WASD, Espace, Maj (accroupi), Ctrl (sprint), clic gauche (miner/attaquer),
-clic droit (utiliser), molette/1–9 (hotbar), E (inventaire), G (jeter), F3 (diagnostic), Échap (retour).
+clic droit (utiliser), molette/1–9 (hotbar), E (inventaire), Q/G (jeter), T ou Entrée (chat),
+/ (commande), F3 (diagnostic), Échap (retour).
 
 ---
 
@@ -438,6 +480,10 @@ npm run e2e:vanilla              # 26 vérifications : dalles, porte, lit et som
                                  # cisailles, échelle, TNT et explosion, sable qui tombe, décomposition des
                                  # feuilles, flèches récupérées, glisser pour répartir, double porte,
                                  # import/retrait d'un pack de ressources
+npm run e2e:addons               # 26 vérifications : import d'un .mcaddon généré (packs imbriqués,
+                                 # JSON commenté), blocs/objets/recettes/créature/fonctions d'add-on,
+                                 # textures remplacées, commandes, chat, triches, croix directionnelle,
+                                 # désactivation (identifiants conservés)
 npm run screens                  # captures 16:9, 20:9, petit écran, tablette, portrait
 npm run perf                     # coûts CPU par frame
 ```

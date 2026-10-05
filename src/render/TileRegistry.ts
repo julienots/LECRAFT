@@ -3,7 +3,7 @@ import { BLOCK_DEFS } from '../data/blocks';
 /** Tuiles animées : nombre d'images consécutives dans l'atlas. */
 export const ANIMATED_TILES: Record<string, number> = { water: 4, lava: 4 };
 export const EXTRA_TILES = Array.from({ length: 10 }, (_, i) => `destroy_stage_${i}`);
-export const ATLAS_COLS = 16;
+export const ATLAS_COLS = 32;
 export const TILE_PX = 16;
 
 /**
@@ -13,7 +13,7 @@ export const TILE_PX = 16;
 class TileRegistryImpl {
   readonly names: string[] = [];
   private map = new Map<string, number>();
-  readonly animFrames = new Uint8Array(256);
+  readonly animFrames = new Uint8Array(ATLAS_COLS * ATLAS_COLS);
 
   constructor() {
     this.add('missing');
@@ -26,6 +26,12 @@ class TileRegistryImpl {
     if (this.names.length > ATLAS_COLS * ATLAS_COLS) throw new Error('Atlas plein');
   }
 
+  /** Ajoute une tuile (add-ons) ; même ordre sur le thread principal et le worker. */
+  addTile(name: string) {
+    this.add(name);
+    if (this.names.length > ATLAS_COLS * ATLAS_COLS) throw new Error('Atlas plein');
+  }
+
   private add(name: string) {
     if (this.map.has(name)) return;
     const frames = ANIMATED_TILES[name] ?? 1;
@@ -34,6 +40,10 @@ class TileRegistryImpl {
     this.animFrames[idx] = frames;
     this.names.push(name);
     for (let f = 1; f < frames; f++) this.names.push(`${name}#${f}`);
+  }
+
+  has(name: string) {
+    return this.map.has(name);
   }
 
   index(name: string): number {

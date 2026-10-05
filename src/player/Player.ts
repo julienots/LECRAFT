@@ -39,6 +39,9 @@ export class Player {
   /** Poison (araignée venimeuse) et régénération (pomme dorée), en secondes. */
   poisonTimer = 0;
   regenEffect = 0;
+  /** Règles du jeu appliquées par la session. */
+  naturalRegen = true;
+  fallDamage = true;
   private effectTick = 0;
   regenTimer = 0;
   starveTimer = 0;
@@ -173,7 +176,7 @@ export class Player {
         this.heal(1);
         this.hunger = Math.min(20, this.hunger + 1);
       }
-    } else if (this.hunger >= 18 && this.health < this.maxHealth) {
+    } else if (this.naturalRegen && this.hunger >= 18 && this.health < this.maxHealth) {
       this.regenTimer += dt;
       if (this.regenTimer >= 4) {
         this.regenTimer = 0;
@@ -204,7 +207,7 @@ export class Player {
     if (this.body.landed > 0) {
       const d = Math.floor(this.body.landed - 3);
       this.body.landed = 0;
-      if (d > 0 && !this.body.inWater) this.damage(d, 'fall');
+      if (d > 0 && !this.body.inWater && this.fallDamage) this.damage(d, 'fall');
     }
     // effort
     if (this.sprinting) this.addExhaustion(dt * 0.2);

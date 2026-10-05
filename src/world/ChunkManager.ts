@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ADDON_BLOCKS } from '../addons/AddonRegistry';
 import { CHUNK_SIZE } from '../core/Config';
 import { chunkKey } from '../util/math';
 import type { MeshArrays } from '../render/ChunkMesher';
@@ -55,7 +56,7 @@ export class ChunkManager {
     this.worker = new Worker(new URL('../workers/world.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e: MessageEvent<FromWorker>) => this.onMessage(e.data);
     this.worker.onerror = (e) => this.onError(e.message);
-    this.post({ type: 'init', seed: world.seed });
+    this.post({ type: 'init', seed: world.seed, addonBlocks: ADDON_BLOCKS });
     this.group.name = 'chunks';
   }
 

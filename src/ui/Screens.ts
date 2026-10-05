@@ -122,7 +122,7 @@ function editWorldScreen(game: Game, w: WorldMeta, done: () => void): Screen {
         status.textContent = 'Copie de sauvegarde créée';
         done();
       }),
-      mcButton('Ouvrir le dossier des mondes', () => {}, { disabled: true }),
+      mcToggle('Activer les triches', w.cheats ?? true, (v) => (w.cheats = v), 200),
       status,
     ],
     footer: [
@@ -150,6 +150,7 @@ export function newWorldScreen(game: Game): Screen {
   let mode: GameMode = 'survival';
   let diff: Difficulty = game.settings.difficulty === 'peaceful' ? 'normal' : game.settings.difficulty;
   let bonus = false;
+  let cheats = true;
   const desc = mcLabel(MODE_DESC[mode]);
   return mcScreen({
     title: 'Créer un nouveau monde',
@@ -166,9 +167,10 @@ export function newWorldScreen(game: Game): Screen {
       desc,
       mcLabel('Graine pour le générateur de monde', 'left'),
       seed,
-      mcToggle('Coffre bonus', bonus, (v) => (bonus = v), 150),
+      mcRow(mcToggle('Coffre bonus', bonus, (v) => (bonus = v), 150), mcToggle('Activer les triches', cheats, (v) => (cheats = v), 150)),
+      mcLabel('Les triches autorisent les commandes comme /give, /tp, /time ou /gamemode.'),
     ],
-    footer: [mcRow(mcButton('Créer un nouveau monde', () => game.createWorld(name.value, seed.value, mode, diff, bonus), { w: 150 }), mcButton('Annuler', () => game.ui.back(), { w: 150 }))],
+    footer: [mcRow(mcButton('Créer un nouveau monde', () => game.createWorld(name.value, seed.value, mode, diff, bonus, cheats), { w: 150 }), mcButton('Annuler', () => game.ui.back(), { w: 150 }))],
   });
 }
 

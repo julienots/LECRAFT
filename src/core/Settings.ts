@@ -19,6 +19,8 @@ export interface Settings {
   buttonScale: number; // 0.7..1.4
   invertY: boolean;
   leftHanded: boolean;
+  /** Schéma tactile : joystick ou croix directionnelle classique. */
+  controlScheme: 'joystick' | 'dpad';
   autoJump: boolean;
   layout: ControlLayout;
   musicVolume: number;
@@ -51,6 +53,7 @@ export function defaultSettings(q: QualityLevel = 'MEDIUM'): Settings {
     buttonScale: 1,
     invertY: false,
     leftHanded: false,
+    controlScheme: 'joystick',
     autoJump: true,
     layout: {},
     musicVolume: 0.5,

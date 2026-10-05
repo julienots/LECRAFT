@@ -47,3 +47,10 @@ export const MOB_DEFS: MobDef[] = [
 ];
 
 export const MOB_BY_KEY = new Map(MOB_DEFS.map((m, i) => [m.key, { def: m, index: i }]));
+
+/** Ajoute une créature (add-ons) à la fin de la liste. */
+export function registerMob(def: MobDef) {
+  if (MOB_BY_KEY.has(def.key)) throw new Error(`Créature dupliquée : ${def.key}`);
+  MOB_DEFS.push(def);
+  MOB_BY_KEY.set(def.key, { def, index: MOB_DEFS.length - 1 });
+}

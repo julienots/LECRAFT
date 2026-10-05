@@ -4,7 +4,7 @@ import { ItemRegistry } from '../inventory/ItemRegistry';
 import { ICON_TEMPLATES } from '../ui/IconTemplates';
 import type { SkinProvider } from './MobModels';
 import { paintSkin } from './MobSkins';
-import type { LoadedPack } from './ResourcePack';
+import { LoadedPack } from './ResourcePack';
 import { buildAtlas, hex } from './TextureGenerator';
 import { ANIMATED_TILES, ATLAS_COLS, TILE_PX, TileRegistry } from './TileRegistry';
 
@@ -24,7 +24,7 @@ const PACK_RENAME: Record<string, string> = { water: 'water_still', lava: 'lava_
 const WATER_TINT = hex('#3f76e4');
 
 /** Chemins des skins des créatures dans un pack (plusieurs versions du jeu). */
-const SKIN_PATHS: Record<string, string[]> = {
+export const SKIN_PATHS: Record<string, string[]> = {
   pig: ['entity/pig/pig.png', 'entity/pig/temperate_pig.png'],
   cow: ['entity/cow/cow.png', 'entity/cow/temperate_cow.png'],
   sheep: ['entity/sheep/sheep.png'],
@@ -53,6 +53,10 @@ export class TextureManager implements SkinProvider {
   private iconCanvasCache = new Map<string, HTMLCanvasElement>();
   private skinCache = new Map<string, THREE.CanvasTexture>();
   private pack: LoadedPack | null = null;
+  /** Images des add-ons (textures Bedrock converties, textures propres aux add-ons). */
+  private extra = new Map<string, ImageBitmap>();
+  /** Vue combinée : pack de ressources Java prioritaire, puis images des add-ons. */
+  private view: LoadedPack | null = null;
   /** Appelé après le changement de pack (rafraîchissement de l'interface). */
   onChange: (() => void) | null = null;
 
@@ -68,7 +72,7 @@ export class TextureManager implements SkinProvider {
 
   /** Image brute du pack installé (chemin relatif à textures/). */
   packImage(...paths: string[]): ImageBitmap | undefined {
-    return this.pack?.first(...paths);
+    return this.view?.first(...paths);
   }
 
   get packName(): string | null {
@@ -76,9 +80,13 @@ export class TextureManager implements SkinProvider {
   }
 
   /** Applique (ou retire) un pack de ressources : atlas, icônes et skins sont régénérés. */
-  applyPack(pack: LoadedPack | null) {
+  applyPack(pack: LoadedPack | null, extra?: Map<string, ImageBitmap>) {
     this.pack = pack;
-    const fresh = buildAtlas(pack ? this.packTiles(pack) : undefined);
+    if (extra) this.extra = extra;
+    const merged = new Map(this.extra);
+    if (pack) for (const [k, v] of pack.images) merged.set(k, v);
+    this.view = merged.size ? new LoadedPack(pack?.info ?? { name: 'add-ons', files: merged.size }, merged) : null;
+    const fresh = buildAtlas(this.view ? this.packTiles(this.view) : undefined);
     const ctx = this.atlasCanvas.getContext('2d')!;
     ctx.clearRect(0, 0, this.atlasCanvas.width, this.atlasCanvas.height);
     ctx.drawImage(fresh, 0, 0);
@@ -127,6 +135,8 @@ export class TextureManager implements SkinProvider {
           d[i + 2] = (d[i + 2] * WATER_TINT[2]) / 255;
           d[i + 3] = Math.max(d[i + 3], 170);
         }
+      } else if (name.startsWith('addon/')) {
+        // textures d'add-ons : transparence conservée (blocs « blend »)
       } else {
         // alpha binaire (cutout) ; on évite la plage réservée à la teinte
         for (let i = 0; i < d.length; i += 4) d[i + 3] = d[i + 3] > 128 ? 255 : 0;
@@ -151,7 +161,7 @@ export class TextureManager implements SkinProvider {
   }
 
   private skinCanvas(key: string): HTMLCanvasElement {
-    const img = this.pack?.first(...(SKIN_PATHS[key] ?? []));
+    const img = this.view?.first(...(SKIN_PATHS[key] ?? []));
     if (img) {
       const c = document.createElement('canvas');
       c.width = img.width;
@@ -236,13 +246,13 @@ export class TextureManager implements SkinProvider {
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     const def = ItemRegistry.get(itemId);
-    const packImg = def && this.pack?.first(...(ITEM_PATHS[itemId] ?? []), `item/${def.packTexture ?? itemId}.png`);
+    const packImg = def && this.view?.first(...(ITEM_PATHS[itemId] ?? []), `item/${def.packTexture ?? itemId}.png`);
     if (def && packImg) {
-      const data = this.pack!.imageData(packImg, 16);
+      const data = this.view!.imageData(packImg, 16);
       const tint = def.armor?.material === 'leather' || itemId.startsWith('leather_') ? hex('#a06540') : null;
       if (tint) {
-        const ov = this.pack!.get(`item/${itemId}_overlay.png`);
-        const od = ov ? this.pack!.imageData(ov, 16).data : null;
+        const ov = this.view!.get(`item/${itemId}_overlay.png`);
+        const od = ov ? this.view!.imageData(ov, 16).data : null;
         const d = data.data;
         for (let i = 0; i < d.length; i += 4) {
           if (od && od[i + 3] > 0) {
@@ -258,6 +268,14 @@ export class TextureManager implements SkinProvider {
       tmp.width = tmp.height = 16;
       tmp.getContext('2d')!.putImageData(data, 0, 0);
       ctx.drawImage(tmp, 0, 0, 32, 32);
+    } else if (def && 'image' in def.icon) {
+      const img = this.view?.get(def.icon.image);
+      if (img) {
+        ctx.drawImage(img, 0, 0, img.width, Math.min(img.height, img.width), 0, 0, 32, 32);
+      } else {
+        ctx.fillStyle = '#f0f';
+        ctx.fillRect(8, 8, 16, 16);
+      }
     } else if (def && 'tile' in def.icon) {
       const name = def.icon.tile;
       let ti = 0;

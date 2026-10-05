@@ -52,6 +52,7 @@ export class Explosions {
   /** Amorce la TNT en (x,y,z) : le bloc devient une entité qui explose après `fuse` secondes. */
   prime(ctx: GameContext, x: number, y: number, z: number, fuse = 4) {
     if (this.primed.some((p) => p.x === x && p.y === y && p.z === z)) return;
+    if (!ctx.gamerules.tntExplodes) return;
     ctx.world.setBlock(x, y, z, B.AIR);
     const mesh = new THREE.Mesh(this.geo, this.materials().map((m) => m.clone()));
     mesh.position.set(x + 0.5, y + 0.5, z + 0.5);

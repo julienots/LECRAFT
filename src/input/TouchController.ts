@@ -1,6 +1,7 @@
 import type { Settings } from '../core/Settings';
 import type { InputState } from './InputState';
 import { VirtualJoystick } from './VirtualJoystick';
+import { DPad } from './DPad';
 
 export interface TouchButtonDef {
   id: string;
@@ -34,6 +35,7 @@ const TAP_MOVE_PX = 12;
 export class TouchController {
   readonly root: HTMLDivElement;
   private joystick: VirtualJoystick;
+  private dpad: DPad;
   private buttons = new Map<string, HTMLDivElement>();
   private look = new Map<number, { x: number; y: number; sx: number; sy: number; t: number; long: boolean; timer: number }>();
   private editMode = false;
@@ -45,6 +47,7 @@ export class TouchController {
     this.root.className = 'touch-layer';
     parent.appendChild(this.root);
     this.joystick = new VirtualJoystick(this.root, settings.joystickSize / 2);
+    this.dpad = new DPad(this.root, input);
     for (const b of BUTTONS) this.createButton(b);
     this.applyLayout();
     const opts = { passive: false } as AddEventListenerOptions;
@@ -141,6 +144,7 @@ export class TouchController {
   syncToggles() {
     this.buttons.get('sneak')!.classList.toggle('active', this.input.sneak);
     this.buttons.get('sprint')!.classList.toggle('active', this.input.sprint);
+    this.dpad.syncSneak();
   }
 
   applyLayout() {
@@ -166,6 +170,16 @@ export class TouchController {
       }
     }
     this.joystick.setSize(s.joystickSize);
+    // croix directionnelle : la case centrale remplace « accroupi », double appui avant = sprint
+    const dpad = s.controlScheme === 'dpad';
+    this.dpad.setVisible(dpad);
+    this.dpad.setScale(scale, s.leftHanded);
+    this.buttons.get('sneak')!.style.display = dpad ? 'none' : '';
+    this.buttons.get('sprint')!.style.display = dpad ? 'none' : '';
+    if (dpad && !s.layout.jump) {
+      const j = this.buttons.get('jump')!;
+      j.style.bottom = `${40 * scale}px`;
+    }
   }
 
   setEditMode(on: boolean) {
@@ -179,6 +193,7 @@ export class TouchController {
   }
 
   private isJoystickZone(x: number) {
+    if (this.settings.controlScheme === 'dpad') return false;
     const w = window.innerWidth;
     return this.settings.leftHanded ? x > w * 0.6 : x < w * 0.4;
   }
@@ -239,6 +254,7 @@ export class TouchController {
 
   releaseAll() {
     this.joystick.end(-1);
+    this.dpad.release();
     for (const l of this.look.values()) clearTimeout(l.timer);
     this.look.clear();
     this.input.attack = this.input.jump = this.input.useHeld = false;

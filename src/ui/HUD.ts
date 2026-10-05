@@ -48,6 +48,13 @@ export class HUD implements HudApi {
   onSlotTap: (i: number) => void = () => {};
   onPause: () => void = () => {};
   onInventory: () => void = () => {};
+  onChat: () => void = () => {};
+  private titleEl: HTMLElement;
+  private subtitleEl: HTMLElement;
+  private actionbarEl: HTMLElement;
+  private coordsEl: HTMLElement;
+  private titleTimer = 0;
+  private actionTimer = 0;
   stats: () => string = () => '';
 
   constructor(parent: HTMLElement, private textures: TextureManager) {
@@ -94,6 +101,16 @@ export class HUD implements HudApi {
     this.compassArrow = el('span', { class: 'arrow' }, '➤');
     this.compassText = el('span');
     this.compass = el('div', { class: 'compass hidden' }, this.compassArrow, this.compassText);
+    const chatBtn = el('button', { class: 'btn-chat', 'aria-label': 'Chat' }, '💬');
+    chatBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.onChat();
+    });
+    this.titleEl = el('div', { class: 'mc-title-big' });
+    this.subtitleEl = el('div', { class: 'mc-subtitle' });
+    this.actionbarEl = el('div', { class: 'mc-actionbar' });
+    this.coordsEl = el('div', { class: 'mc-coords hidden' });
     const pause = el('button', { class: 'btn-pause', 'aria-label': 'Pause' }, '❚❚');
     pause.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
@@ -112,6 +129,10 @@ export class HUD implements HudApi {
       this.toasts,
       this.debug,
       pause,
+      chatBtn,
+      el('div', { class: 'mc-titles' }, this.titleEl, this.subtitleEl),
+      this.actionbarEl,
+      this.coordsEl,
       el('div', { class: 'mc-hud' }, this.itemName, this.armor, this.hearts, this.air, this.food, this.xpBg, this.xpLevel, this.hotbar, invBtn),
     );
     parent.append(this.root);
@@ -130,6 +151,21 @@ export class HUD implements HudApi {
     this.applySprites();
     this.last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1 };
     this.hotbarDirty = true;
+  }
+
+  /** /title : titre, sous-titre ou barre d'action. */
+  showTitle(text: string, kind: 'title' | 'subtitle' | 'actionbar') {
+    if (kind === 'actionbar') {
+      this.actionbarEl.textContent = text;
+      this.actionTimer = 3;
+      return;
+    }
+    if (!text) {
+      this.titleEl.textContent = this.subtitleEl.textContent = '';
+      return;
+    }
+    (kind === 'title' ? this.titleEl : this.subtitleEl).textContent = text;
+    this.titleTimer = 4;
   }
 
   show(v: boolean) {
@@ -232,6 +268,12 @@ export class HUD implements HudApi {
       } else this.debug.classList.add('hidden');
     }
     const L = this.last;
+    // titres, barre d'action et coordonnées (règle showCoordinates)
+    if (this.titleTimer > 0 && (this.titleTimer -= dt) <= 0) this.titleEl.textContent = this.subtitleEl.textContent = '';
+    if (this.actionTimer > 0 && (this.actionTimer -= dt) <= 0) this.actionbarEl.textContent = '';
+    const showC = s.gamerules.showCoordinates;
+    this.coordsEl.classList.toggle('hidden', !showC);
+    if (showC) this.coordsEl.textContent = `Position : ${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)}`;
     const hp = Math.ceil(p.health);
     if (hp !== L.h || p.maxHealth !== L.maxH) {
       L.h = hp;

@@ -63,7 +63,14 @@ export class KeyboardMouse {
       else if (code === 'F3') {
         e.preventDefault();
         this.input.push('debug');
-      } else if (code === 'KeyG') this.input.push('drop');
+      } else if (code === 'KeyG' || code === 'KeyQ') this.input.push('drop');
+      else if (code === 'KeyT' || code === 'Enter') {
+        e.preventDefault();
+        this.input.push('chat');
+      } else if (code === 'Slash' || e.key === '/') {
+        e.preventDefault();
+        this.input.push('command');
+      }
       else if (/^Digit[1-9]$/.test(code)) this.input.push(`slot:${Number(code.slice(5)) - 1}`);
       else if (code === 'KeyF') this.input.push('use');
       else if (code === 'Escape' || code === 'KeyP') this.onBack();

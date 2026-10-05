@@ -316,3 +316,34 @@ html.menu-3d #game-canvas { filter: blur(1.5px); }
 .title-screen .panorama { transition: opacity 1.2s; }
 html.pano-ready .title-screen .panorama { opacity: 0; }
 html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }
+/* ---------- chat et titres ---------- */
+.chat-feed { position: absolute; left: calc(var(--safe-left) + 4px); top: calc(var(--safe-top) + var(--gs) * 14px); max-width: min(60vw, calc(var(--gs) * 320px)); pointer-events: none; display: flex; flex-direction: column; gap: 0; }
+.chat-line { background: rgba(0, 0, 0, 0.5); color: #fff; font-size: calc(var(--gs) * 8px); line-height: calc(var(--gs) * 9px); padding: 0 calc(var(--gs) * 2px); text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f; overflow-wrap: anywhere; }
+.chat-line.error { color: #ff5555; }
+.chat-line.chat { color: #e0e0e0; }
+.chat-screen { justify-content: flex-end; align-items: stretch; padding: calc(var(--safe-top) + 4px) calc(var(--safe-right) + 4px) calc(var(--safe-bottom) + 4px) calc(var(--safe-left) + 4px); background: transparent; }
+.chat-log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; max-width: min(100%, calc(var(--gs) * 360px)); touch-action: pan-y; }
+.chat-log .chat-line { flex: none; }
+.chat-bottom { display: flex; flex-direction: column; gap: 2px; }
+.chat-row { display: flex; gap: 4px; align-items: center; }
+.chat-input { flex: 1; min-width: 0; height: calc(var(--gs) * 14px) !important; min-height: 0 !important; background: rgba(0, 0, 0, 0.6) !important; border: 0 !important; border-radius: 0 !important; color: #fff !important; font-size: calc(var(--gs) * 8px) !important; padding: 0 calc(var(--gs) * 3px) !important; }
+.chat-send { height: calc(var(--gs) * 14px) !important; }
+.chat-sugg { display: flex; flex-direction: column; align-items: flex-start; }
+.chat-sugg-item { background: rgba(0, 0, 0, 0.75); color: #a0a0a0; font-size: calc(var(--gs) * 8px); line-height: calc(var(--gs) * 11px); padding: 0 calc(var(--gs) * 3px); cursor: pointer; }
+.chat-sugg-item:first-child { color: #ffff55; }
+.chat-help { color: #a0a0a0; font-size: calc(var(--gs) * 6px); text-shadow: 1px 1px 0 #000; }
+.btn-chat { position: absolute; top: calc(10px + var(--safe-top)); right: calc(68px + var(--safe-right)); width: 48px; height: 48px; border-radius: 10px; background: #0008; border: 2px solid #fff4; pointer-events: auto; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+.mc-titles { position: absolute; left: 0; right: 0; top: 30%; text-align: center; pointer-events: none; color: #fff; }
+.mc-title-big { font-size: calc(var(--gs) * 32px); line-height: 1.1; text-shadow: calc(var(--gs) * 4px) calc(var(--gs) * 4px) 0 #3f3f3f; }
+.mc-subtitle { font-size: calc(var(--gs) * 16px); text-shadow: calc(var(--gs) * 2px) calc(var(--gs) * 2px) 0 #3f3f3f; }
+.mc-actionbar { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + var(--gs) * 70px); text-align: center; color: #fff; font-size: calc(var(--gs) * 8px); text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f; pointer-events: none; }
+.mc-coords { position: absolute; left: calc(var(--safe-left) + 6px); top: calc(var(--safe-top) + 6px); color: #fff; background: rgba(0, 0, 0, 0.4); padding: 2px 4px; font-size: calc(var(--gs) * 8px); text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f; pointer-events: none; }
+/* croix directionnelle classique */
+.dpad { position: absolute; bottom: calc(var(--safe-bottom) + 16px); display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 3px; pointer-events: auto; touch-action: none; z-index: 1; }
+.dpad.hidden { display: none; }
+.dpad-cell { display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(40, 40, 40, 0.45); border: 2px solid rgba(255, 255, 255, 0.35); text-shadow: 1px 1px 0 #000; user-select: none; }
+.dpad-cell.pressed { background: rgba(200, 200, 200, 0.45); }
+.dpad-up { grid-area: 1 / 2; } .dpad-left { grid-area: 2 / 1; } .dpad-center { grid-area: 2 / 2; border-radius: 50%; transform: scale(0.75); } .dpad-right { grid-area: 2 / 3; } .dpad-down { grid-area: 3 / 2; }
+.dpad-upleft { grid-area: 1 / 1; visibility: hidden; } .dpad-upright { grid-area: 1 / 3; visibility: hidden; }
+.dpad.forward .dpad-upleft, .dpad.forward .dpad-upright { visibility: visible; }
+.dpad-center.active { background: rgba(120, 200, 255, 0.55); }

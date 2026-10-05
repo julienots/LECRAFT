@@ -19,7 +19,7 @@ export const FLAG_LIQUID = 16;
 export interface MeshArrays {
   pos: Int16Array; // xyz * 16
   uv: Uint16Array; // en 1/16 de tuile
-  info: Uint8Array; // tile, flags, sky*16, block*16
+  info: Uint16Array; // tile, flags, sky*16, block*16
   tint: Uint8Array; // r, g, b, shade
   index: Uint16Array | Uint32Array;
   vertexCount: number;
@@ -28,7 +28,7 @@ export interface MeshArrays {
 class Builder {
   pos: Int16Array;
   uv: Uint16Array;
-  info: Uint8Array;
+  info: Uint16Array;
   tint: Uint8Array;
   idx: Uint32Array;
   v = 0;
@@ -36,7 +36,7 @@ class Builder {
   constructor(cap = 65536) {
     this.pos = new Int16Array(cap * 3);
     this.uv = new Uint16Array(cap * 2);
-    this.info = new Uint8Array(cap * 4);
+    this.info = new Uint16Array(cap * 4);
     this.tint = new Uint8Array(cap * 4);
     this.idx = new Uint32Array(cap * 1.5);
   }

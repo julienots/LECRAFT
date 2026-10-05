@@ -3,8 +3,9 @@ import { applyQuality } from '../core/Settings';
 import type { QualityLevel, Difficulty } from '../core/Config';
 import type { Screen } from './UIManager';
 import { button, el } from './dom';
-import { mcButton, mcCycle, mcGrid, mcLabel, mcScreen, mcSlider, mcToggle } from './Mc';
+import { mcButton, mcCycle, mcGrid, mcLabel, mcRow, mcScreen, mcSlider, mcToggle } from './Mc';
 import { importPack, loadInstalledPack, removePack } from '../render/ResourcePack';
+import { importAddon, listAddons, removeAddon, setAddonEnabled } from '../addons/AddonManager';
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
 
@@ -31,6 +32,7 @@ export function settingsScreen(game: Game): Screen {
         mcButton('Musique et sons...', sub(audioScreen), { w: 150 }),
         mcButton('Commandes...', sub(controlsScreen), { w: 150 }),
         mcButton('Packs de ressources...', sub(packsScreen), { w: 150 }),
+        mcButton('Add-ons (.mcaddon)...', sub(addonsScreen), { w: 150 }),
         mcButton('Accessibilité...', sub(accessScreen), { w: 150 }),
         mcButton('Infos appareil...', sub(deviceScreen), { w: 150 }),
       ),
@@ -98,6 +100,7 @@ function controlsScreen(game: Game): Screen {
     list: true,
     body: [
       mcGrid(
+        mcCycle('Commandes tactiles', [['joystick', 'Joystick'], ['dpad', 'Croix (classique)']], s.controlScheme ?? 'joystick', (v) => ((s.controlScheme = v as typeof s.controlScheme), apply())),
         mcSlider((v) => `Sensibilité : ${Math.round(v * 50)} %`, 0.2, 3, 0.05, s.sensitivity, (v) => ((s.sensitivity = v), apply())),
         mcToggle('Inverser la souris', s.invertY, (v) => ((s.invertY = v), apply())),
         mcSlider((v) => `Joystick : ${v} px`, 80, 200, 5, s.joystickSize, (v) => ((s.joystickSize = v), apply())),
@@ -189,6 +192,81 @@ function packsScreen(game: Game): Screen {
       remove,
       progress,
       status,
+      file,
+    ],
+    footer: [mcButton('Terminé', () => game.ui.back())],
+  });
+}
+
+/** Add-ons de l'édition Bedrock : import, activation, suppression (redémarrage pour appliquer). */
+function addonsScreen(game: Game): Screen {
+  const list = el('div', { class: 'col', style: 'align-items:center;gap:calc(var(--gs) * 3px)' });
+  const status = mcLabel('');
+  const restart = mcButton('Redémarrer pour appliquer', async () => {
+    if (game.session) await game.saveNow();
+    location.reload();
+  }, { w: 200 });
+  restart.style.display = 'none';
+  const changed = () => (restart.style.display = '');
+  const file = el('input', { type: 'file', accept: '.mcaddon,.mcpack,.zip,application/zip,application/octet-stream', style: 'display:none' });
+  const typeName: Record<string, string> = { resources: 'ressources', data: 'comportement', script: 'scripts', skin_pack: 'skins', world_template: 'modèle de monde', unknown: 'inconnu' };
+  const refresh = async () => {
+    const all = await listAddons();
+    list.replaceChildren();
+    if (!all.length) list.append(mcLabel('Aucun add-on installé.'));
+    for (const a of all) {
+      const packs = a.packs.map((p) => `${typeName[p.type] ?? p.type}${p.hasScripts ? ' (scripts ignorés)' : ''}`).join(' + ');
+      list.append(
+        el('div', { class: 'world-entry', style: 'grid-template-columns:1fr;cursor:default' },
+          el('div', {}, el('div', { class: 'name' }, a.name), el('div', { class: 'sub' }, `${a.fileName} · ${packs}`), el('div', { class: 'sub' }, a.packs[0]?.description ?? '')),
+          mcRow(
+            mcToggle('Activé', a.enabled, async (v) => {
+              await setAddonEnabled(a.id, v);
+              changed();
+            }, 98),
+            mcButton('Supprimer', async () => {
+              if (await game.ui.confirm('Supprimer cet add-on ?', `« ${a.name} » sera retiré. Les blocs qu'il ajoutait deviendront des « blocs inconnus » dans vos mondes.`, 'Supprimer')) {
+                await removeAddon(a.id);
+                changed();
+                void refresh();
+              }
+            }, { w: 98 }),
+          ),
+        ),
+      );
+    }
+  };
+  file.addEventListener('change', async () => {
+    const f = file.files?.[0];
+    if (!f) return;
+    status.textContent = 'Import en cours…';
+    try {
+      const a = await importAddon(f);
+      status.textContent = `« ${a.name} » importé (${a.packs.length} pack(s)).`;
+      changed();
+      void refresh();
+    } catch (e) {
+      status.textContent = `Échec de l'import : ${(e as Error).message}`;
+    }
+    file.value = '';
+  });
+  const r = game.addonResult;
+  const loaded = r && (r.counts.blocks || r.counts.items || r.counts.mobs || r.counts.recipes || r.counts.textures || r.counts.functions)
+    ? `Chargés : ${r.counts.blocks} blocs, ${r.counts.items} objets, ${r.counts.recipes} recettes, ${r.counts.mobs} créatures, ${r.counts.functions} fonctions, ${r.counts.textures} textures.`
+    : '';
+  void refresh();
+  return mcScreen({
+    title: 'Add-ons',
+    bg: game.session ? 'dim' : 'dirt',
+    list: true,
+    body: [
+      mcLabel('Importez des add-ons de l’édition mobile (.mcaddon, .mcpack) : nouveaux blocs, objets, recettes, créatures, textures, fonctions. Les scripts JavaScript ne sont pas exécutés.'),
+      mcButton('Importer un add-on...', () => file.click(), { w: 200 }),
+      status,
+      loaded ? mcLabel(loaded, 'white') : null,
+      ...(r?.report ?? []).map((t) => mcLabel(t, 'yellow')),
+      restart,
+      list,
       file,
     ],
     footer: [mcButton('Terminé', () => game.ui.back())],

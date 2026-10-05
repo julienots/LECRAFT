@@ -20,6 +20,7 @@ import { Explosions } from '../world/Explosions';
 import { FallingBlocks } from '../world/FallingBlocks';
 import { Monster } from '../entities/Monster';
 import { FACING_DIR, boundsOf, modelBoxes } from '../blocks/Shapes';
+import { DEFAULT_RULES, execute, type GameRules } from '../commands/Commands';
 import { CraftingSystem, tickFurnace, type FurnaceState } from '../crafting/CraftingSystem';
 import { Progression } from './Progression';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
@@ -40,6 +41,7 @@ export interface WorldState {
   defeatedBosses: string[];
   progression: ReturnType<Progression['serialize']>;
   fuel?: number;
+  gamerules?: Partial<GameRules>;
   furnaces?: Record<string, FurnaceState>;
   mobs: SavedMob[];
 }
@@ -82,6 +84,10 @@ export class Session implements GameContext {
   private wasInWater = false;
   loaded = false;
   paused = false;
+  /** Règles du jeu (/gamerule). */
+  readonly gamerules: GameRules = { ...DEFAULT_RULES };
+  /** Fonctions (.mcfunction) fournies par les add-ons. */
+  readonly functions: Map<string, string[]>;
   /** Option « Coffre bonus » à la création du monde. */
   bonusChest = false;
   elapsed = 0;
@@ -93,6 +99,7 @@ export class Session implements GameContext {
     this.scene = r.scene;
     this.world = new World(meta.seed);
     this.player = new Player(meta.gameMode, meta.difficulty);
+    this.functions = game.addonFunctions;
     this.player.difficulty = game.settings.difficulty;
     this.stats = { inc: (s, n) => this.progression.inc(s, n) };
     this.shadowTexture = createShadowTexture();
@@ -187,6 +194,16 @@ export class Session implements GameContext {
   get audio() {
     return this.game.audio;
   }
+  /** Commandes de triche autorisées dans ce monde. */
+  get cheats() {
+    return this.meta.cheats ?? true;
+  }
+
+  /** Exécute une commande de chat ; les messages vont dans le chat. */
+  runCommand(line: string): boolean {
+    return execute(this, line, (m, err) => this.game.chat.add(m, err ? 'error' : 'info'));
+  }
+
   get skins() {
     return this.game.textures;
   }
@@ -323,6 +340,7 @@ export class Session implements GameContext {
     this.savedSpawners = s.spawners ?? {};
     for (const b of s.defeatedBosses ?? []) this.defeatedBosses.add(b);
     if (s.progression) this.progression.load(s.progression);
+    Object.assign(this.gamerules, s.gamerules ?? {});
     for (const [k, f] of Object.entries(s.furnaces ?? {})) this.world.furnaces.set(k, f);
     if (s.mobs) this.pendingMobs = s.mobs;
   }
@@ -343,6 +361,7 @@ export class Session implements GameContext {
       defeatedBosses: [...this.defeatedBosses],
       progression: this.progression.serialize(),
       furnaces: Object.fromEntries(this.world.furnaces),
+      gamerules: { ...this.gamerules },
       mobs: this.entities.serialize(),
     };
   }
@@ -387,6 +406,8 @@ export class Session implements GameContext {
       if (ev === 'pause') game.pause();
       else if (ev === 'inventory') game.openInventory('hand');
       else if (ev === 'debug') game.hud.toggleDebug();
+      else if (ev === 'chat') game.openChat('');
+      else if (ev === 'command') game.openChat('/');
       else if (ev === 'drop') this.dropSelected(false);
       else if (ev === 'slotNext' || ev === 'slotPrev') this.selectSlot((this.player.inventory.selected + (ev === 'slotNext' ? 1 : 8)) % 9);
       else if (ev.startsWith('slot:')) this.selectSlot(Number(ev.slice(5)));
@@ -456,13 +477,18 @@ export class Session implements GameContext {
   private tick() {
     const p = this.player;
     const dt = TICK_DT;
-    this.dayCycle.update(dt);
+    if (this.gamerules.doDaylightCycle) this.dayCycle.update(dt);
+    if (!this.gamerules.doWeatherCycle) this.weather.timer = Math.max(this.weather.timer, 10);
     this.weather.update(dt, this.biomeWeather() !== 'none');
+    p.naturalRegen = this.gamerules.naturalRegeneration;
+    p.fallDamage = this.gamerules.fallDamage;
     p.tick(dt);
     this.entities.update(this, dt);
     this.ticker.tick(this);
     this.tickFurnaces(dt);
     this.explosions.update(this, this.entities, dt);
+    // fonctions « tick » des add-ons
+    for (const f of this.game.addonTickFunctions) execute(this, `function ${f}`, () => {}, 0, undefined, true);
     this.falling.update(this, this.entities, dt);
     this.checkPressurePlate(dt);
     if (this.pendingMobs && this.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) {
@@ -641,7 +667,7 @@ export class Session implements GameContext {
     this.audio.play('hurt', { pitch: 0.7 });
     this.haptic('heavy');
     // perte de l'inventaire (sauf en facile/paisible)
-    if (p.difficulty === 'normal' || p.difficulty === 'hard') {
+    if ((p.difficulty === 'normal' || p.difficulty === 'hard') && !this.gamerules.keepInventory) {
       for (let i = 0; i < p.inventory.size; i++) {
         const s = p.inventory.slots[i];
         if (s) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability);
@@ -656,6 +682,10 @@ export class Session implements GameContext {
       p.xp = 0;
     }
     this.progression.inc('deaths');
+    if (this.gamerules.doImmediateRespawn) {
+      this.respawn();
+      return;
+    }
     this.game.showDeath();
   }
 

@@ -9,6 +9,8 @@ import { applyTheme } from '../ui/Theme';
 import { setWidgetClick } from '../ui/Mc';
 import { SAVE_VERSION } from './Config';
 import { MenuPanorama } from '../render/MenuPanorama';
+import { ChatUI } from '../ui/ChatUI';
+import { loadEnabledAddons, type AddonLoadResult } from '../addons/AddonManager';
 import { Renderer } from '../render/Renderer';
 import { AudioManager } from '../audio/AudioManager';
 import { SaveManager, type WorldMeta } from '../save/SaveManager';
@@ -51,6 +53,12 @@ export class Game {
   lastThumbnail: string | null = null;
   private inventoryUI: InventoryUI | null = null;
   private panorama: MenuPanorama | null = null;
+  readonly chat: ChatUI;
+  /** Fonctions .mcfunction chargées depuis les add-ons. */
+  readonly addonFunctions = new Map<string, string[]>();
+  /** Fonctions exécutées à chaque tick (tick.json des add-ons). */
+  readonly addonTickFunctions: string[] = [];
+  addonResult: AddonLoadResult | null = null;
   readonly debug = new DebugTools(this);
 
   constructor(readonly root: HTMLElement) {
@@ -68,6 +76,8 @@ export class Game {
     this.hud.onSlotTap = (i) => this.input.push(`slot:${i}`);
     this.hud.onPause = () => this.pause();
     this.hud.onInventory = () => this.input.push('inventory');
+    this.hud.onChat = () => this.openChat('');
+    this.chat = new ChatUI(this, this.hud.root);
     this.hud.stats = () => this.debugText();
     this.touch = new TouchController(root.querySelector('#hud') as HTMLElement, this.input, this.settings);
     this.touch.setVisible(false);
@@ -101,7 +111,17 @@ export class Game {
     setWidgetClick(() => this.audio.play('click', { volume: 0.5 }));
     // pack de ressources importé par l'utilisateur (stocké localement)
     const pack = await loadInstalledPack();
-    if (pack) this.textures.applyPack(pack);
+    // add-ons Bedrock activés : enregistrés avant toute création de monde
+    try {
+      const addons = await loadEnabledAddons();
+      this.addonResult = addons;
+      for (const [k, v] of addons.functions) this.addonFunctions.set(k, v);
+      this.addonTickFunctions.push(...addons.tickFunctions);
+      if (pack || addons.images.size) this.textures.applyPack(pack, addons.images);
+    } catch (e) {
+      console.error('Chargement des add-ons', e);
+      if (pack) this.textures.applyPack(pack);
+    }
     applyTheme(this.textures);
     this.showMainMenu();
     this.loop.start();
@@ -195,9 +215,11 @@ export class Game {
   }
 
   // ---------- mondes ----------
-  async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty, bonusChest = false) {
+  async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty, bonusChest = false, cheats = true) {
     const seed = seedText.trim() ? seedFromString(seedText) : (Math.random() * 2 ** 31) | 0;
     const meta = await this.saves.createWorld(name.trim() || 'Nouveau monde', seed, mode, difficulty);
+    meta.cheats = cheats;
+    await this.saves.updateMeta(meta);
     await this.startWorld(meta, null, bonusChest);
   }
 
@@ -237,6 +259,7 @@ export class Game {
     const loading = loadingScreen(meta.name);
     this.ui.set(loading.screen);
     this.session?.dispose();
+    this.chat.clear();
     this.session = new Session(this, meta, state);
     this.session.bonusChest = bonusChest;
     this.hud.markHotbarDirty();
@@ -254,6 +277,7 @@ export class Game {
   pause() {
     if (this.state !== 'playing' || !this.session) return;
     this.closeInventory();
+    this.chat.close();
     this.state = 'paused';
     this.session.paused = true;
     this.input.reset();
@@ -320,6 +344,23 @@ export class Game {
     this.session.respawn();
     this.ui.clear();
     this.touch.setVisible(true);
+  }
+
+  // ---------- chat ----------
+  openChat(prefill: string) {
+    if (!this.session || this.state !== 'playing' || this.chat.isOpen) return;
+    this.closeInventory();
+    this.input.reset();
+    this.touch.releaseAll();
+    this.keyboard.releaseAll();
+    this.keyboard.exitPointerLock();
+    this.touch.setVisible(false);
+    this.chat.open(prefill);
+  }
+
+  onChatClosed() {
+    this.input.reset();
+    if (this.state === 'playing') this.touch.setVisible(true);
   }
 
   // ---------- inventaire ----------

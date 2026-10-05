@@ -13,6 +13,7 @@ import { LightVolume } from '../render/Lighting';
 import { buildPadded } from '../render/Padded';
 import { BiomeManager } from '../world/BiomeManager';
 import type { FromWorker, ToWorker } from './protocol';
+import { registerAddonBlocks } from '../addons/AddonRegistry';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 let gen: WorldGenerator | null = null;
@@ -123,6 +124,7 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
   try {
     switch (m.type) {
       case 'init':
+        if (m.addonBlocks?.length) registerAddonBlocks(m.addonBlocks);
         gen = new WorldGenerator(m.seed);
         chunks.clear();
         break;

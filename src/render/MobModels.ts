@@ -18,11 +18,14 @@ interface CubePart {
   mirror?: boolean;
   inflate?: number;
   anim?: string;
+  /** UV par face (format « per-face » des modèles de l'édition Bedrock) : [u, v, largeur, hauteur]. */
+  faceUV?: Partial<Record<'top' | 'bottom' | 'right' | 'front' | 'left' | 'back', [number, number, number, number]>>;
   /** Couche séparée (laine du mouton). */
   layer?: 'fur';
   children?: CubePart[];
 }
-interface VanillaModel {
+export type { CubePart };
+export interface VanillaModel {
   skin: string;
   texW: number;
   texH: number;
@@ -144,6 +147,7 @@ function cubeGeometry(part: CubePart, texW: number, texH: number): THREE.BufferG
     back: [u + 2 * d + w, v + d, w, h],
   };
   if (part.mirror) [R.right, R.left] = [R.left, R.right];
+  if (part.faceUV) Object.assign(R, part.faceUV);
   // faces : 4 coins (repère vanilla) + coordonnées texture (u relatif, v relatif) de chaque coin
   type C = [number, number, number, number, number];
   const faces: { r: number[]; n: [number, number, number]; c: C[] }[] = [
@@ -190,7 +194,7 @@ function cubeGeometry(part: CubePart, texW: number, texH: number): THREE.BufferG
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
 function cachedCube(part: CubePart, texW: number, texH: number) {
-  const k = `${part.uv}|${part.box}|${part.inflate ?? 0}|${part.mirror ? 1 : 0}|${texW}x${texH}`;
+  const k = `${part.uv}|${part.box}|${part.inflate ?? 0}|${part.mirror ? 1 : 0}|${texW}x${texH}|${part.faceUV ? JSON.stringify(part.faceUV) : ''}`;
   let g = geoCache.get(k);
   if (!g) {
     g = cubeGeometry(part, texW, texH);
@@ -249,9 +253,12 @@ export class MobModel {
     if (p.rot) pivot.rotation.set(p.rot[0], -p.rot[1], -p.rot[2]);
     const fur = p.layer === 'fur';
     const mat = fur ? this.furMaterial! : this.material;
-    const mesh = new THREE.Mesh(cachedCube(p, def.texW, def.texH), mat);
-    pivot.add(mesh);
-    if (fur) this.furParts.push(mesh);
+    // nœud sans géométrie (os d'un modèle Bedrock) : seulement un pivot
+    if (p.box[3] || p.box[4] || p.box[5]) {
+      const mesh = new THREE.Mesh(cachedCube(p, def.texW, def.texH), mat);
+      pivot.add(mesh);
+      if (fur) this.furParts.push(mesh);
+    }
     if (p.anim) {
       const list = this.parts.get(p.anim) ?? [];
       list.push(pivot);

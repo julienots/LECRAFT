@@ -16,7 +16,7 @@ export class InputState {
   /** Source de la dernière entrée (pour l'interface). */
   mode: 'touch' | 'keyboard' = 'touch';
 
-  push(ev: 'use' | 'attackTap' | 'inventory' | 'pause' | 'drop' | 'debug' | `slot:${number}` | 'slotNext' | 'slotPrev') {
+  push(ev: 'use' | 'attackTap' | 'inventory' | 'pause' | 'drop' | 'debug' | `slot:${number}` | 'slotNext' | 'slotPrev' | 'chat' | 'command') {
     this.queue.push(ev);
   }
   consume(): string[] {

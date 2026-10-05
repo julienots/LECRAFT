@@ -14,13 +14,14 @@ export type ItemUse =
   | 'bone_meal'
   | 'ignite'
   | 'shear'
-  | 'spawn_compass';
+  | 'spawn_compass'
+  | 'spawn_egg';
 
 export interface ItemDef {
   key: string;
   name: string;
   /** Icône : rendu isométrique d'un bloc, tuile plate de l'atlas, ou sprite pixel-art procédural. */
-  icon: { block: string } | { tile: string } | { sprite: string; colors: string[] };
+  icon: { block: string } | { tile: string } | { sprite: string; colors: string[] } | { image: string };
   maxStack?: number;
   /** Bloc posé par cet item. */
   place?: string;

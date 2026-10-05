@@ -510,6 +510,13 @@ export class PlayerInteraction {
         }
         return false;
       }
+      case 'spawn_egg': {
+        const def = ItemRegistry.get(itemId);
+        if (!t || !def?.target) return false;
+        const m = this.entities.spawnMob(def.target, t.x + 0.5 + t.nx, t.y + Math.max(0, t.ny) + (t.ny < 0 ? -2 : 0), t.z + 0.5 + t.nz, { persistent: true });
+        if (m && !p.creative) inv.takeFromSlot(inv.selected, 1);
+        return !!m;
+      }
       case 'ignite':
         // le briquet n'a d'effet que sur la TNT (pas de feu dans cette version)
         return false;
