@@ -37,8 +37,9 @@ export class HeldItem {
     if (!id || !def) {
       const m = new THREE.MeshBasicMaterial({ color: 0xd8a888 });
       this.mats.push(m);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.7), m);
-      arm.position.set(0.1, -0.05, 0.1);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.6), m);
+      arm.position.set(0.12, -0.1, 0.15);
+      arm.rotation.set(0.15, -0.1, 0);
       return arm;
     }
     if ('block' in def.icon) {
@@ -50,7 +51,7 @@ export class HeldItem {
           this.mats.push(m);
           return m;
         });
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mats);
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), mats);
         mesh.rotation.set(0.2, 0.7, 0);
         return mesh;
       }
@@ -61,8 +62,8 @@ export class HeldItem {
     tex.colorSpace = THREE.NoColorSpace;
     const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
     this.mats.push(m);
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), m);
-    plane.rotation.set(0, -1.2, 0.3);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), m);
+    plane.rotation.set(0, -0.55, 0.15);
     return plane;
   }
 
@@ -84,7 +85,7 @@ export class HeldItem {
     this.camera.updateProjectionMatrix();
     const s = Math.sin(swing * Math.PI);
     const bx = Math.sin(bob) * 0.025 * moving, by = Math.abs(Math.cos(bob)) * 0.02 * moving;
-    this.holder.position.set(0.48 + bx - s * 0.15, -0.42 + by - s * 0.08 - (sneak ? 0.03 : 0), -0.75 - s * 0.15);
+    this.holder.position.set(0.42 + bx - s * 0.12, -0.36 + by - s * 0.06 - (sneak ? 0.03 : 0), -0.72 - s * 0.12);
     this.holder.rotation.set(-s * 0.9, -0.15, 0);
     this.tint.setScalar(light);
     for (const m of this.mats) m.color.copy(this.tint);

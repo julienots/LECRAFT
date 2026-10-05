@@ -22,6 +22,7 @@ export class Renderer {
     this.gl = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     this.gl.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.gl.autoClear = false;
+    this.gl.info.autoReset = false;
     this.gl.setClearColor(0x87b8f0, 1);
     this.camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.08, 800);
     this.camera.rotation.order = 'YXZ';
@@ -67,6 +68,7 @@ export class Renderer {
       this.camera.position.x += (Math.random() - 0.5) * this.shake * 0.15;
       this.camera.position.y += (Math.random() - 0.5) * this.shake * 0.15;
     }
+    this.gl.info.reset();
     this.gl.clear();
     this.gl.render(this.scene, this.camera);
     if (extra) {

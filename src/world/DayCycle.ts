@@ -24,7 +24,7 @@ export class DayCycle {
   }
   /** Lumière du jour 0..1 (appliquée à la lumière du ciel). */
   get daylight() {
-    return clamp(0.18 + 0.82 * smoothstep(-0.18, 0.3, this.sunHeight), 0.18, 1);
+    return clamp(0.34 + 0.66 * smoothstep(-0.18, 0.3, this.sunHeight), 0.34, 1);
   }
   get isNight() {
     return this.sunHeight < -0.08;

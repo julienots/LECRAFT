@@ -6,6 +6,8 @@ export class KeyboardMouse {
   private keys = new Set<string>();
   private cleanup: (() => void)[] = [];
   enabled = true;
+  /** Échap = bouton retour Android. */
+  onBack: () => void = () => {};
 
   constructor(private canvas: HTMLElement, private input: InputState, private settings: Settings) {
     const kd = (e: KeyboardEvent) => this.onKey(e, true);
@@ -64,7 +66,7 @@ export class KeyboardMouse {
       } else if (code === 'KeyG') this.input.push('drop');
       else if (/^Digit[1-9]$/.test(code)) this.input.push(`slot:${Number(code.slice(5)) - 1}`);
       else if (code === 'KeyF') this.input.push('use');
-      else if (code === 'Escape' || code === 'KeyP') this.input.push('pause');
+      else if (code === 'Escape' || code === 'KeyP') this.onBack();
     } else {
       this.keys.delete(code);
       if (code === 'ShiftLeft' || code === 'ShiftRight') this.input.sneak = false;

@@ -69,7 +69,7 @@ void main() {
   if (tex.a < 0.95 && tex.a > 0.5) c *= vTint.rgb;
   float sky = vLight.x * uDaylight;
   float blk = vLight.y;
-  float bs = pow(sky, 1.6);
+  float bs = pow(sky, 1.45);
   float bb = pow(blk, 1.5);
   vec3 light = max(uSkyColor * bs, vec3(1.0, 0.82, 0.58) * bb * 1.05);
   light = max(light, vec3(uAmbient));

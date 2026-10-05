@@ -9,6 +9,7 @@ const SUNSET_ZENITH = C('#3a58a0');
 const NIGHT_ZENITH = C('#03060f');
 const NIGHT_HORIZON = C('#0c1428');
 const RAIN_TINT = C('#7a8494');
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
 
 function pixelTexture(size: number, draw: (ctx: CanvasRenderingContext2D) => void) {
   const c = document.createElement('canvas');
@@ -36,6 +37,7 @@ export class Sky {
   readonly zenith = new THREE.Color();
   readonly skyLightColor = new THREE.Color(1, 1, 1);
   private disposables: { dispose(): void }[] = [];
+  private tmp = new THREE.Vector3();
 
   constructor() {
     this.domeMat = new THREE.ShaderMaterial({
@@ -70,7 +72,7 @@ export class Sky {
       for (const [x, y, s] of [[3, 3, 3], [9, 5, 2], [5, 10, 3], [11, 11, 2]]) c.fillRect(x, y, s, s);
     });
     const mk = (tex: THREE.Texture, size: number) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, fog: false }));
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: true, fog: false }));
       m.renderOrder = -9;
       m.frustumCulled = false;
       this.disposables.push(tex, m.geometry, m.material as THREE.Material);
@@ -88,7 +90,7 @@ export class Sky {
     }
     const sg = new THREE.BufferGeometry();
     sg.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false }));
+    this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, depthTest: true, fog: false }));
     this.stars.renderOrder = -9;
     this.stars.frustumCulled = false;
     this.group.add(this.stars);
@@ -147,10 +149,10 @@ export class Sky {
     this.domeMat.uniforms.uSunGlow.value.setRGB(1, 0.6, 0.3).multiplyScalar(sunset * (1 - rain));
     this.group.position.copy(camPos);
     this.sun.position.copy(sunDir).multiplyScalar(380);
-    this.sun.lookAt(0, 0, 0);
+    this.sun.quaternion.setFromUnitVectors(Z_AXIS, this.tmp.copy(sunDir).negate());
     (this.sun.material as THREE.MeshBasicMaterial).opacity = 1 - rain * 0.9;
     this.moon.position.copy(sunDir).multiplyScalar(-380);
-    this.moon.lookAt(0, 0, 0);
+    this.moon.quaternion.setFromUnitVectors(Z_AXIS, sunDir);
     (this.moon.material as THREE.MeshBasicMaterial).opacity = 1 - rain * 0.9;
     (this.stars.material as THREE.PointsMaterial).opacity = clamp((1 - day) * 1.2 - rain, 0, 1);
     this.stars.rotation.z = ang * 0.2;

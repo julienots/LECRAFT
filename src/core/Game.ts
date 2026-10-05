@@ -17,6 +17,7 @@ import { settingsScreen } from '../ui/SettingsUI';
 import { InventoryUI, type InventoryMode } from '../ui/InventoryUI';
 import type { Difficulty, GameMode } from './Config';
 import { seedFromString } from '../util/math';
+import { DebugTools } from './DebugTools';
 
 export type GameState = 'menu' | 'loading' | 'playing' | 'paused';
 
@@ -43,6 +44,7 @@ export class Game {
   state: GameState = 'menu';
   lastThumbnail: string | null = null;
   private inventoryUI: InventoryUI | null = null;
+  readonly debug = new DebugTools(this);
 
   constructor(readonly root: HTMLElement) {
     this.device = detectDevice();
@@ -62,6 +64,7 @@ export class Game {
     this.touch = new TouchController(root.querySelector('#hud') as HTMLElement, this.input, this.settings);
     this.touch.setVisible(false);
     this.keyboard = new KeyboardMouse(canvas, this.input, this.settings);
+    this.keyboard.onBack = () => this.back();
     this.loop = new GameLoop((dt) => this.frame(dt));
     this.loop.fpsCap = this.settings.fpsCap;
     this.adaptive = new AdaptiveQuality((dir) => this.adjustQuality(dir));
