@@ -1,5 +1,5 @@
 import { CHUNK_VOLUME, SAVE_VERSION, type Difficulty, type GameMode } from '../core/Config';
-import { checksumBytes, checksumString, rleDecode, rleEncode } from './WorldSerializer';
+import { checksumBytes, checksumString, rleDecode, rleDecode16, rleEncode, rleEncode16 } from './WorldSerializer';
 
 export interface WorldMeta {
   id: string;
@@ -26,7 +26,9 @@ interface StateRecord {
 interface ChunkRecord {
   key: string;
   world: string;
+  /** RLE des blocs : 8 bits (format 1) ou 16 bits (fmt = 16). */
   blocks: Uint8Array;
+  fmt?: number;
   meta: Uint8Array;
   checksum: number;
 }
@@ -34,7 +36,7 @@ interface ChunkRecord {
 export interface SavedChunk {
   cx: number;
   cz: number;
-  blocks: Uint8Array;
+  blocks: Uint16Array;
   meta: Uint8Array;
 }
 
@@ -147,8 +149,8 @@ export class SaveManager {
     tx.objectStore('worlds').put(meta);
     const cs = tx.objectStore('chunks');
     for (const c of chunks) {
-      const blocks = rleEncode(c.blocks), m = rleEncode(c.meta);
-      const record: ChunkRecord = { key: `${meta.id}:${c.cx}:${c.cz}`, world: meta.id, blocks, meta: m, checksum: (checksumBytes(blocks) ^ checksumBytes(m)) >>> 0 };
+      const blocks = rleEncode16(c.blocks), m = rleEncode(c.meta);
+      const record: ChunkRecord = { key: `${meta.id}:${c.cx}:${c.cz}`, world: meta.id, blocks, fmt: 16, meta: m, checksum: (checksumBytes(blocks) ^ checksumBytes(m)) >>> 0 };
       cs.put(record);
     }
     await done(tx);
@@ -188,7 +190,7 @@ export class SaveManager {
       return null;
     }
     try {
-      return { cx, cz, blocks: rleDecode(r.blocks, CHUNK_VOLUME), meta: rleDecode(r.meta, CHUNK_VOLUME) };
+      return { cx, cz, blocks: r.fmt === 16 ? rleDecode16(r.blocks, CHUNK_VOLUME) : Uint16Array.from(rleDecode(r.blocks, CHUNK_VOLUME)), meta: rleDecode(r.meta, CHUNK_VOLUME) };
     } catch (e) {
       console.warn('[SaveManager] décodage impossible', e);
       return null;

@@ -20,14 +20,14 @@ let gen: WorldGenerator | null = null;
 const chunks = new Map<string, ChunkData>();
 const mesher = new ChunkMesher();
 const light = new LightVolume(PADDED_W);
-const padded = new Uint8Array(PADDED_AREA * WORLD_HEIGHT);
+const padded = new Uint16Array(PADDED_AREA * WORLD_HEIGHT);
 const P = LIGHT_PADDING;
 
 function post(msg: FromWorker, transfer: Transferable[] = []) {
   ctx.postMessage(msg, transfer);
 }
 
-function load(cx: number, cz: number, saved?: { blocks: Uint8Array; meta: Uint8Array }) {
+function load(cx: number, cz: number, saved?: { blocks: Uint16Array; meta: Uint8Array }) {
   if (!gen) throw new Error('Worker non initialisé');
   const key = chunkKey(cx, cz);
   let c = chunks.get(key);
@@ -124,7 +124,7 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
   try {
     switch (m.type) {
       case 'init':
-        if (m.addonBlocks?.length) registerAddonBlocks(m.addonBlocks);
+        if (m.addonBlocks?.length) registerAddonBlocks(m.addonBlocks, m.addonTiles ?? []);
         gen = new WorldGenerator(m.seed);
         chunks.clear();
         break;

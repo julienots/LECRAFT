@@ -16,7 +16,7 @@
 import type { BlockDef } from '../blocks/Block';
 import type { ItemDef } from '../inventory/Item';
 import { ItemRegistry } from '../inventory/ItemRegistry';
-import { BlockRegistry } from '../blocks/BlockRegistry';
+import { BlockRegistry, MAX_BLOCKS } from '../blocks/BlockRegistry';
 import { RecipeRegistry } from '../crafting/RecipeRegistry';
 import type { CraftingRecipe, SmeltingRecipe } from '../crafting/Recipe';
 import { MOB_BY_KEY, registerMob, type MobDef } from '../data/mobs';
@@ -25,7 +25,8 @@ import { VANILLA_MODELS } from '../render/MobModels';
 import { SKIN_PATHS } from '../render/TextureManager';
 import { extract, readEntries } from '../render/ResourcePack';
 import { TileRegistry } from '../render/TileRegistry';
-import { ADDON_BLOCKS, registerAddonBlocks } from './AddonRegistry';
+import { ADDON_BLOCKS, ADDON_TILES, addonTile, registerAddonBlocks } from './AddonRegistry';
+import { buildVisual, readBlockGeometries, stateMult, traitStates, metaCount, decodeStates, conditionTrue, type BedrockBlockInfo, type BedrockVisual, type BlockGeo, type StateDef, type Material } from './BedrockBlocks';
 import { parseLenientJson } from './Json';
 import { BEDROCK_BLOCK_TEXTURES, BEDROCK_ENTITY_TEXTURES, BEDROCK_ITEM_TEXTURES, BIOME_TAGS } from './BedrockMaps';
 import { geometryToModel, readGeometries, type BedrockGeo } from './BedrockGeometry';
@@ -204,7 +205,7 @@ export async function importAddon(file: File): Promise<InstalledAddon> {
 export interface AddonLoadResult {
   images: Map<string, ImageBitmap>;
   report: string[];
-  counts: { blocks: number; items: number; recipes: number; mobs: number; functions: number; textures: number };
+  counts: { blocks: number; items: number; recipes: number; mobs: number; functions: number; textures: number; permutations?: number };
   functions: Map<string, string[]>;
   tickFunctions: string[];
 }
@@ -327,7 +328,93 @@ function reserveBlockIds(byId: Map<number, BlockDef>) {
   const maxId = Math.max(VANILLA_BLOCK_COUNT - 1, ...Object.values(ids), ...byId.keys());
   ADDON_BLOCKS.length = 0;
   for (let id = VANILLA_BLOCK_COUNT; id <= maxId; id++) ADDON_BLOCKS.push(byId.get(id) ?? { key: `unknown_block_${id}`, name: 'Bloc inconnu', textures: { all: 'missing' }, hardness: 1, drops: [], color: '#ff00ff' });
-  registerAddonBlocks(ADDON_BLOCKS);
+  registerAddonBlocks(ADDON_BLOCKS, ADDON_TILES);
+}
+
+/** États, permutations et géométrie d'un bloc d'add-on (null si c'est un simple cube). */
+async function buildBedrockInfo(
+  b: { id: string; c: Record<string, unknown>; desc: Record<string, unknown>; perms: { condition?: string; components?: Record<string, unknown> }[] },
+  base: Record<string, unknown>,
+  tile: (short: string | undefined) => Promise<string>,
+  terrain: Map<string, string>,
+  blockGeos: Map<string, BlockGeo>,
+  report: string[],
+): Promise<BedrockBlockInfo | null> {
+  const ts = traitStates(b.desc.traits as Parameters<typeof traitStates>[0]);
+  const states: StateDef[] = [...ts.states];
+  for (const [name, v] of Object.entries((b.desc.states ?? b.desc.properties ?? {}) as Record<string, unknown>)) {
+    if (states.some((s) => s.name === name)) continue;
+    let values: (string | number | boolean)[] = [];
+    if (Array.isArray(v)) values = v as (string | number | boolean)[];
+    else if (v && typeof v === 'object' && 'values' in (v as object)) {
+      const r = (v as { values: { min?: number; max?: number } }).values;
+      for (let i = r.min ?? 0; i <= (r.max ?? 0); i++) values.push(i);
+    }
+    if (values.length) states.push({ name, values });
+  }
+  const geoC = base['minecraft:geometry'];
+  const geoId = typeof geoC === 'string' ? geoC : (geoC as { identifier?: string } | undefined)?.identifier;
+  const custom = Object.keys(base).filter((k) => !k.startsWith('minecraft:') && !k.startsWith('tag:') && k.includes(':'));
+  const legacyCustom = (base['minecraft:custom_components'] as string[] | undefined) ?? [];
+  const tick = base['minecraft:tick'] as { interval_range?: [number, number] } | undefined;
+  const plain = !states.length && !b.perms.length && (!geoId || geoId.includes('full_block')) && !base['minecraft:transformation'] && base['minecraft:collision_box'] === undefined;
+  const tags = Object.keys(base).filter((k) => k.startsWith('tag:')).map((k) => k.slice(4));
+  if (plain && !custom.length && !legacyCustom.length && !tick) return null;
+  const mult = stateMult(states);
+  const info: BedrockBlockInfo = { states, mult, visuals: [], placement: ts.placement, custom: [...custom, ...legacyCustom], tick: tick ? tick.interval_range ?? [1, 1] : null, randomTick: !!base['minecraft:random_ticking'], tags };
+  if (mult.some((m) => m === 0)) report.push(`Bloc « ${b.id} » : trop d'états, certains sont figés.`);
+  const count = metaCount(info);
+  const tileCache = new Map<string, Material | null>();
+  const cache = new Map<string, BedrockVisual>();
+  const matFor = async (mi: Record<string, unknown>, inst: string, face: string): Promise<Material | null> => {
+    let e = mi[inst] ?? mi[face] ?? (['north', 'south', 'east', 'west'].includes(face) ? mi.side : undefined) ?? mi['*'];
+    for (let i = 0; i < 4 && typeof e === 'string'; i++) e = mi[e as string];
+    const m = e as { texture?: string; render_method?: string } | undefined;
+    if (!m?.texture) return null;
+    const key = `${m.texture}|${m.render_method ?? ''}`;
+    if (tileCache.has(key)) return tileCache.get(key)!;
+    const name = await tile(m.texture);
+    const out: Material | null = name === 'missing' ? null : { tile: addonTile(name), trans: m.render_method === 'blend', w: 16, h: 16 };
+    tileCache.set(key, out);
+    return out;
+  };
+  for (let meta = 0; meta < count; meta++) {
+    const st = decodeStates(info, meta);
+    const comp: Record<string, unknown> = { ...base };
+    for (const p of b.perms) if (p.condition && conditionTrue(p.condition, st)) Object.assign(comp, p.components ?? {});
+    const g = comp['minecraft:geometry'];
+    const gid = typeof g === 'string' ? g : (g as { identifier?: string } | undefined)?.identifier;
+    const boneVis = typeof g === 'object' ? (g as { bone_visibility?: Record<string, string | boolean> }).bone_visibility : undefined;
+    const geometry = !gid || gid.includes('full_block') ? 'full' : gid.includes('geometry.cross') ? 'cross' : blockGeos.get(gid) ?? null;
+    if (gid && geometry === null) {
+      const msg = `Bloc « ${b.id} » : géométrie « ${gid} » introuvable (cube).`;
+      if (!report.includes(msg)) report.push(msg);
+    }
+    const mi = (comp['minecraft:material_instances'] ?? {}) as Record<string, unknown>;
+    // matériaux résolus d'avance (fonction synchrone pour buildVisual)
+    const mats = new Map<string, Material | null>();
+    const insts = new Set<string>(['*', 'up', 'down', 'north', 'south', 'east', 'west', 'side', ...Object.keys(mi)]);
+    for (const inst of insts) for (const face of ['up', 'down', 'north', 'south', 'east', 'west']) mats.set(`${inst}|${face}`, await matFor(mi, inst, face));
+    const boneEval: Record<string, boolean> = {};
+    if (boneVis) for (const [k, v] of Object.entries(boneVis)) boneEval[k] = typeof v === 'boolean' ? v : conditionTrue(String(v), st);
+    const key = JSON.stringify([gid, boneEval, mi, comp['minecraft:transformation'], comp['minecraft:collision_box'], comp['minecraft:selection_box']]);
+    let vis = cache.get(key);
+    if (!vis) {
+      vis = buildVisual({
+        geometry: geometry ?? 'full',
+        boneVisibility: boneEval,
+        materials: (inst, face) => mats.get(`${inst}|${face}`) ?? mats.get(`*|${face}`) ?? null,
+        transformation: comp['minecraft:transformation'] as { rotation?: number[] } | undefined,
+        collision: comp['minecraft:collision_box'],
+        selection: comp['minecraft:selection_box'],
+        states: st,
+      });
+      cache.set(key, vis);
+    }
+    info.visuals.push(vis);
+  }
+  void terrain;
+  return info;
 }
 
 /** Charge et enregistre tous les add-ons activés. À appeler avant la création de tout monde. */
@@ -364,6 +451,7 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   const blockJson = new Map<string, unknown>(); // blocks.json
   const clientEntities = new Map<string, { texture?: string; geometry?: string }>();
   const geos = new Map<string, BedrockGeo>();
+  const blockGeos = new Map<string, BlockGeo>();
   const rpItemIcons = new Map<string, string>(); // anciens objets : icône définie côté ressources
   const imageSources = new Map<string, { vfs: VFS; path: string }>(); // chemin sans extension → fichier
   const shortTex = (x: unknown): string | undefined => {
@@ -402,7 +490,11 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       const geo = d.geometry as Record<string, string> | undefined;
       clientEntities.set(String(d.identifier), { texture: tex?.default ?? Object.values(tex ?? {})[0], geometry: geo?.default ?? Object.values(geo ?? {})[0] });
     }
-    for (const f of vfs.list(root + 'models', '.json')) for (const g of readGeometries(vfs.json(f) ?? {})) if (g.id) geos.set(g.id, g);
+    for (const f of vfs.list(root + 'models', '.json')) {
+      const j = vfs.json(f) ?? {};
+      for (const g of readGeometries(j)) if (g.id) geos.set(g.id, g);
+      readBlockGeometries(j, blockGeos);
+    }
     for (const f of vfs.list(root + 'items', '.json')) {
       const j = vfs.json(f) as Record<string, { description?: { identifier?: string }; components?: Record<string, unknown> }> | undefined;
       const item = j?.['minecraft:item'];
@@ -457,7 +549,7 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   };
 
   // 3) packs de comportement : lecture des définitions
-  const blockDefs: { id: string; def: BlockDef; c: Record<string, unknown> }[] = [];
+  const blockDefs: { id: string; def: BlockDef; c: Record<string, unknown>; desc: Record<string, unknown>; perms: { condition?: string; components?: Record<string, unknown> }[] }[] = [];
   const itemDefs: ItemDef[] = [];
   const recipes: unknown[] = [];
   const entities: { id: string; c: Record<string, unknown>; desc: Record<string, unknown> }[] = [];
@@ -480,10 +572,10 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
     for (const v of tick?.values ?? []) result.tickFunctions.push(v.toLowerCase());
     for (const f of vfs.list(root + 'blocks', '.json')) {
       const j = vfs.json(f) as Record<string, { description?: Record<string, unknown>; components?: Record<string, unknown> }> | undefined;
-      const b = j?.['minecraft:block'];
+      const b = j?.['minecraft:block'] as { description?: Record<string, unknown>; components?: Record<string, unknown>; permutations?: { condition?: string; components?: Record<string, unknown> }[] } | undefined;
       const id = b?.description?.identifier as string | undefined;
       if (!id) continue;
-      blockDefs.push({ id, def: undefined as unknown as BlockDef, c: b!.components ?? {} });
+      blockDefs.push({ id, def: undefined as unknown as BlockDef, c: b!.components ?? {}, desc: b!.description ?? {}, perms: b!.permutations ?? [] });
     }
     for (const f of vfs.list(root + 'items', '.json')) {
       const j = vfs.json(f) as Record<string, { description?: Record<string, unknown>; components?: Record<string, unknown> }> | undefined;
@@ -546,8 +638,8 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   const lateLoot: [string, unknown][] = [];
   for (const b of blockDefs) {
     if (ids[b.id] === undefined) {
-      if (next > 255) {
-        result.report.push(`Bloc « ${b.id} » ignoré : limite de 256 blocs atteinte.`);
+      if (next >= MAX_BLOCKS) {
+        result.report.push(`Bloc « ${b.id} » ignoré : limite de ${MAX_BLOCKS} blocs atteinte.`);
         continue;
       }
       ids[b.id] = next++;
@@ -572,6 +664,7 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       if (!key) return 'missing';
       const name = key; // « addon/textures/blocks/… »
       result.images.set(`block/${name}.png`, result.images.get(key)!);
+      addonTile(name);
       return name;
     };
     const top = await tile(texOf('up')), bottom = await tile(texOf('down')), side = await tile(texOf('north'));
@@ -585,17 +678,17 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
     const light = typeof lightRaw === 'number' ? (lightRaw <= 1 && c['minecraft:block_light_emission'] !== undefined ? Math.round(lightRaw * 15) : lightRaw) : val(lightRaw, 0);
     const collision = c['minecraft:collision_box'];
     const name = lang.get(`tile.${b.id}.name`) ?? (typeof c['minecraft:display_name'] === 'object' ? lang.get(String((c['minecraft:display_name'] as { value?: string }).value)) : undefined) ?? prettify(b.id);
-    if (c['minecraft:geometry'] && !String(typeof c['minecraft:geometry'] === 'string' ? c['minecraft:geometry'] : (c['minecraft:geometry'] as { identifier?: string }).identifier).includes('full_block'))
-      result.report.push(`Bloc « ${b.id} » : géométrie personnalisée affichée en cube.`);
     // le butin est résolu après l'enregistrement des objets (il peut en référencer)
     const drops = c['minecraft:loot'] !== undefined ? [] : [{ item: b.id }];
     if (c['minecraft:loot'] !== undefined) lateLoot.push([b.id, c['minecraft:loot']]);
+    const bedrock = await buildBedrockInfo(b, c, tile, terrain, blockGeos, result.report);
     const def: BlockDef = {
       key: b.id,
       name,
       textures: { top, bottom, side },
+      ...(bedrock ? { bedrock, shape: 'custom' as const } : {}),
       hardness: Math.max(-1, Math.min(50, hardness)),
-      render: method === 'blend' ? 'translucent' : method === 'alpha_test' || method === 'double_sided' ? 'cutout' : 'cube',
+      render: bedrock ? 'model' : method === 'blend' ? 'translucent' : method === 'alpha_test' || method === 'double_sided' ? 'cutout' : 'cube',
       solid: collision === false ? false : undefined,
       light: Math.max(0, Math.min(15, Math.round(light))),
       friction: typeof c['minecraft:friction'] === 'number' ? Math.max(0, 0.6 - (c['minecraft:friction'] as number)) : undefined,
@@ -608,6 +701,7 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   localStorage.setItem(ID_KEY, JSON.stringify(ids));
   reserveBlockIds(byId);
   for (const d of byId.values()) {
+    if (d.bedrock) result.counts.permutations = (result.counts.permutations ?? 0) + d.bedrock.visuals.length;
     if (!ItemRegistry.has(d.key)) ItemRegistry.register({ key: d.key, name: d.name, icon: { block: d.key }, place: d.key, tab: 'building' });
     result.counts.blocks++;
   }

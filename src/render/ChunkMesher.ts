@@ -18,7 +18,7 @@ export const FLAG_LIQUID = 16;
 
 export interface MeshArrays {
   pos: Int16Array; // xyz * 16
-  uv: Uint16Array; // en 1/16 de tuile
+  uv: Uint16Array; // en 1/256 de tuile (1/16 de pixel)
   info: Uint16Array; // tile, flags, sky*16, block*16
   tint: Uint8Array; // r, g, b, shade
   index: Uint16Array | Uint32Array;
@@ -62,8 +62,8 @@ class Builder {
     this.pos[k * 3] = Math.round(x * 16);
     this.pos[k * 3 + 1] = Math.round(y * 16);
     this.pos[k * 3 + 2] = Math.round(z * 16);
-    this.uv[k * 2] = u;
-    this.uv[k * 2 + 1] = v;
+    this.uv[k * 2] = Math.round(u * 16);
+    this.uv[k * 2 + 1] = Math.round(v * 16);
     this.info[k * 4] = tile;
     this.info[k * 4 + 1] = flags;
     this.info[k * 4 + 2] = sky;
@@ -110,7 +110,7 @@ const FRONT_FACE = [4, 1, 5, 0];
 
 export interface MeshInput {
   /** Volume padded (W x H x W) des ID de blocs. */
-  blocks: Uint8Array;
+  blocks: Uint16Array;
   /** Méta du chunk central uniquement (16x128x16). */
   meta: Uint8Array;
   sky: Uint8Array;
@@ -254,7 +254,7 @@ export class ChunkMesher {
   }
 
   /** Occlusion : vrai si la cellule est opaque. */
-  private occ(blocks: Uint8Array, i: number): number {
+  private occ(blocks: Uint16Array, i: number): number {
     if (i < 0) return 1; // sous le monde : considéré plein
     if (i >= blocks.length) return 0;
     return BlockRegistry.opaque[blocks[i]];
@@ -359,6 +359,7 @@ export class ChunkMesher {
     const { blocks, sky, blk } = inp;
     const m = inp.meta[x + z * 16 + y * 256];
     const kind = SHAPES[R.shape[b] - 1];
+    if (kind === 'custom') return this.custom(inp, x, y, z, pi, b, m);
     const nb = (dx: number, dy: number, dz: number) => {
       const yy = y + dy;
       if (yy < 0 || yy >= WORLD_HEIGHT) return 0;
@@ -411,14 +412,40 @@ export class ChunkMesher {
     }
   }
 
-  private liquidHeight(blocks: Uint8Array, meta: Uint8Array, x: number, y: number, z: number, pi: number, b: number) {
+  /** Bloc d'add-on : quads précalculés de la permutation (méta). */
+  private custom(inp: MeshInput, x: number, y: number, z: number, pi: number, b: number, m: number) {
+    const R = BlockRegistry;
+    const info = R.blocks[b].def.bedrock;
+    const vis = info?.visuals[m] ?? info?.visuals[0];
+    if (!vis) return;
+    const { blocks, sky, blk } = inp;
+    for (const q of vis.quads) {
+      let li = pi;
+      if (q.edge >= 0) {
+        const [dx, dy, dz] = DIRS[q.edge];
+        if (y + dy >= 0 && y + dy < WORLD_HEIGHT) {
+          const ni = pi + dx + dy * AREA + dz * W;
+          if (R.opaque[blocks[ni]]) continue;
+          li = ni;
+        } else if (dy < 0) continue;
+      }
+      const sl = li < blocks.length ? Math.max(sky[li], sky[pi]) * 16 : 240, bl = li < blocks.length ? Math.max(blk[li], blk[pi]) * 16 : 0;
+      const shade = Math.round(255 * (q.shade >= 0 ? FACE_SHADE[q.shade] : 0.85));
+      const builder = q.trans ? this.trans : this.opaque;
+      const p = q.p, uv = q.uv;
+      const ids = [0, 1, 2, 3].map((k) => builder.vertex(x + p[k * 3] / 16, y + p[k * 3 + 1] / 16, z + p[k * 3 + 2] / 16, uv[k * 2], uv[k * 2 + 1], q.tile, 0, sl, bl, 255, 255, 255, shade));
+      builder.quad(ids[0], ids[1], ids[2], ids[3], false);
+    }
+  }
+
+  private liquidHeight(blocks: Uint16Array, meta: Uint8Array, x: number, y: number, z: number, pi: number, b: number) {
     if (y + 1 < WORLD_HEIGHT && blocks[pi + AREA] === b) return 1;
     const m = meta[x + z * 16 + y * 256];
     if (m === 0 || m >= 8) return 0.875;
     return Math.max(0.15, 0.875 - m * 0.1);
   }
 
-  private liquid(blocks: Uint8Array, meta: Uint8Array, sky: Uint8Array, blk: Uint8Array, x: number, y: number, z: number, pi: number, b: number) {
+  private liquid(blocks: Uint16Array, meta: Uint8Array, sky: Uint8Array, blk: Uint8Array, x: number, y: number, z: number, pi: number, b: number) {
     const R = BlockRegistry;
     const block = R.blocks[b];
     const isWater = block.liquid === 'water';

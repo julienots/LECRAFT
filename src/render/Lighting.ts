@@ -17,7 +17,7 @@ export class LightVolume {
     this.queue = new Int32Array(n);
   }
 
-  compute(blocks: Uint8Array) {
+  compute(blocks: Uint16Array) {
     const { W, H, sky, blk, queue } = this;
     const area = W * W;
     const opaque = BlockRegistry.opaque;
@@ -59,7 +59,7 @@ export class LightVolume {
     this.bfs(blocks, blk, 0, tail);
   }
 
-  private bfs(blocks: Uint8Array, light: Uint8Array, head: number, tail: number) {
+  private bfs(blocks: Uint16Array, light: Uint8Array, head: number, tail: number) {
     const { W, H, queue } = this;
     const area = W * W;
     const opaque = BlockRegistry.opaque;

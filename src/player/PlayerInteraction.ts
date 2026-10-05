@@ -10,6 +10,8 @@ import { raycastBlocks, type RayHit } from '../util/Raycast';
 import { hash3 } from '../util/math';
 import { WORLD_HEIGHT } from '../core/Config';
 import { FACING_DIR, facingFromYaw, opposite } from '../blocks/Shapes';
+import { encodeStates, type BedrockBlockInfo } from '../addons/BedrockBlocks';
+import { connectionStates } from '../addons/BlockRuntime';
 
 export interface PlacementPreview {
   x: number;
@@ -336,6 +338,7 @@ export class PlayerInteraction {
     const x = replace ? t.x : t.x + t.nx;
     const y = replace ? t.y : t.y + t.ny;
     const z = replace ? t.z : t.z + t.nz;
+    if (b.def.bedrock) return this.validate(mk(x, y, z, this.bedrockPlacementMeta(b.def.bedrock, t, x, y, z, block)));
     if (b.shape === 'slab') {
       if (w.getBlock(x, y, z) === block && (w.getMeta(x, y, z) & 3) !== 2) return this.validate(mk(x, y, z, 2), true);
       const top = t.ny === -1 || (t.ny === 0 && fy > 0.5);
@@ -376,6 +379,31 @@ export class PlayerInteraction {
     }
     // feuilles posées par le joueur : persistantes (ne se décomposent pas)
     return this.validate(mk(x, y, z, b.orientable ? opposite(look) : b.key.endsWith('_leaves') ? 1 : 0));
+  }
+
+  /** États initiaux d'un bloc d'add-on selon ses traits de placement (comme le jeu de référence). */
+  private bedrockPlacementMeta(info: BedrockBlockInfo, t: RayHit, x: number, y: number, z: number, block: number): number {
+    const p = this.ctx.player;
+    const v: Record<string, string | boolean> = {};
+    const pl = info.placement;
+    if (pl.cardinal !== undefined) {
+      // direction regardée (+ décalage de rotation du trait, par pas de 90°)
+      const steps = Math.round((pl.cardinal ?? 0) / 90);
+      v['minecraft:cardinal_direction'] = ['south', 'west', 'north', 'east'][(facingFromYaw(p.yaw) + steps + 400) & 3];
+    }
+    const faceName = t.ny > 0 ? 'up' : t.ny < 0 ? 'down' : t.nz > 0 ? 'south' : t.nz < 0 ? 'north' : t.nx > 0 ? 'east' : 'west';
+    if (pl.face) v['minecraft:block_face'] = faceName;
+    if (pl.facing) {
+      if (p.pitch > 0.8) v['minecraft:facing_direction'] = 'down';
+      else if (p.pitch < -0.8) v['minecraft:facing_direction'] = 'up';
+      else v['minecraft:facing_direction'] = ['north', 'east', 'south', 'west'][(facingFromYaw(p.yaw) + 2) & 3];
+    }
+    if (pl.half) {
+      const fy = t.py - Math.floor(t.py);
+      v['minecraft:vertical_half'] = t.ny < 0 || (t.ny === 0 && fy > 0.5) ? 'top' : 'bottom';
+    }
+    if (pl.connections) Object.assign(v, connectionStates(this.ctx.world, x, y, z, block));
+    return encodeStates(info, v);
   }
 
   private validate(pv: PlacementPreview, merging = false): PlacementPreview {

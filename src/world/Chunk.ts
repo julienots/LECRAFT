@@ -6,7 +6,7 @@ import type { ChunkData } from './ChunkData';
 export class Chunk implements ChunkData {
   cx: number;
   cz: number;
-  blocks: Uint8Array;
+  blocks: Uint16Array;
   meta: Uint8Array;
   biomes: Uint8Array;
   heights: Uint8Array;

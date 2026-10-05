@@ -57,3 +57,14 @@ describe('SaveManager', () => {
     expect(sm.lastLoadUsedBackup).toBe(true);
   });
 });
+
+describe('Format des blocs 16 bits', () => {
+  it('RLE 16 bits aller-retour et lecture des anciens chunks 8 bits', async () => {
+    const { rleEncode16, rleDecode16, rleEncode, rleDecode } = await import('../src/save/WorldSerializer');
+    const a = new Uint16Array(4096);
+    for (let i = 0; i < a.length; i++) a[i] = i < 1000 ? 300 + (i % 3) : i % 700 === 0 ? 4000 : 2;
+    expect([...rleDecode16(rleEncode16(a), a.length)]).toEqual([...a]);
+    const old = new Uint8Array([1, 1, 2, 7, 7, 200]);
+    expect([...Uint16Array.from(rleDecode(rleEncode(old), old.length))]).toEqual([1, 1, 2, 7, 7, 200]);
+  });
+});

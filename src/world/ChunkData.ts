@@ -7,7 +7,7 @@ export const idx = (x: number, y: number, z: number) => x + z * CHUNK_SIZE + y *
 export interface ChunkData {
   cx: number;
   cz: number;
-  blocks: Uint8Array; // ID de bloc
+  blocks: Uint16Array; // ID de bloc (16 bits : blocs des add-ons)
   meta: Uint8Array; // niveau de liquide, stade de culture, orientation, table de butin...
   biomes: Uint8Array; // biome par colonne (x + z*16)
   heights: Uint8Array; // plus haut bloc non-air par colonne
@@ -17,7 +17,7 @@ export function createChunkData(cx: number, cz: number): ChunkData {
   return {
     cx,
     cz,
-    blocks: new Uint8Array(CHUNK_VOLUME),
+    blocks: new Uint16Array(CHUNK_VOLUME),
     meta: new Uint8Array(CHUNK_VOLUME),
     biomes: new Uint8Array(CHUNK_AREA),
     heights: new Uint8Array(CHUNK_AREA),

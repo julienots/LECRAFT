@@ -2,8 +2,10 @@ import type { Block, BlockDef, ShapeKind } from './Block';
 import { BLOCK_DEFS } from '../data/blocks';
 import { TileRegistry } from '../render/TileRegistry';
 
+/** Nombre maximal de blocs (identifiants sur 16 bits, tables de lookup bornées). */
+export const MAX_BLOCKS = 4096;
 const RENDER_TYPES = ['none', 'cube', 'cutout', 'cross', 'liquid', 'translucent', 'model'] as const;
-export const SHAPES: ShapeKind[] = ['slab', 'stairs', 'door', 'ladder', 'fence', 'pane', 'bed', 'torch', 'chest', 'farmland', 'snow_layer', 'cactus', 'plate', 'lantern'];
+export const SHAPES: ShapeKind[] = ['slab', 'stairs', 'door', 'ladder', 'fence', 'pane', 'bed', 'torch', 'chest', 'farmland', 'snow_layer', 'cactus', 'plate', 'lantern', 'custom'];
 
 /**
  * Registre des blocs : convertit les définitions data-driven en objets compacts
@@ -13,19 +15,19 @@ class BlockRegistryImpl {
   readonly blocks: Block[] = [];
   private byKey = new Map<string, Block>();
   // Tables de lookup rapides (utilisées par le mesher et la physique)
-  solid = new Uint8Array(256);
-  opaque = new Uint8Array(256);
-  lightEmit = new Uint8Array(256);
-  lightFilter = new Uint8Array(256);
-  renderType = new Uint8Array(256); // 0 none,1 cube,2 cutout,3 cross,4 liquid,5 translucent,6 model
-  liquid = new Uint8Array(256); // 0 none, 1 water, 2 lava
-  replaceable = new Uint8Array(256);
+  solid = new Uint8Array(MAX_BLOCKS);
+  opaque = new Uint8Array(MAX_BLOCKS);
+  lightEmit = new Uint8Array(MAX_BLOCKS);
+  lightFilter = new Uint8Array(MAX_BLOCKS);
+  renderType = new Uint8Array(MAX_BLOCKS); // 0 none,1 cube,2 cutout,3 cross,4 liquid,5 translucent,6 model
+  liquid = new Uint8Array(MAX_BLOCKS); // 0 none, 1 water, 2 lava
+  replaceable = new Uint8Array(MAX_BLOCKS);
   /** Forme : 0 = aucune, sinon index+1 dans SHAPES. */
-  shape = new Uint8Array(256);
+  shape = new Uint8Array(MAX_BLOCKS);
   /** Teinte : 0 aucune, 1 herbe, 2 feuillage, 3 couleur fixe (tintColor). */
-  tintType = new Uint8Array(256);
-  tintColor = new Uint32Array(256);
-  climbable = new Uint8Array(256);
+  tintType = new Uint8Array(MAX_BLOCKS);
+  tintColor = new Uint32Array(MAX_BLOCKS);
+  climbable = new Uint8Array(MAX_BLOCKS);
 
   constructor(defs: BlockDef[]) {
     defs.forEach((d) => this.register(d));
@@ -34,7 +36,7 @@ class BlockRegistryImpl {
   register(def: BlockDef): Block {
     if (this.byKey.has(def.key)) throw new Error(`Bloc dupliqué: ${def.key}`);
     const id = this.blocks.length;
-    if (id > 255) throw new Error('Maximum 256 blocs (stockage Uint8)');
+    if (id >= MAX_BLOCKS) throw new Error(`Maximum ${MAX_BLOCKS} blocs`);
     const render = def.render ?? (def.shape ? 'model' : 'cube');
     const solid = def.solid ?? !(render === 'none' || render === 'cross' || render === 'liquid');
     const opaque = render === 'cube';

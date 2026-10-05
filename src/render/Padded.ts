@@ -6,7 +6,7 @@ import { PADDED_AREA, PADDED_W } from './ChunkMesher';
  * Remplit un volume padded (chunk central + LIGHT_PADDING blocs des 8 voisins).
  * Retourne la hauteur max du chunk central.
  */
-export function buildPadded(get: (cx: number, cz: number) => ChunkData | undefined, cx: number, cz: number, padded: Uint8Array): number {
+export function buildPadded(get: (cx: number, cz: number) => ChunkData | undefined, cx: number, cz: number, padded: Uint16Array): number {
   const P = LIGHT_PADDING;
   padded.fill(0);
   let maxY = 0;

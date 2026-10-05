@@ -33,7 +33,7 @@ void main() {
   if (flag(f, 4.0) > 0.5 && (!liquid || uWaterAnim > 0.5)) tile += mod(floor(uTime * 3.0), 4.0);
   vTile = tile;
   vFlags = f;
-  vUv = aUv / 16.0;
+  vUv = aUv / 256.0;
   vLight = vec2(aInfo.z, aInfo.w) / 240.0;
   vTint = aTint;
   vec4 mv = viewMatrix * wp;

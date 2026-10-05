@@ -17,7 +17,7 @@ export type ShapeKind =
   | 'snow_layer'
   | 'cactus'
   | 'plate'
-  | 'lantern';
+  | 'lantern' | 'custom';
 
 export interface DropDef {
   item: string;
@@ -48,6 +48,8 @@ export interface BlockDef {
   minTier?: number;
   render?: RenderType; // défaut 'cube' (ou 'model' si shape)
   shape?: ShapeKind;
+  /** Bloc d'add-on Bedrock : états, permutations et géométrie précalculés. */
+  bedrock?: import('../addons/BedrockBlocks').BedrockBlockInfo;
   solid?: boolean;
   liquid?: 'water' | 'lava';
   /** Niveau de lumière émis 0..15. */

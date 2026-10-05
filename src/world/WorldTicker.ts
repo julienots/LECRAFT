@@ -6,6 +6,7 @@ import type { EntitySpawner } from '../entities/Mob';
 import { buildTree } from './Trees';
 import { FluidSimulator } from './FluidSimulator';
 import { idx } from './ChunkData';
+import { updatedConnectionMeta } from '../addons/BlockRuntime';
 import type { TreeType } from '../data/biomes';
 
 const IS_LOG = new Uint8Array(BlockRegistry.blocks.length);
@@ -150,6 +151,11 @@ export class WorldTicker {
       w.setBlock(x, y, z, B.AIR);
       for (const d of getDrops(id, meta, undefined)) this.spawner.spawnItem(d.id, d.count, x + 0.5, y + 0.3, z + 0.5);
       return;
+    }
+    // blocs d'add-ons à connexions (barrières, murs…)
+    if (b.def.bedrock?.placement.connections) {
+      const m = updatedConnectionMeta(w, x, y, z, id);
+      if (m !== null) w.setBlock(x, y, z, id, m, false);
     }
     // terre cultivable écrasée
     if (id === B.FARMLAND && BlockRegistry.solid[Math.max(0, w.getBlock(x, y + 1, z))]) w.setBlock(x, y, z, B.DIRT);

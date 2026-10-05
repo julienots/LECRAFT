@@ -441,7 +441,11 @@ const COMMANDS: CommandDef[] = [
             if (mode === 'keep' && cur !== B.AIR) continue;
             if (filter >= 0 && cur !== filter) continue;
             if (mode === 'destroy' && cur > 0) c.s.interaction.breakBlock(x, y, z, 'diamond_pickaxe');
-            if (w.setBlock(x, y, z, target, 0, false)) n++;
+            if (w.setBlock(x, y, z, target, 0, false)) {
+              n++;
+              // blocs d'add-ons connectés (barrières, barreaux…) : états recalculés au tick suivant
+              if (BlockRegistry.get(target).def.bedrock?.placement.connections) w.scheduleUpdate(x, y, z);
+            }
           }
       if (!n) throw new CommandError('Aucun bloc rempli');
       c.out(`${n} blocs remplis`);

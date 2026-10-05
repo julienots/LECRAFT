@@ -95,6 +95,10 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
       if (connects(nb(1, 0, 0), 'fence')) out.push([10, 6, 7, 16, 9, 9], [10, 12, 7, 16, 15, 9]);
       return out;
     }
+    case 'custom': {
+      const info = BlockRegistry.get(id).def.bedrock;
+      return info?.visuals[meta]?.selection ?? info?.visuals[0]?.selection ?? [FULL];
+    }
     case 'pane': {
       const out: Box[] = [[7, 0, 7, 9, 16, 9]];
       if (connects(nb(0, 0, -1), 'pane')) out.push([7, 0, 0, 9, 16, 7]);
@@ -134,6 +138,10 @@ export function collisionBoxes(id: number, meta: number, nb: NeighborFn): Box[] 
     }
     case 'lantern':
       return [[5, 0, 5, 11, 9, 11]];
+    case 'custom': {
+      const info = BlockRegistry.get(id).def.bedrock;
+      return info?.visuals[meta]?.collision ?? info?.visuals[0]?.collision ?? [FULL];
+    }
     default:
       return modelBoxes(id, meta, nb);
   }
