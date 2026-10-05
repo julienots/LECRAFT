@@ -3,6 +3,7 @@ import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { Mob, EntitySpawner } from '../entities/Mob';
 import { Boss } from '../entities/Boss';
 import { AIState } from '../ai/StateMachine';
+import { hooks, type DamageEvent } from '../scripting/Hooks';
 
 /**
  * Application des dégâts aux créatures : faiblesses, coups critiques, invincibilité temporaire,
@@ -32,7 +33,12 @@ export class DamageSystem {
   damageMob(m: Mob, amount: number, src: DamageInfo): number {
     const ctx = this.ctx();
     if (m.dead || (m.iframes > 0 && src.kind !== 'environment')) return 0;
-    const dmg = amount * this.multiplier(m, src);
+    let dmg = amount * this.multiplier(m, src) * m.effects.damageMul(!!src.fire);
+    const ev = this.eventOf(src);
+    if (hooks.beforeHurt) {
+      dmg = hooks.beforeHurt(m, dmg, ev);
+      if (!(dmg > 0)) return 0;
+    }
     m.health -= dmg;
     if (src.kind !== 'environment') m.iframes = 0.45;
     m.hurtTimer = 0.3;
@@ -53,15 +59,24 @@ export class DamageSystem {
       }
     }
     if (m instanceof Boss) m.onHit(ctx);
+    hooks.afterHurt?.(m, dmg, ev);
     if (m.health <= 0) this.kill(m, src);
     else ctx.audio.play(m.def.sounds.hurt, { x: m.x, y: m.y, z: m.z });
     return dmg;
+  }
+
+  /** Description des dégâts pour l'API de script. */
+  private eventOf(src: DamageInfo): DamageEvent {
+    const fromPlayer = src.fromPlayer || src.kind === 'player';
+    const cause = src.cause ?? (src.kind === 'player' ? 'entityAttack' : src.kind === 'projectile' ? 'projectile' : src.fire ? 'fire' : 'none');
+    return { cause, attacker: src.attacker ?? (fromPlayer ? this.ctx().player : null), projectile: src.projectile ?? null };
   }
 
   private kill(m: Mob, src: DamageInfo) {
     const ctx = this.ctx();
     m.dead = true;
     m.health = 0;
+    hooks.died?.(m, this.eventOf(src));
     m.ai.fsm.set(AIState.DEAD);
     ctx.audio.play(m.def.sounds.death, { x: m.x, y: m.y, z: m.z });
     ctx.particles.burst('smoke', m.x, m.y + m.body.height / 2, m.z, 12);

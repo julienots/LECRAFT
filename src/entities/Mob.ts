@@ -47,6 +47,7 @@ export class Mob extends Entity {
   model: MobModel;
   object3d: THREE.Object3D;
   sim = true; // simulé ce tick (LOD)
+  private effectTick = 0;
   private idleSoundTimer = 4 + Math.random() * 10;
 
   constructor(readonly def: MobDef, readonly index: number, x: number, y: number, z: number, protected spawner: EntitySpawner, handlers?: Partial<Record<AIState, StateHandlers<Mob>>>) {
@@ -85,7 +86,7 @@ export class Mob extends Entity {
     const dx = p.x - this.x, dz = p.z - this.z, d = Math.hypot(dx, dz) || 1;
     const dy = p.y - this.y;
     if (d > this.def.attackRange * 1.2 || dy > 2.5 || dy < -2) return;
-    const dealt = p.damage(this.def.damage, 'mob', (dx / d) * 5, (dz / d) * 5);
+    const dealt = p.damage(this.def.damage, 'mob', (dx / d) * 5, (dz / d) * 5, this);
     if (dealt > 0 && this.has('poison') && p.difficulty !== 'easy') p.poisonTimer = Math.max(p.poisonTimer, p.difficulty === 'hard' ? 15 : 7);
     if (dealt > 0) {
       ctx.audio.play('hurt', { volume: 0.9 });
@@ -132,6 +133,18 @@ export class Mob extends Entity {
       if (this.deathTimer > 0.8) this.removed = true;
       return;
     }
+    if (this.effects.map.size) {
+      this.effects.tick(
+        {
+          heal: (n) => (this.health = Math.min(this.maxHealth, this.health + n)),
+          hurt: (n) => ctx.combat.damageMob(this, n, { kind: 'environment' }),
+          hp: () => this.health,
+          body: this.body,
+        },
+        this.effectTick++,
+      );
+      if (this.dead) return;
+    }
     this.ai.update(ctx, dt);
     this.customUpdate(ctx, dt);
     if (this.has('flies')) {
@@ -174,6 +187,7 @@ export class Mob extends Entity {
   /** Synchronise l'objet 3D avec la simulation (à chaque frame de rendu). */
   render(ctx: GameContext, alpha: number, t: number) {
     const g = this.model.group;
+    g.visible = !this.effects.level('invisibility');
     g.position.set(this.x, this.y + (this.dead ? -this.deathTimer * 0.3 : 0), this.z);
     g.rotation.y = this.yaw;
     g.rotation.z = this.dead ? Math.min(Math.PI / 2, this.deathTimer * 4) : 0;

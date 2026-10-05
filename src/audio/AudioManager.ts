@@ -1,6 +1,7 @@
 import type { SoundFx } from '../core/GameContext';
 import type { Settings } from '../core/Settings';
 import { buildAmbience, buildSounds, SynthContext } from './Synth';
+import { mapSound } from './SoundMap';
 
 const SCALES = {
   day: [0, 2, 4, 7, 9, 12, 14, 16],
@@ -27,6 +28,10 @@ export class AudioManager implements SoundFx {
   private musicPlaying = false;
   private recent = new Map<string, number>();
   ready = false;
+  /** Sons fournis par les add-ons : identifiant → fichiers audio (une variante tirée au hasard). */
+  private external = new Map<string, { data: Uint8Array[]; volume: number; pitch: number }>();
+  private decoded = new Map<string, AudioBuffer[]>();
+  private decoding = new Set<string>();
 
   constructor(private settings: Settings) {}
 
@@ -79,6 +84,46 @@ export class AudioManager implements SoundFx {
     this.listener = { x, y, z, yaw };
   }
 
+  /** Enregistre un son d'add-on (fichiers .ogg/.wav/.mp3). */
+  addExternal(id: string, data: Uint8Array[], volume = 1, pitch = 1) {
+    this.external.set(id.toLowerCase(), { data, volume, pitch });
+    this.decoded.delete(id.toLowerCase());
+  }
+  clearExternal() {
+    this.external.clear();
+    this.decoded.clear();
+  }
+  hasSound(id: string): boolean {
+    return this.external.has(id.toLowerCase()) || mapSound(id) !== null;
+  }
+
+  /** Joue un son par identifiant du jeu de référence (son d'add-on, sinon équivalent synthétisé). */
+  playId(id: string, opts: { x?: number; y?: number; z?: number; volume?: number; pitch?: number } = {}) {
+    const k = id.toLowerCase().replace(/^minecraft:/, '');
+    const ext = this.external.get(k);
+    if (ext && this.ctx && this.ready) {
+      const bufs = this.decoded.get(k);
+      if (bufs?.length) {
+        this.playBuffer(bufs[Math.floor(Math.random() * bufs.length)], { ...opts, volume: (opts.volume ?? 1) * ext.volume, pitch: (opts.pitch ?? 1) * ext.pitch });
+        return;
+      }
+      if (!this.decoding.has(k)) {
+        this.decoding.add(k);
+        const c = this.ctx;
+        Promise.all(ext.data.map((d) => c.decodeAudioData(d.slice().buffer as ArrayBuffer).catch(() => null)))
+          .then((list) => {
+            const ok = list.filter((b): b is AudioBuffer => !!b);
+            this.decoded.set(k, ok);
+            if (ok.length) this.playBuffer(ok[Math.floor(Math.random() * ok.length)], { ...opts, volume: (opts.volume ?? 1) * ext.volume, pitch: (opts.pitch ?? 1) * ext.pitch });
+          })
+          .finally(() => this.decoding.delete(k));
+        return;
+      }
+    }
+    const m = mapSound(k);
+    if (m) this.play(m, opts);
+  }
+
   play(name: string, opts: { x?: number; y?: number; z?: number; volume?: number; pitch?: number } = {}) {
     if (!this.ctx || !this.ready || this.ctx.state !== 'running') return;
     const buf = this.buffers.get(name);
@@ -99,12 +144,34 @@ export class AudioManager implements SoundFx {
       pan = d > 0.5 ? Math.max(-1, Math.min(1, (dx * rx + dz * rz) / d)) * 0.8 : 0;
     }
     if (vol < 0.01) return;
-    const src = this.ctx.createBufferSource();
+    this.output(buf, vol, pan, (opts.pitch ?? 1) * (0.92 + Math.random() * 0.16));
+  }
+
+  private playBuffer(buf: AudioBuffer, opts: { x?: number; y?: number; z?: number; volume?: number; pitch?: number }) {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    let vol = opts.volume ?? 1;
+    let pan = 0;
+    if (opts.x !== undefined) {
+      const dx = opts.x - this.listener.x, dy = (opts.y ?? this.listener.y) - this.listener.y, dz = (opts.z ?? this.listener.z) - this.listener.z;
+      const d = Math.hypot(dx, dy, dz);
+      const range = 16 * Math.max(1, vol);
+      if (d > range) return;
+      vol = Math.min(1, vol) * Math.max(0, 1 - d / range);
+      const rx = Math.cos(this.listener.yaw), rz = -Math.sin(this.listener.yaw);
+      pan = d > 0.5 ? Math.max(-1, Math.min(1, (dx * rx + dz * rz) / d)) * 0.8 : 0;
+    }
+    if (vol < 0.01) return;
+    this.output(buf, vol, pan, opts.pitch ?? 1);
+  }
+
+  private output(buf: AudioBuffer, vol: number, pan: number, rate: number) {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.playbackRate.value = (opts.pitch ?? 1) * (0.92 + Math.random() * 0.16);
-    const g = this.ctx.createGain();
+    src.playbackRate.value = Math.max(0.1, Math.min(4, rate));
+    const g = ctx.createGain();
     g.gain.value = vol;
-    const p = this.ctx.createStereoPanner();
+    const p = ctx.createStereoPanner();
     p.pan.value = pan;
     src.connect(g).connect(p).connect(this.sfx);
     src.start();

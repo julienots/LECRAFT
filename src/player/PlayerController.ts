@@ -66,6 +66,7 @@ export class PlayerController {
     let speed = b.flying ? FLY * (p.sprinting ? 1.8 : 1) : p.sneaking ? SNEAK : p.sprinting ? SPRINT : WALK;
     if (b.inWater || b.inLava) speed = b.inLava ? 1.5 : SWIM * (p.sprinting ? 1.3 : 1);
     if (p.slowTimer > 0) speed *= 0.55;
+    if (!b.flying) speed *= p.effects.speedMul();
     // friction du bloc sous les pieds
     const below = world.getBlock(Math.floor(b.x), Math.floor(b.y - 0.05), Math.floor(b.z));
     if (below > 0 && BlockRegistry.blocks[below].def.friction) speed *= 1 - BlockRegistry.blocks[below].def.friction! * 0.5;
@@ -84,7 +85,7 @@ export class PlayerController {
     } else if (b.inWater || b.inLava) {
       if (i.jump) b.vy = Math.min(b.vy + 22 * dt, 3.2);
     } else if (i.jump && b.onGround) {
-      b.vy = JUMP_V;
+      b.vy = JUMP_V * Math.sqrt(1 + 0.75 * p.effects.level('jump_boost'));
       this.onJump();
       p.addExhaustion(p.sprinting ? 0.2 : 0.05);
     }
@@ -111,7 +112,7 @@ export class PlayerController {
       const ahead = 0.6;
       const ax = b.x + (tvx / (speed || 1)) * ahead, az = b.z + (tvz / (speed || 1)) * ahead;
       if (b.collides(world, ax, b.y + 0.05, az) && !b.collides(world, ax, b.y + 1.05, az) && !b.collides(world, b.x, b.y + 1.05, b.z)) {
-        b.vy = JUMP_V;
+        b.vy = JUMP_V * Math.sqrt(1 + 0.75 * p.effects.level('jump_boost'));
       }
     }
 

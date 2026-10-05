@@ -67,7 +67,29 @@ const solid = (r, g, b) => () => [r, g, b, 255];
 // ---------- add-on de test ----------
 const bp = zip([
   ['manifest.json', { format_version: 2, header: { name: '§cRubis BP', description: 'Add-on de test', uuid: '11111111-1111-1111-1111-111111111111', version: [1, 0, 0] }, modules: [{ type: 'data', uuid: '22222222-2222-2222-2222-222222222222', version: [1, 0, 0] }, { type: 'script', language: 'javascript', entry: 'scripts/main.js', uuid: '33333333-3333-3333-3333-333333333333', version: [1, 0, 0] }] }],
-  ['scripts/main.js', 'import { world } from "@minecraft/server";'],
+  ['scripts/main.js', `import { world, system, ItemStack } from "@minecraft/server";
+import { ActionFormData } from "@minecraft/server-ui";
+import { helper } from "./lib/util";
+system.beforeEvents.startup.subscribe(({ blockComponentRegistry, itemComponentRegistry }) => {
+  blockComponentRegistry.registerCustomComponent("test:toggle", {
+    onPlayerInteract(e) { const p = e.block.permutation; e.block.setPermutation(p.withState("test:lit", !p.getState("test:lit"))); },
+  });
+  itemComponentRegistry.registerCustomComponent("test:wand", {
+    onUse(e, { params }) {
+      new ActionFormData().title("§6Baguette").body(params.msg).button("A").button("B").show(e.source).then((r) => world.setDynamicProperty("choice", r.canceled ? -1 : r.selection));
+    },
+  });
+});
+world.afterEvents.playerBreakBlock.subscribe((e) => world.setDynamicProperty("broken", e.brokenBlockPermutation.type.id));
+system.runInterval(() => world.setDynamicProperty("ticks", (world.getDynamicProperty("ticks") ?? 0) + 1), 1);
+world.beforeEvents.chatSend.subscribe((e) => { if (e.message === "secret") { e.cancel = true; system.run(() => world.sendMessage("§aSecret intercepté")); } });
+system.afterEvents.scriptEventReceive.subscribe((e) => { if (e.id === "test:ping") e.sourceEntity?.runCommand("give @s test:ruby " + helper(2)); });
+world.afterEvents.entityHurt.subscribe((e) => { if (e.hurtEntity.typeId === "test:ruby_golem") e.hurtEntity.addTag("hurt"); });
+world.afterEvents.playerSpawn.subscribe((e) => { if (e.initialSpawn) e.player.sendMessage("§bScript prêt " + new ItemStack("test:ruby", 2).amount); });
+`],
+  ['scripts/lib/util.js', 'export const helper = (n) => n * 2;'],
+  ['blocks/ruby_lamp.json', { format_version: '1.21.40', 'minecraft:block': { description: { identifier: 'test:ruby_lamp', states: { 'test:lit': [false, true] } }, components: { 'test:toggle': {}, 'minecraft:material_instances': { '*': { texture: 'test_ruby_block', render_method: 'opaque' } } }, permutations: [{ condition: "q.block_state('test:lit')", components: { 'minecraft:light_emission': 15 } }] } }],
+  ['items/ruby_wand.json', { format_version: '1.21.40', 'minecraft:item': { description: { identifier: 'test:ruby_wand' }, components: { 'minecraft:icon': 'test_ruby', 'minecraft:max_stack_size': 1, 'test:wand': { msg: 'Choisissez' } } } }],
   ['items/ruby.json', `{
     // commentaire : JSON tolérant
     "format_version": "1.20.50",
@@ -141,14 +163,61 @@ try {
   await page.screenshot({ path: `${OUT}/addons-01-screen.png` });
   await Promise.all([page.waitForEvent('load'), page.getByText('Redémarrer pour appliquer').click()]);
   await page.waitForFunction(() => window.__lecraft?.state === 'menu' && window.__lecraft.addonResult, null, { timeout: 30000 });
-  const res = await G(() => window.__lecraft.addonResult);
-  check('Contenu chargé au démarrage', res.counts.blocks === 1 && res.counts.items >= 3 && res.counts.recipes === 4 && res.counts.mobs === 1 && res.counts.functions === 2 && res.counts.textures >= 1, JSON.stringify(res.counts));
-  check('Scripts JavaScript signalés comme non pris en charge', res.report.some((r) => /JavaScript/.test(r)), res.report.join(' / '));
+  const res = await G(() => { const r = window.__lecraft.addonResult; return { ...r, scripts: r.scripts.map((x) => ({ entry: x.entry, files: x.files.size, modules: x.modules })) }; });
+  check('Contenu chargé au démarrage', res.counts.blocks === 2 && res.counts.items >= 4 && res.counts.recipes === 4 && res.counts.mobs === 1 && res.counts.functions === 2 && res.counts.textures >= 1, JSON.stringify(res.counts));
+  check('Script du pack détecté (point d’entrée, fichiers, version du module)', res.scripts?.length === 1 && res.scripts[0].files === 2 && !res.report.some((r) => /JavaScript/.test(r)), JSON.stringify(res.scripts?.map((x) => [x.entry, x.files.size, x.modules])));
 
   // ---------- en jeu ----------
   await G(() => window.__lecraft.createWorld('Add-ons', '99', 'survival', 'normal'));
   await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
   await wait(1200);
+  // ---------- API de script ----------
+  await wait(400);
+  const sc = await G(() => { const h = window.__lecraft.session.scripts; return { log: h?.log ?? ['pas d’hôte'], ticks: window.__lecraft.session.worldProps.get('ticks') }; });
+  check('Script exécuté sans erreur (imports relatifs sans extension, @minecraft/server-ui)', sc.log.length === 0 && sc.ticks > 3, JSON.stringify(sc));
+  check('Événement playerSpawn + sendMessage + ItemStack', (await G(() => [...document.querySelectorAll('.chat-line')].some((l) => /Script prêt 2/.test(l.textContent)))));
+  // composant de bloc personnalisé
+  const lamp = await G(() => {
+    const s = window.__lecraft.session, p = s.player, w = s.world;
+    const id = window.__lecraft.debug.blockId('test:ruby_lamp');
+    const x = Math.floor(p.x) + 2, y = Math.floor(p.y) + 1, z = Math.floor(p.z);
+    w.setBlock(x - 1, y, z, 0, 0);
+    w.setBlock(x - 1, y - 1, z, 0, 0);
+    w.setBlock(x, y, z, id, 0);
+    const ex = p.x, ey = p.y + p.eyeHeight, ez = p.z;
+    p.yaw = Math.atan2(-(x + 0.5 - ex), -(z + 0.5 - ez));
+    p.pitch = Math.atan2(y + 0.5 - ey, Math.hypot(x + 0.5 - ex, z + 0.5 - ez));
+    s.interaction.update(0, []);
+    const t = s.interaction.target;
+    s.interaction.use();
+    return { meta: w.getMeta(x, y, z), id: w.getBlock(x, y, z) === id, target: t && [t.x - x, t.y - y, t.z - z, t.block], mob: !!s.interaction.targetMob };
+  });
+  check('Composant de bloc personnalisé (onPlayerInteract → setPermutation)', lamp.id && lamp.meta === 1, JSON.stringify(lamp));
+  // composant d'objet personnalisé + formulaire
+  await G(() => { const s = window.__lecraft.session, inv = s.player.inventory; inv.slots[3] = { id: 'test:ruby_wand', count: 1 }; inv.selected = 3; inv.changed(); s.player.pitch = 1.4; s.interaction.update(0, []); s.player.pitch = 1.5; s.interaction.target = null; s.interaction.use(); });
+  await wait(300);
+  const formText = await G(() => document.querySelector('.script-form')?.innerText ?? '');
+  await page.screenshot({ path: `${OUT}/addons-05-form.png` });
+  if (formText) await page.locator('.script-form .mc-btn', { hasText: 'A' }).first().click();
+  await wait(300);
+  check('Composant d’objet (onUse) + ActionFormData', /Baguette/.test(formText) && /Choisissez/.test(formText) && (await G(() => window.__lecraft.session.worldProps.get('choice'))) === 0, formText.replace(/\n/g, ' | '));
+  await G(() => { const inv = window.__lecraft.session.player.inventory; inv.selected = 0; inv.changed(); });
+  // scriptevent + runCommand depuis une entité
+  const r0 = await G(() => window.__lecraft.session.player.inventory.count('test:ruby'));
+  await cmd('/scriptevent test:ping hello');
+  await wait(300);
+  const r1 = await G(() => window.__lecraft.session.player.inventory.count('test:ruby'));
+  check('/scriptevent → scriptEventReceive → entity.runCommand', r1 === r0 + 4, `${r0} → ${r1}`);
+  // chat intercepté (beforeEvents.chatSend)
+  await G(() => window.__lecraft.openChat(''));
+  await wait(150);
+  await page.locator('.chat-input').fill('secret');
+  await page.locator('.chat-input').press('Enter');
+  await wait(300);
+  const chatTxt = await G(() => [...document.querySelectorAll('.chat-line')].map((l) => l.textContent).join(' | '));
+  check('beforeEvents.chatSend (annulation) + world.sendMessage', /Secret intercepté/.test(chatTxt) && !/<Joueur> secret/.test(chatTxt), chatTxt.slice(-160));
+
+  await cmd('/clear @s test:ruby');
   await cmd('/give @s test:ruby 9');
   const info = await G(() => ({ rubies: window.__lecraft.session.player.inventory.count('test:ruby') }));
   check('/give d’un objet d’add-on', info.rubies === 9, `rubis : ${info.rubies}`);
@@ -210,10 +279,14 @@ try {
     return m ? { hp: m.health, name: m.def.name, hostile: m.def.category, model: !!m.model } : null;
   });
   check('/summon d’une créature d’add-on (santé, nom, hostilité)', !!mob && mob.hp === 30 && mob.name === 'Golem de rubis' && mob.hostile === 'hostile', JSON.stringify(mob));
+  const hurt = await G(() => { const s = window.__lecraft.session; const m = s.entities.mobs.find((x) => x.def.key === 'test:ruby_golem'); s.combat.damageMob(m, 2, { kind: 'player', fromPlayer: true }); return [...m.tags]; });
+  check('afterEvents.entityHurt (addTag sur la créature)', hurt.includes('hurt'), JSON.stringify(hurt));
   await G(() => { const s = window.__lecraft.session; s.dayCycle.time = 0.2; const p = s.player; p.yaw = -Math.PI / 2; p.pitch = -0.1; });
   await wait(800);
   await page.screenshot({ path: `${OUT}/addons-02-golem.png` });
   // fonctions
+  await cmd('/kill @e[type=item]');
+  await wait(100);
   const before = await G(() => window.__lecraft.session.player.inventory.count('test:ruby'));
   await cmd('/function hello');
   await wait(200);

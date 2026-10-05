@@ -12,6 +12,10 @@ import { WORLD_HEIGHT } from '../core/Config';
 import { FACING_DIR, facingFromYaw, opposite } from '../blocks/Shapes';
 import { encodeStates, type BedrockBlockInfo } from '../addons/BedrockBlocks';
 import { connectionStates } from '../addons/BlockRuntime';
+import { hooks } from '../scripting/Hooks';
+
+/** Face moteur (0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z) d'une normale. */
+const faceOf = (t: RayHit) => (t.nx > 0 ? 0 : t.nx < 0 ? 1 : t.ny > 0 ? 2 : t.ny < 0 ? 3 : t.nz > 0 ? 4 : 5);
 
 export interface PlacementPreview {
   x: number;
@@ -115,8 +119,11 @@ export class PlayerInteraction {
     }
     // arc : maintenir utiliser charge, relâcher tire
     if (held?.id === 'bow') {
-      if (this.input.useHeld) this.bowCharge = Math.min(1, this.bowCharge + dt);
-      else if (this.bowCharge > 0) {
+      if (this.input.useHeld) {
+        if (this.bowCharge === 0) hooks.startUse?.({ ...held });
+        this.bowCharge = Math.min(1, this.bowCharge + dt);
+      } else if (this.bowCharge > 0) {
+        hooks.releaseUse?.({ ...held }, Math.round(this.bowCharge * 20));
         this.shootBow(this.bowCharge);
         this.bowCharge = 0;
       }
@@ -144,6 +151,7 @@ export class PlayerInteraction {
     if (key !== this.miningKey) {
       this.miningKey = key;
       this.miningProgress = 0;
+      hooks.hitBlock?.(t.x, t.y, t.z, faceOf(t));
     }
     const p = ctx.player;
     const time = breakTime(t.block, itemId, p.creative, p.body.headInWater || (!p.body.onGround && p.body.inWater));
@@ -157,7 +165,15 @@ export class PlayerInteraction {
       ctx.particles.blockHit(t.x, t.y, t.z, t.block, t.nx, t.ny, t.nz);
     }
     if (this.miningProgress >= 1) {
+      const stack = p.inventory.selectedStack ? { ...p.inventory.selectedStack } : null;
+      const meta = ctx.world.getMeta(t.x, t.y, t.z);
+      if (hooks.beforeBreak?.(t.x, t.y, t.z, t.block, meta, stack)) {
+        this.resetMining();
+        this.hitSoundTimer = 0.3;
+        return;
+      }
       this.breakBlock(t.x, t.y, t.z, itemId);
+      hooks.afterBreak?.(t.x, t.y, t.z, t.block, meta, stack);
       this.resetMining();
       // en créatif, petit délai entre deux cassages
       if (p.creative) this.hitSoundTimer = 0.2;
@@ -239,6 +255,13 @@ export class PlayerInteraction {
     const held = inv.selectedStack;
     const def = held ? ItemRegistry.get(held.id) : undefined;
     const t = this.target;
+    // 0) scripts d'add-ons : interaction avec une créature ou un bloc (peut annuler la suite)
+    if (!repeat && this.targetMob && hooks.interactEntity?.(this.targetMob, held ? { ...held } : null)) return;
+    if (!repeat && t && !this.targetMob && hooks.interactBlock) {
+      const [ox, oy, oz, dx, dy, dz] = this.eye();
+      const hit: [number, number, number] = [ox + dx * t.distance, oy + dy * t.distance, oz + dz * t.distance];
+      if (hooks.interactBlock(t.x, t.y, t.z, faceOf(t), hit, held ? { ...held } : null)) return;
+    }
     // 1) nourrir un animal
     if (!repeat && this.targetMob instanceof Animal && held && this.targetMob.def.food?.includes(held.id)) {
       if (this.targetMob.feed(ctx, held.id)) {
@@ -267,6 +290,8 @@ export class PlayerInteraction {
       }
     }
     if (!def || !held) return;
+    // objet utilisé dans le vide (ou sur un bloc sans pose) : événements de script
+    if (!repeat && hooks.useItem && (!t || !def.place) && hooks.useItem({ ...held })) return;
     // 3) utilisations spéciales
     if (!repeat && def.use === 'till' && t && t.ny === 1 && (t.block === B.DIRT || t.block === B.GRASS_BLOCK || t.block === B.DIRT_PATH)) {
       if (ctx.world.getBlock(t.x, t.y + 1, t.z) === B.AIR || BlockRegistry.replaceable[ctx.world.getBlock(t.x, t.y + 1, t.z)]) {
@@ -301,11 +326,22 @@ export class PlayerInteraction {
         return;
       }
       const blk = BlockRegistry.get(pv.block);
-      ctx.world.setBlock(pv.x, pv.y, pv.z, pv.block, pv.meta);
+      let placeMeta = pv.meta;
+      if (hooks.beforePlace && t) {
+        const m = hooks.beforePlace(pv.x, pv.y, pv.z, pv.block, pv.meta, faceOf(t));
+        if (m === null) {
+          if (!repeat) ctx.audio.play('deny', { volume: 0.4 });
+          return;
+        }
+        placeMeta = m;
+      }
+      const prevId = Math.max(0, ctx.world.getBlock(pv.x, pv.y, pv.z));
+      ctx.world.setBlock(pv.x, pv.y, pv.z, pv.block, placeMeta);
       for (const [ex, ey, ez, eid, em] of pv.extra) ctx.world.setBlock(ex, ey, ez, eid, em);
       ctx.audio.blockSound('place', blk.sound, pv.x + 0.5, pv.y + 0.5, pv.z + 0.5);
       if (!p.creative) inv.takeFromSlot(inv.selected, 1);
       ctx.stats.inc('blocksPlaced');
+      hooks.afterPlace?.(pv.x, pv.y, pv.z, pv.block, prevId);
       this.entities.combat.swing = 0.7;
       ctx.haptic('light');
       return;
@@ -313,7 +349,9 @@ export class PlayerInteraction {
     // 5) manger
     if (!repeat && def.food) {
       if (p.eat(held.id)) {
+        const eaten = { ...held };
         if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+        hooks.consumed?.(eaten);
         ctx.audio.play('eat');
         ctx.particles.burst('dust', p.x, p.y + 1.4, p.z, 4);
         ctx.stats.inc('eaten');

@@ -25,12 +25,12 @@ import { VANILLA_MODELS } from '../render/MobModels';
 import { SKIN_PATHS } from '../render/TextureManager';
 import { extract, readEntries } from '../render/ResourcePack';
 import { TileRegistry } from '../render/TileRegistry';
-import { ADDON_BLOCKS, ADDON_TILES, addonTile, registerAddonBlocks } from './AddonRegistry';
+import { ADDON_BLOCKS, ADDON_TILES, addonTile, registerAddonBlocks, LOOT_TABLES } from './AddonRegistry';
 import { buildVisual, readBlockGeometries, stateMult, traitStates, metaCount, decodeStates, conditionTrue, type BedrockBlockInfo, type BedrockVisual, type BlockGeo, type StateDef, type Material } from './BedrockBlocks';
 import { parseLenientJson } from './Json';
 import { BEDROCK_BLOCK_TEXTURES, BEDROCK_ENTITY_TEXTURES, BEDROCK_ITEM_TEXTURES, BIOME_TAGS } from './BedrockMaps';
 import { geometryToModel, readGeometries, type BedrockGeo } from './BedrockGeometry';
-import { resolveItem } from '../commands/Commands';
+import { resolveItem, LANG } from '../commands/Commands';
 
 // ---------- stockage ----------
 
@@ -159,6 +159,18 @@ function findPacks(vfs: VFS): Pack[] {
     const types = (m.modules ?? []).map((x) => String(x.type ?? ''));
     const type = (types.find((t) => t === 'resources' || t === 'data' || t === 'skin_pack' || t === 'world_template') ?? (types.includes('script') ? 'script' : 'unknown')) as PackSummary['type'];
     const v = m.header.version;
+    // nom et description traduits (« pack.name » → texts/fr_FR.lang ou en_US.lang)
+    const tr = (k: string) => {
+      if (!/^[\w.]+$/.test(k) || !k.includes('.')) return k;
+      for (const f of ['texts/fr_FR.lang', 'texts/en_US.lang']) {
+        const t = vfs.text(root + f);
+        const line = t?.split(/\r?\n/).find((l) => l.startsWith(`${k}=`));
+        if (line) return line.slice(k.length + 1).replace(/\t#.*$/, '');
+      }
+      return k;
+    };
+    m.header.name = tr(String(m.header.name ?? ''));
+    m.header.description = tr(String(m.header.description ?? ''));
     packs.push({
       root,
       summary: {
@@ -172,6 +184,25 @@ function findPacks(vfs: VFS): Pack[] {
     });
   }
   return packs;
+}
+
+/** Lit le module de script d'un pack (point d'entrée, fichiers .js, versions des modules). */
+function readScriptPack(vfs: VFS, root: string, name: string): ScriptPack | null {
+  const m = vfs.json(root + 'manifest.json') as { modules?: { type?: string; entry?: string }[]; dependencies?: { module_name?: string; version?: string | number[] }[] } | undefined;
+  const mod = m?.modules?.find((x) => x.type === 'script' || x.type === 'javascript');
+  if (!mod?.entry) return null;
+  const files = new Map<string, string>();
+  const lowRoot = root.toLowerCase();
+  for (const f of vfs.files.keys()) {
+    const lf = f.toLowerCase();
+    if (!lf.startsWith(lowRoot) || !(lf.endsWith('.js') || lf.endsWith('.mjs') || lf.endsWith('.json'))) continue;
+    const rel = f.slice(root.length);
+    if (lf.endsWith('.json') && !rel.toLowerCase().startsWith('scripts/')) continue;
+    files.set(rel, vfs.text(f) ?? '');
+  }
+  const modules: Record<string, string> = {};
+  for (const d of m?.dependencies ?? []) if (d.module_name) modules[d.module_name] = Array.isArray(d.version) ? d.version.join('.') : String(d.version ?? '');
+  return { name, entry: mod.entry.replace(/^\.?\//, ''), files, modules };
 }
 
 /** Retire les codes de mise en forme (§a, §l…). */
@@ -208,6 +239,18 @@ export interface AddonLoadResult {
   counts: { blocks: number; items: number; recipes: number; mobs: number; functions: number; textures: number; permutations?: number };
   functions: Map<string, string[]>;
   tickFunctions: string[];
+  /** Scripts JavaScript des packs de comportement (API de script). */
+  scripts: ScriptPack[];
+}
+
+export interface ScriptPack {
+  name: string;
+  /** Point d'entrée, relatif à la racine du pack (« scripts/main.js »). */
+  entry: string;
+  /** Fichiers .js du pack : chemin relatif → source. */
+  files: Map<string, string>;
+  /** Versions demandées des modules (« @minecraft/server » → « 1.8.0 »). */
+  modules: Record<string, string>;
 }
 
 const ID_KEY = 'lecraft.addonBlockIds';
@@ -355,13 +398,20 @@ async function buildBedrockInfo(
   const geoC = base['minecraft:geometry'];
   const geoId = typeof geoC === 'string' ? geoC : (geoC as { identifier?: string } | undefined)?.identifier;
   const custom = Object.keys(base).filter((k) => !k.startsWith('minecraft:') && !k.startsWith('tag:') && k.includes(':'));
+  const customParams: Record<string, unknown> = {};
+  for (const k of custom) customParams[k] = base[k];
+  // composants personnalisés ajoutés par des permutations
+  for (const p of b.perms) for (const k of Object.keys(p.components ?? {})) if (!k.startsWith('minecraft:') && !k.startsWith('tag:') && k.includes(':') && !custom.includes(k)) {
+    custom.push(k);
+    customParams[k] = p.components![k];
+  }
   const legacyCustom = (base['minecraft:custom_components'] as string[] | undefined) ?? [];
   const tick = base['minecraft:tick'] as { interval_range?: [number, number] } | undefined;
   const plain = !states.length && !b.perms.length && (!geoId || geoId.includes('full_block')) && !base['minecraft:transformation'] && base['minecraft:collision_box'] === undefined;
   const tags = Object.keys(base).filter((k) => k.startsWith('tag:')).map((k) => k.slice(4));
   if (plain && !custom.length && !legacyCustom.length && !tick) return null;
   const mult = stateMult(states);
-  const info: BedrockBlockInfo = { states, mult, visuals: [], placement: ts.placement, custom: [...custom, ...legacyCustom], tick: tick ? tick.interval_range ?? [1, 1] : null, randomTick: !!base['minecraft:random_ticking'], tags };
+  const info: BedrockBlockInfo = { states, mult, visuals: [], placement: ts.placement, custom: [...custom, ...legacyCustom], customParams, tick: tick ? tick.interval_range ?? [1, 1] : null, randomTick: !!base['minecraft:random_ticking'], tags };
   if (mult.some((m) => m === 0)) report.push(`Bloc « ${b.id} » : trop d'états, certains sont figés.`);
   const count = metaCount(info);
   const tileCache = new Map<string, Material | null>();
@@ -419,7 +469,7 @@ async function buildBedrockInfo(
 
 /** Charge et enregistre tous les add-ons activés. À appeler avant la création de tout monde. */
 export async function loadEnabledAddons(): Promise<AddonLoadResult> {
-  const result: AddonLoadResult = { images: new Map(), report: [], counts: { blocks: 0, items: 0, recipes: 0, mobs: 0, functions: 0, textures: 0 }, functions: new Map(), tickFunctions: [] };
+  const result: AddonLoadResult = { images: new Map(), report: [], counts: { blocks: 0, items: 0, recipes: 0, mobs: 0, functions: 0, textures: 0 }, functions: new Map(), tickFunctions: [], scripts: [] };
   const addons = (await listAddons()).filter((a) => a.enabled);
   if (!addons.length) {
     // aucun add-on actif : les identifiants déjà attribués restent réservés (« bloc inconnu »)
@@ -437,7 +487,11 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       for (const p of findPacks(vfs)) {
         if (p.summary.type === 'resources') rps.push({ vfs, root: p.root, name: p.summary.name });
         else if (p.summary.type === 'data') bps.push({ vfs, root: p.root, name: p.summary.name });
-        if (p.summary.hasScripts) result.report.push(`« ${p.summary.name} » : les scripts JavaScript ne sont pas pris en charge (le reste du contenu est chargé).`);
+        if (p.summary.hasScripts) {
+          const sp = readScriptPack(vfs, p.root, p.summary.name);
+          if (sp) result.scripts.push(sp);
+          else result.report.push(`« ${p.summary.name} » : point d'entrée de script introuvable.`);
+        }
       }
     } catch (e) {
       result.report.push(`Add-on « ${a.name} » illisible : ${(e as Error).message}`);
@@ -711,13 +765,28 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   for (const raw of itemDefs) {
     const r = raw as unknown as { key: string; _c: Record<string, unknown>; _d: Record<string, unknown> };
     const c = r._c;
-    if (ItemRegistry.has(r.key)) continue;
+    // composants personnalisés (API de script) : « espace:nom »: {params} ou minecraft:custom_components
+    const scriptComponents: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(c)) if (k.includes(':') && !k.startsWith('minecraft:') && !k.startsWith('tag:')) scriptComponents[k] = v;
+    for (const k of (c['minecraft:custom_components'] as string[] | undefined) ?? []) scriptComponents[k] = {};
+    const itemTags = [...((c['minecraft:tags'] as { tags?: string[] } | undefined)?.tags ?? []), ...Object.keys(c).filter((k) => k.startsWith('tag:')).map((k) => k.slice(4))];
+    const cd = c['minecraft:cooldown'] as { category?: string; duration?: number } | undefined;
+    const scriptExtras = {
+      ...(Object.keys(scriptComponents).length ? { scriptComponents } : {}),
+      ...(itemTags.length ? { tags: itemTags } : {}),
+      ...(cd ? { cooldown: { category: String(cd.category ?? r.key), duration: Number(cd.duration ?? 0) } } : {}),
+    };
+    if (ItemRegistry.has(r.key)) {
+      // objet déjà créé par son bloc : on y ajoute les données de script
+      Object.assign(ItemRegistry.get(r.key)!, scriptExtras);
+      continue;
+    }
     const iconC = c['minecraft:icon'];
     const iconShort = typeof iconC === 'string' ? iconC : (iconC as { texture?: string; textures?: { default?: string } } | undefined)?.texture ?? (iconC as { textures?: { default?: string } } | undefined)?.textures?.default ?? rpItemIcons.get(r.key);
     const iconKey = await addonImage(iconShort ? itemTex.get(iconShort) ?? iconShort : undefined);
     const dn = c['minecraft:display_name'] as { value?: string } | undefined;
     const name = lang.get(`item.${r.key}.name`) ?? lang.get(`item.${r.key}`) ?? (dn?.value ? lang.get(dn.value) ?? cleanText(dn.value) : undefined) ?? prettify(r.key);
-    const def: ItemDef = { key: r.key, name, icon: iconKey ? { image: iconKey } : { sprite: 'lump', colors: ['#c070ff', '#ffffff'] } };
+    const def: ItemDef = { key: r.key, name, icon: iconKey ? { image: iconKey } : { sprite: 'lump', colors: ['#c070ff', '#ffffff'] }, ...scriptExtras };
     const ms = c['minecraft:max_stack_size'];
     if (ms !== undefined) def.maxStack = Math.max(1, Math.min(64, val(ms, 64)));
     const food = c['minecraft:food'] as { nutrition?: number; saturation_modifier?: number | string; can_always_eat?: boolean } | undefined;
@@ -823,6 +892,13 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   }
   if (skipped) result.report.push(`${skipped} recette(s) ignorée(s) (ingrédients inconnus du jeu).`);
 
+  // textes traduits (formulaires des scripts, tellraw « translate »)
+  for (const [k, v] of lang) if (!LANG.has(k)) LANG.set(k, v);
+
+  // tables de butin (commande /loot, API de script)
+  LOOT_TABLES.clear();
+  for (const k of loot.keys()) LOOT_TABLES.set(k.replace(/^loot_tables\//, '').replace(/\.json$/, ''), lootDrops(k));
+
   // 7) entités
   for (const e of entities) {
     if (MOB_BY_KEY.has(e.id)) continue;
@@ -858,6 +934,15 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       traits,
       sounds: hostile ? { idle: 'groan', hurt: 'groan_hurt', death: 'groan_death' } : { idle: 'oink', hurt: 'oink_hurt', death: 'oink_hurt' },
       scale: val(c['minecraft:scale'], 1),
+      families: ((c['minecraft:type_family'] as { family?: string[] } | undefined)?.family ?? []).map(String),
+      properties: Object.fromEntries(
+        Object.entries((e.desc.properties ?? {}) as Record<string, { type?: string; default?: unknown; values?: unknown[]; range?: number[] }>).map(([k, v]) => {
+          const d = v.default;
+          const val = typeof d === 'number' || typeof d === 'boolean' ? d : typeof d === 'string' && !/[qv]\.|query|math/.test(d) ? d : v.type === 'bool' ? false : v.type === 'enum' ? String(v.values?.[0] ?? '') : (v.range?.[0] ?? 0);
+          return [k, val as number | string | boolean];
+        }),
+      ),
+      variant: val((c['minecraft:variant'] as { value?: number } | undefined)?.value, 0),
     };
     // apparition naturelle (règles d'apparition)
     const sr = spawnRules.get(e.id) as { conditions?: Record<string, unknown>[] } | undefined;

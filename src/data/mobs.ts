@@ -29,6 +29,27 @@ export interface MobDef {
   /** Multiplicateurs de dégâts reçus selon le type d'outil (faiblesses). */
   weakness?: Partial<Record<'pickaxe' | 'axe' | 'sword' | 'shovel' | 'gold' | 'fire', number>>;
   scale?: number;
+  /** Familles (minecraft:type_family) : « monster », « undead »… */
+  families?: string[];
+  /** Propriétés d'entité (minecraft:properties) → valeur par défaut. */
+  properties?: Record<string, number | string | boolean>;
+  /** Événements d'entité définis par l'add-on (noms). */
+  events?: string[];
+  /** Variantes (minecraft:variant / mark_variant / skin_id) de base. */
+  variant?: number;
+}
+
+const VANILLA_FAMILIES: Record<string, string[]> = {
+  zombie: ['zombie', 'undead', 'monster'], skeleton: ['skeleton', 'undead', 'monster'], spider: ['spider', 'arthropod', 'monster'],
+  cave_spider: ['cave_spider', 'arthropod', 'monster'], slime: ['slime', 'monster'], zombie_chief: ['zombie', 'undead', 'monster'],
+  cow: ['cow'], sheep: ['sheep'], pig: ['pig'], chicken: ['chicken'], golem: ['irongolem'], liche: ['undead', 'monster'],
+};
+
+/** Familles d'une créature (définies par l'add-on, ou déduites pour les créatures de base). */
+export function familiesOf(def: MobDef): string[] {
+  if (def.families?.length) return def.families;
+  const f = VANILLA_FAMILIES[def.key] ?? [def.key.split(':').pop()!];
+  return [...f, 'mob', ...(def.category === 'hostile' || def.category === 'boss' ? ['monster'] : [])];
 }
 
 export const MOB_DEFS: MobDef[] = [

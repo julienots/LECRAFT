@@ -17,6 +17,7 @@ import { makeStack } from '../inventory/Inventory';
 import { DamageSystem } from '../combat/DamageSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 import { BOSS } from '../world/StructureGenerator';
+import { hooks } from '../scripting/Hooks';
 import type { SpecialBlock } from '../world/ChunkData';
 
 export interface SavedMob {
@@ -28,6 +29,12 @@ export interface SavedMob {
   baby: boolean;
   wool?: string;
   sheared?: boolean;
+  /** Données des add-ons (étiquettes, propriétés dynamiques, nom, effets). */
+  tags?: string[];
+  dp?: Record<string, unknown>;
+  name?: string;
+  effects?: import('./Effects').ActiveEffect[];
+  yaw?: number;
 }
 
 /**
@@ -76,7 +83,7 @@ export class EntityManager implements EntitySpawner {
     else m.dispose();
   }
 
-  spawnMob(key: string, x: number, y: number, z: number, opts: { baby?: boolean; persistent?: boolean; altar?: string } = {}): Mob | null {
+  spawnMob(key: string, x: number, y: number, z: number, opts: { baby?: boolean; persistent?: boolean; altar?: string; cause?: 'Spawned' | 'Born' | 'Loaded' } = {}): Mob | null {
     const info = MOB_BY_KEY.get(key);
     if (!info) return null;
     const { def, index } = info;
@@ -89,6 +96,7 @@ export class EntityManager implements EntitySpawner {
     if (opts.persistent) m.persistent = true;
     this.entities.push(m);
     this.group.add(m.object3d);
+    hooks.spawned?.(m, opts.cause ?? (opts.baby ? 'Born' : 'Spawned'));
     return m;
   }
 
@@ -199,6 +207,7 @@ export class EntityManager implements EntitySpawner {
       const e = this.entities[i];
       if (!e.removed) continue;
       this.entities.splice(i, 1);
+      if (e.kind === 'mob') hooks.removed?.(e);
       if (e.kind === 'mob') {
         const m = e as Mob;
         if (this.activeBoss === m) this.activeBoss = null;
@@ -226,7 +235,7 @@ export class EntityManager implements EntitySpawner {
       const b = p.body;
       if (pr.x > b.x - 0.4 && pr.x < b.x + 0.4 && pr.z > b.z - 0.4 && pr.z < b.z + 0.4 && pr.y > b.y && pr.y < b.y + b.height) {
         const v = Math.hypot(pr.body.vx, pr.body.vz) || 1;
-        const dealt = p.damage(pr.damage, 'projectile', (pr.body.vx / v) * 4, (pr.body.vz / v) * 4);
+        const dealt = p.damage(pr.damage, 'projectile', (pr.body.vx / v) * 4, (pr.body.vz / v) * 4, null, pr);
         if (pr.type === 'ice') p.slowTimer = 2;
         if (dealt > 0) {
           ctx.audio.play('hurt');
@@ -241,7 +250,7 @@ export class EntityManager implements EntitySpawner {
       const [a, b, c, d, f, g] = e.aabb();
       if (pr.x > a - 0.1 && pr.x < d + 0.1 && pr.y > b && pr.y < f && pr.z > c - 0.1 && pr.z < g + 0.1) {
         const v = Math.hypot(pr.body.vx, pr.body.vz) || 1;
-        this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: true, knockX: (pr.body.vx / v) * 4, knockZ: (pr.body.vz / v) * 4, itemId: pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow' });
+        this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: true, knockX: (pr.body.vx / v) * 4, knockZ: (pr.body.vz / v) * 4, itemId: pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: ctx.player });
         if (pr.type === 'frost_bolt') (e as Mob).slowTimer = 3;
         pr.removed = true;
         return;
@@ -387,14 +396,26 @@ export class EntityManager implements EntitySpawner {
   }
 
   serialize(): SavedMob[] {
-    return this.mobs.filter((m) => !m.dead && (m.def.category === 'passive' || m.def.category === 'neutral')).map((m) => ({ key: m.def.key, x: m.x, y: m.y, z: m.z, health: m.health, baby: m.baby, wool: m instanceof Animal ? m.woolColor : undefined, sheared: m instanceof Animal ? m.sheared : undefined }));
+    return this.mobs
+      .filter((m) => !m.dead && !m.removed && m.def.category !== 'boss' && (m.def.category === 'passive' || m.def.category === 'neutral' || m.persistent || m.nameTag || m.tags.size || m.dynProps.size))
+      .map((m) => ({
+        key: m.def.key, x: m.x, y: m.y, z: m.z, health: m.health, baby: m.baby, wool: m instanceof Animal ? m.woolColor : undefined, sheared: m instanceof Animal ? m.sheared : undefined,
+        ...(m.tags.size ? { tags: [...m.tags] } : {}), ...(m.dynProps.size ? { dp: Object.fromEntries(m.dynProps) } : {}), ...(m.nameTag ? { name: m.nameTag } : {}),
+        ...(m.effects.map.size ? { effects: m.effects.serialize() } : {}), yaw: m.yaw,
+      }));
   }
 
   load(list: SavedMob[]) {
     for (const s of list) {
-      const m = this.spawnMob(s.key, s.x, s.y + 0.1, s.z, { baby: s.baby, persistent: true });
-      if (m) m.health = s.health;
+      const m = this.spawnMob(s.key, s.x, s.y + 0.1, s.z, { baby: s.baby, persistent: true, cause: 'Loaded' });
+      if (!m) continue;
+      m.health = s.health;
       if (m instanceof Animal && s.wool) m.setWool(s.wool, !!s.sheared);
+      for (const t of s.tags ?? []) m.tags.add(t);
+      for (const [k, v] of Object.entries(s.dp ?? {})) m.dynProps.set(k, v);
+      if (s.name) m.nameTag = s.name;
+      if (s.effects) m.effects.load(s.effects);
+      if (s.yaw !== undefined) m.yaw = s.yaw;
     }
   }
 

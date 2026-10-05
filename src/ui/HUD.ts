@@ -1,4 +1,5 @@
 import type { HudApi } from '../core/GameContext';
+import { setMcText } from './McText';
 import type { Session } from '../core/Session';
 import type { TextureManager } from '../render/TextureManager';
 import { ItemRegistry } from '../inventory/ItemRegistry';
@@ -156,7 +157,7 @@ export class HUD implements HudApi {
   /** /title : titre, sous-titre ou barre d'action. */
   showTitle(text: string, kind: 'title' | 'subtitle' | 'actionbar') {
     if (kind === 'actionbar') {
-      this.actionbarEl.textContent = text;
+      setMcText(this.actionbarEl, text);
       this.actionTimer = 3;
       return;
     }
@@ -164,7 +165,7 @@ export class HUD implements HudApi {
       this.titleEl.textContent = this.subtitleEl.textContent = '';
       return;
     }
-    (kind === 'title' ? this.titleEl : this.subtitleEl).textContent = text;
+    setMcText(kind === 'title' ? this.titleEl : this.subtitleEl, text);
     this.titleTimer = 4;
   }
 

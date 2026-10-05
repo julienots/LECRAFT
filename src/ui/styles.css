@@ -347,3 +347,12 @@ html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }
 .dpad-upleft { grid-area: 1 / 1; visibility: hidden; } .dpad-upright { grid-area: 1 / 3; visibility: hidden; }
 .dpad.forward .dpad-upleft, .dpad.forward .dpad-upright { visibility: visible; }
 .dpad-center.active { background: rgba(120, 200, 255, 0.55); }
+
+/* formulaires des scripts d'add-ons (@minecraft/server-ui) */
+.script-form .form-btn { display: flex; align-items: center; justify-content: center; gap: calc(var(--gs) * 4px); width: 100%; }
+.script-form .form-icon { width: calc(var(--gs) * 14px); height: calc(var(--gs) * 14px); image-rendering: pixelated; object-fit: contain; flex: none; }
+.script-form .form-divider { height: calc(var(--gs) * 1px); background: #8b8b8b; width: calc(var(--gs) * 260px); max-width: calc(100vw - 20px); flex: none; }
+.script-form .mc-label.form-body { text-align: left; width: calc(var(--gs) * 260px); max-width: calc(100vw - 20px); white-space: pre-wrap; }
+.script-form .mc-btn { min-height: calc(var(--gs) * 20px); height: auto; }
+.script-form .mc-body > * { flex-shrink: 0; }
+.script-form .mc-label.left { width: calc(var(--gs) * 260px); }

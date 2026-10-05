@@ -79,7 +79,7 @@ export class AIController {
       this.stop();
       return d;
     }
-    const sp = m.def.speed * speedMul * this.speedMul * (m.baby ? 1.2 : 1) * (m.slowTimer > 0 ? 0.5 : 1);
+    const sp = m.def.speed * speedMul * this.speedMul * (m.baby ? 1.2 : 1) * (m.slowTimer > 0 ? 0.5 : 1) * m.effects.speedMul();
     let vx = (dx / d) * sp, vz = (dz / d) * sp;
     if (avoidCliffs && b.onGround && !m.has('flies')) {
       const ax = Math.floor(m.x + (dx / d) * (b.halfWidth + 0.6)), az = Math.floor(m.z + (dz / d) * (b.halfWidth + 0.6));

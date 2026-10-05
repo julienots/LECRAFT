@@ -1,4 +1,5 @@
 import type { DamageInfo, GameContext } from '../core/GameContext';
+import { hooks } from '../scripting/Hooks';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { Mob } from '../entities/Mob';
 import type { DamageSystem } from './DamageSystem';
@@ -33,13 +34,14 @@ export class CombatSystem {
     const p = ctx.player;
     const stack = p.inventory.selectedStack;
     const def = stack ? ItemRegistry.get(stack.id) : undefined;
-    const base = def?.damage ?? 1;
+    const base = Math.max(0, (def?.damage ?? 1) + p.effects.attackBonus());
     this.cooldown = def?.attackCooldown ?? 0.4;
     this.swing = 1;
     const crit = !p.body.onGround && p.body.vy < -1 && !p.body.inWater;
     const dx = m.x - p.x, dz = m.z - p.z, d = Math.hypot(dx, dz) || 1;
     const kb = stack?.id === 'golem_mace' ? 14 : p.sprinting ? 9 : 5;
     const dealt = this.damage.damageMob(m, base, { kind: 'player', itemId: stack?.id, knockX: (dx / d) * kb, knockZ: (dz / d) * kb, fromPlayer: true, crit });
+    hooks.hitEntity?.(m, stack ?? null);
     if (dealt > 0) {
       ctx.audio.play(crit ? 'crit' : 'hit', { x: m.x, y: m.y, z: m.z });
       if (crit) ctx.particles.burst('magic', m.x, m.y + m.body.height, m.z, 6);

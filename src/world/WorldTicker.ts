@@ -1,4 +1,5 @@
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
+import { hooks } from '../scripting/Hooks';
 import { hasSupport, getDrops } from '../blocks/BlockBehaviors';
 import { CHUNK_SIZE, WORLD_HEIGHT } from '../core/Config';
 import type { GameContext } from '../core/GameContext';
@@ -198,6 +199,7 @@ export class WorldTicker {
   }
 
   private randomTick(ctx: GameContext, x: number, y: number, z: number, id: number) {
+    if (hooks.randomTick && BlockRegistry.get(id).def.bedrock?.custom.length) hooks.randomTick(x, y, z, id);
     const w = ctx.world;
     const rain = ctx.raining();
     if (IS_LEAVES[id]) {

@@ -3,6 +3,9 @@ import { Inventory } from '../inventory/Inventory';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { clamp } from '../util/math';
 import { PlayerPhysics, EYE_HEIGHT, SNEAK_EYE_HEIGHT } from './PlayerPhysics';
+import { EffectList, type ActiveEffect } from '../entities/Effects';
+import { hooks, damageCause, type Actor } from '../scripting/Hooks';
+import type { Entity } from '../entities/Entity';
 
 export type DamageSource = 'mob' | 'fall' | 'lava' | 'drown' | 'starve' | 'contact' | 'void' | 'projectile' | 'boss' | 'fire' | 'explosion';
 
@@ -11,6 +14,7 @@ export interface PlayerSnapshot {
   health: number; hunger: number; saturation: number; exhaustion: number; air: number;
   xp: number; level: number; spawn: [number, number, number];
   inventory: ReturnType<Inventory['serialize']>; flying: boolean;
+  effects?: ActiveEffect[]; tags?: string[]; dynProps?: Record<string, unknown>;
 }
 
 /**
@@ -21,6 +25,14 @@ export interface PlayerSnapshot {
 export class Player {
   readonly body = new PlayerPhysics();
   readonly inventory = new Inventory();
+  /** Effets de statut, étiquettes (/tag) et propriétés dynamiques (scripts d'add-ons). */
+  readonly effects = new EffectList();
+  readonly tags = new Set<string>();
+  readonly dynProps = new Map<string, unknown>();
+  readonly id = 0;
+  name = 'Joueur';
+  nameTag = '';
+  private tickNo = 0;
   yaw = 0;
   pitch = 0;
   health = 20;
@@ -75,8 +87,12 @@ export class Player {
   }
 
   /** Applique des dégâts (armure, difficulté, invincibilité). Retourne les dégâts effectifs. */
-  damage(amount: number, source: DamageSource, knockX = 0, knockZ = 0): number {
+  damage(amount: number, source: DamageSource, knockX = 0, knockZ = 0, attacker: Actor | null = null, projectile: Entity | null = null): number {
     if (this.dead || this.creative) return 0;
+    if (hooks.beforeHurt) {
+      amount = hooks.beforeHurt(this, amount, { cause: damageCause(source), attacker, projectile });
+      if (!(amount > 0)) return 0;
+    }
     if (source !== 'drown' && source !== 'starve' && source !== 'void' && this.invulnerable > 0) return 0;
     let dmg = amount;
     if (source === 'mob' || source === 'projectile' || source === 'boss') {
@@ -88,6 +104,7 @@ export class Player {
       dmg *= 1 - Math.min(0.8, def * 0.04);
       this.inventory.damageArmor(1);
     }
+    dmg *= this.effects.damageMul(source === 'lava' || source === 'fire');
     dmg = Math.max(0, Math.round(dmg * 2) / 2);
     if (dmg <= 0) return 0;
     this.health = Math.max(0, this.health - dmg);
@@ -100,13 +117,38 @@ export class Player {
       this.body.vy = Math.max(this.body.vy, 5);
     }
     this.onDamage(dmg, source);
+    hooks.afterHurt?.(this, dmg, { cause: damageCause(source), attacker, projectile });
     if (this.health <= 0) {
       this.dead = true;
       this.deathCause = source;
+      hooks.died?.(this, { cause: damageCause(source), attacker, projectile });
       this.onDeath();
     }
     return dmg;
   }
+
+  /** Adaptateur pour les effets de statut. */
+  readonly effectTarget = {
+    heal: (n: number) => this.heal(n),
+    hurt: (n: number) => {
+      if (this.creative || this.dead) return;
+      this.health = Math.max(0, this.health - n);
+      this.hurtFlash = 0.25;
+      this.onDamage(n, 'contact');
+      if (this.health <= 0) {
+        this.dead = true;
+        this.deathCause = 'contact';
+        this.onDeath();
+      }
+    },
+    hp: () => this.health,
+    body: this.body,
+    feed: (h: number, sat: number) => {
+      this.hunger = Math.min(20, this.hunger + h);
+      this.saturation = Math.min(this.hunger, this.saturation + sat);
+    },
+    exhaust: (n: number) => this.addExhaustion(n),
+  };
 
   heal(n: number) {
     this.health = Math.min(this.maxHealth, this.health + n);
@@ -151,6 +193,7 @@ export class Player {
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt);
     this.slowTimer = Math.max(0, this.slowTimer - dt);
+    this.effects.tick(this.effectTarget, this.tickNo++);
     this.effectTick += dt;
     if (this.effectTick >= 1.25) {
       this.effectTick = 0;
@@ -192,7 +235,7 @@ export class Player {
       }
     }
     // air
-    if (this.body.headInWater) {
+    if (this.body.headInWater && !this.effects.level('water_breathing')) {
       this.air -= dt * 20;
       if (this.air <= -20) {
         this.air = 0;
@@ -216,6 +259,7 @@ export class Player {
   respawn() {
     this.dead = false;
     this.deathCause = null;
+    this.effects.clear();
     this.health = this.maxHealth;
     this.hunger = 20;
     this.saturation = 5;
@@ -233,6 +277,7 @@ export class Player {
       x: this.body.x, y: this.body.y, z: this.body.z, yaw: this.yaw, pitch: this.pitch,
       health: this.health, hunger: this.hunger, saturation: this.saturation, exhaustion: this.exhaustion, air: this.air,
       xp: this.xp, level: this.level, spawn: this.spawn, inventory: this.inventory.serialize(), flying: this.body.flying,
+      effects: this.effects.serialize(), tags: [...this.tags], dynProps: Object.fromEntries(this.dynProps),
     };
   }
 
@@ -250,6 +295,11 @@ export class Player {
     this.spawn = s.spawn;
     this.inventory.load(s.inventory);
     this.body.flying = !!s.flying && this.creative;
+    this.effects.load(s.effects);
+    this.tags.clear();
+    for (const t of s.tags ?? []) this.tags.add(t);
+    this.dynProps.clear();
+    for (const [k, v] of Object.entries(s.dynProps ?? {})) this.dynProps.set(k, v);
     if (this.health <= 0) this.respawn();
   }
 }

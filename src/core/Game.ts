@@ -1,4 +1,5 @@
 import { detectDevice, AdaptiveQuality, type DeviceInfo } from './DeviceProfiler';
+import type { Screen } from '../ui/UIManager';
 import { applyQuality, loadSettings, saveSettings, type Settings } from './Settings';
 import { GameLoop } from './GameLoop';
 import { Session, type WorldState } from './Session';
@@ -95,7 +96,7 @@ export class Game {
     window.addEventListener('pointerdown', unlock, { capture: true });
     window.addEventListener('keydown', unlock, { capture: true });
     document.addEventListener('pointerlockchange', () => {
-      if (!document.pointerLockElement && this.state === 'playing' && this.input.mode === 'keyboard' && !this.inventoryUI) this.pause();
+      if (!document.pointerLockElement && this.state === 'playing' && this.input.mode === 'keyboard' && !this.inventoryUI && !this.formScreen) this.pause();
     });
   }
 
@@ -265,6 +266,7 @@ export class Game {
     this.hud.markHotbarDirty();
     this.session.player.inventory.onChange(() => this.hud.markHotbarDirty());
     await this.session.waitForSpawn((f) => loading.progress(f));
+    await this.session.startScripts();
     this.ui.clear();
     this.state = 'playing';
     this.hud.show(true);
@@ -361,6 +363,69 @@ export class Game {
   onChatClosed() {
     this.input.reset();
     if (this.state === 'playing') this.touch.setVisible(true);
+  }
+
+  // ---------- formulaires des scripts d'add-ons ----------
+  private formScreen: Screen | null = null;
+  /** Ouvre un formulaire de script ; faux si le joueur est occupé (autre écran ouvert). */
+  openScriptForm(build: (close: () => void) => Screen): boolean {
+    if (!this.session || this.state !== 'playing' || this.chat.isOpen || this.inventoryUI || this.formScreen) return false;
+    this.input.reset();
+    this.touch.releaseAll();
+    this.keyboard.releaseAll();
+    this.keyboard.exitPointerLock();
+    this.touch.setVisible(false);
+    let screen: Screen | null = null;
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      if (screen) this.ui.remove(screen);
+      if (this.formScreen === screen) this.formScreen = null;
+      this.input.reset();
+      if (this.state === 'playing' && !this.formScreen) this.touch.setVisible(true);
+    };
+    screen = build(close);
+    const prevClose = screen.onClose;
+    screen.onClose = () => {
+      prevClose?.();
+      close();
+    };
+    this.formScreen = screen;
+    this.ui.push(screen);
+    return true;
+  }
+  closeScriptForms() {
+    if (this.formScreen) this.ui.remove(this.formScreen);
+    this.formScreen = null;
+  }
+  get scriptFormOpen() {
+    return !!this.formScreen;
+  }
+  private iconUrls = new Map<string, string | null>();
+  /** URL d'une texture d'add-on (icônes des formulaires), ou null. */
+  addonIcon(path: string): string | null {
+    const key = path.replace(/\\/g, '/').replace(/^\//, '').replace(/\.(png|tga|jpg)$/i, '');
+    if (this.iconUrls.has(key)) return this.iconUrls.get(key)!;
+    let url: string | null = null;
+    const imgs = this.addonResult?.images;
+    const bmp = imgs?.get(key) ?? imgs?.get(`addon/${key}`) ?? [...(imgs?.entries() ?? [])].find(([k]) => k.toLowerCase().endsWith(key.toLowerCase()))?.[1];
+    if (bmp) {
+      const c = document.createElement('canvas');
+      c.width = bmp.width;
+      c.height = bmp.height;
+      c.getContext('2d')!.drawImage(bmp, 0, 0);
+      url = c.toDataURL();
+    } else {
+      const item = key.split('/').pop() ?? '';
+      try {
+        url = this.textures.iconCanvas(item).toDataURL();
+      } catch {
+        url = null;
+      }
+    }
+    this.iconUrls.set(key, url);
+    return url;
   }
 
   // ---------- inventaire ----------

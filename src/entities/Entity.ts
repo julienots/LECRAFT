@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { GameContext } from '../core/GameContext';
 import { PhysicsBody } from './Physics';
+import { EffectList } from './Effects';
 
 let NEXT_ID = 1;
 
@@ -15,6 +16,11 @@ export abstract class Entity {
   /** Distance au joueur (mise à jour par l'EntityManager). */
   distToPlayer = 0;
   abstract object3d: THREE.Object3D;
+  /** Données des add-ons (API de script, /tag) : étiquettes, propriétés dynamiques, nom, effets. */
+  readonly tags = new Set<string>();
+  readonly dynProps = new Map<string, unknown>();
+  nameTag = '';
+  readonly effects = new EffectList();
 
   constructor(halfWidth: number, height: number) {
     this.body = new PhysicsBody(halfWidth, height);

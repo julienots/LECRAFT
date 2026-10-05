@@ -30,6 +30,9 @@ import type { ItemStack } from '../inventory/Item';
 import { createShadowTexture } from '../render/MobModels';
 import { clamp } from '../util/math';
 import type { Boss } from '../entities/Boss';
+import { Scoreboard, type ScoreboardSnapshot } from '../scripting/Scoreboard';
+import { Mob } from '../entities/Mob';
+import { ScriptHost } from '../scripting/ScriptHost';
 
 export interface WorldState {
   version: number;
@@ -44,6 +47,8 @@ export interface WorldState {
   gamerules?: Partial<GameRules>;
   furnaces?: Record<string, FurnaceState>;
   mobs: SavedMob[];
+  /** Données des scripts d'add-ons : propriétés dynamiques du monde, tableau des scores, règles. */
+  scripting?: { dynProps?: Record<string, unknown>; scoreboard?: ScoreboardSnapshot; extraRules?: Record<string, string> };
 }
 
 /**
@@ -86,6 +91,12 @@ export class Session implements GameContext {
   paused = false;
   /** Règles du jeu (/gamerule). */
   readonly gamerules: GameRules = { ...DEFAULT_RULES };
+  /** Règles du jeu de référence sans équivalent local (mémorisées pour les scripts). */
+  readonly extraRules = new Map<string, string>();
+  /** Tableau des scores (/scoreboard, scripts). */
+  readonly scoreboard = new Scoreboard();
+  /** Propriétés dynamiques du monde (world.setDynamicProperty). */
+  readonly worldProps = new Map<string, unknown>();
   /** Fonctions (.mcfunction) fournies par les add-ons. */
   readonly functions: Map<string, string[]>;
   /** Option « Coffre bonus » à la création du monde. */
@@ -202,6 +213,40 @@ export class Session implements GameContext {
   /** Exécute une commande de chat ; les messages vont dans le chat. */
   runCommand(line: string): boolean {
     return execute(this, line, (m, err) => this.game.chat.add(m, err ? 'error' : 'info'));
+  }
+
+  /** Scripts JavaScript des add-ons (API de script), démarrés au chargement du monde. */
+  scripts: ScriptHost | null = null;
+
+  async startScripts() {
+    const packs = this.game.addonResult?.scripts ?? [];
+    if (!packs.length) return;
+    this.scripts = new ScriptHost(this, packs, {
+      open: (b) => this.game.openScriptForm(b),
+      closeAll: () => this.game.closeScriptForms(),
+      icon: (p) => this.game.addonIcon(p),
+    });
+    try {
+      const n = await this.scripts.start();
+      if (n < packs.length) this.hud.toast(`Scripts : ${n}/${packs.length} add-on(s) démarré(s) (voir le rapport)`, 'warn');
+    } catch (e) {
+      console.error('Scripts', e);
+    }
+  }
+
+  /** Message dans le chat (say, tellraw, scripts). */
+  chatMessage(text: string) {
+    this.game.chat.add(text, 'chat');
+  }
+
+  /** Éclair : dégâts et feu autour du point d'impact. */
+  lightning(x: number, y: number, z: number) {
+    this.audio.play('thunder', { x, y, z, volume: 1 });
+    this.particles.burst('explosion', x, y + 1, z, 10);
+    this.weather.flash = 1;
+    const p = this.player;
+    if (Math.hypot(p.x - x, p.y - y, p.z - z) < 3) p.damage(5, 'fire');
+    for (const e of this.entities.entities) if (e instanceof Mob && !e.dead && Math.hypot(e.x - x, e.y - y, e.z - z) < 3) this.combat.damageMob(e, 5, { kind: 'environment', fire: true });
   }
 
   get skins() {
@@ -343,6 +388,9 @@ export class Session implements GameContext {
     Object.assign(this.gamerules, s.gamerules ?? {});
     for (const [k, f] of Object.entries(s.furnaces ?? {})) this.world.furnaces.set(k, f);
     if (s.mobs) this.pendingMobs = s.mobs;
+    for (const [k, v] of Object.entries(s.scripting?.dynProps ?? {})) this.worldProps.set(k, v);
+    this.scoreboard.load(s.scripting?.scoreboard);
+    for (const [k, v] of Object.entries(s.scripting?.extraRules ?? {})) this.extraRules.set(k, v);
   }
   private pendingMobs: SavedMob[] | null = null;
 
@@ -363,6 +411,7 @@ export class Session implements GameContext {
       furnaces: Object.fromEntries(this.world.furnaces),
       gamerules: { ...this.gamerules },
       mobs: this.entities.serialize(),
+      scripting: { dynProps: Object.fromEntries(this.worldProps), scoreboard: this.scoreboard.serialize(), extraRules: Object.fromEntries(this.extraRules) },
     };
   }
 
@@ -490,6 +539,7 @@ export class Session implements GameContext {
     // fonctions « tick » des add-ons
     for (const f of this.game.addonTickFunctions) execute(this, `function ${f}`, () => {}, 0, undefined, true);
     this.falling.update(this, this.entities, dt);
+    this.scripts?.update();
     this.checkPressurePlate(dt);
     if (this.pendingMobs && this.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) {
       this.entities.load(this.pendingMobs.filter((m) => this.world.isLoaded(Math.floor(m.x), Math.floor(m.z))));
@@ -706,6 +756,8 @@ export class Session implements GameContext {
   }
 
   dispose() {
+    this.scripts?.dispose();
+    this.scripts = null;
     this.chunks.dispose();
     this.entities.dispose();
     this.particles.dispose();

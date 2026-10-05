@@ -17,6 +17,10 @@ export interface DamageInfo {
   knockZ?: number;
   fromPlayer?: boolean;
   crit?: boolean;
+  /** Cause (vocabulaire du jeu de référence) et auteurs, pour l'API de script. */
+  cause?: string;
+  attacker?: import('../scripting/Hooks').Actor | null;
+  projectile?: import('../entities/Entity').Entity | null;
 }
 export interface CombatApi {
   damageMob(m: Mob, amount: number, src: DamageInfo): number;

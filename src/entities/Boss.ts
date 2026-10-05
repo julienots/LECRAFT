@@ -91,7 +91,7 @@ export class GolemBoss extends Boss {
         const d = Math.hypot(p.x - this.x, p.z - this.z);
         if (d < 5 && Math.abs(p.y - this.y) < 2.5) {
           const k = 1 - d / 5.5;
-          p.damage(9 * k + 2, 'boss', ((p.x - this.x) / (d || 1)) * 10, ((p.z - this.z) / (d || 1)) * 10);
+          p.damage(9 * k + 2, 'boss', ((p.x - this.x) / (d || 1)) * 10, ((p.z - this.z) / (d || 1)) * 10, this);
           ctx.haptic('heavy');
         }
       }
@@ -188,7 +188,7 @@ export class LichBoss extends Boss {
         ctx.particles.burst('ice', s.x, s.y + 0.5, s.z, 18);
         ctx.audio.play('glass_break', { x: s.x, y: s.y, z: s.z });
         if (Math.hypot(p.x - s.x, p.z - s.z) < 1.8 && Math.abs(p.y - s.y) < 2) {
-          p.damage(6, 'boss');
+          p.damage(6, 'boss', 0, 0, this);
           p.slowTimer = 2.5;
         }
       }

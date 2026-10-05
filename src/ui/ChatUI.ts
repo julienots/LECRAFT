@@ -2,6 +2,8 @@ import type { Game } from '../core/Game';
 import { commandList, suggest } from '../commands/Commands';
 import type { Screen } from './UIManager';
 import { el } from './dom';
+import { mcNodes } from './McText';
+import { hooks } from '../scripting/Hooks';
 
 interface Line {
   text: string;
@@ -38,7 +40,9 @@ export class ChatUI {
   }
 
   private lineEl(l: Line) {
-    return el('div', { class: `chat-line ${l.kind}` }, l.text);
+    const d = el('div', { class: `chat-line ${l.kind}` });
+    d.append(...mcNodes(l.text));
+    return d;
   }
 
   private renderFeed() {
@@ -110,7 +114,7 @@ export class ChatUI {
       if (v.startsWith('/')) {
         this.add(v, 'chat');
         game.session?.runCommand(v);
-      } else this.add(`<Joueur> ${v}`, 'chat');
+      } else if (!hooks.chat?.(v)) this.add(`<${game.session?.player.name ?? 'Joueur'}> ${v}`, 'chat');
       this.close();
     };
     input.addEventListener('keydown', (e) => {

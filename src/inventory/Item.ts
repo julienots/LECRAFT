@@ -47,6 +47,12 @@ export interface ItemDef {
   /** Nom de texture dans un pack de ressources (sinon = clé). */
   packTexture?: string;
   description?: string;
+  /** Add-ons : composants personnalisés (scripts) → paramètres. */
+  scriptComponents?: Record<string, unknown>;
+  /** Add-ons : étiquettes d'objet (minecraft:tags). */
+  tags?: string[];
+  /** Add-ons : temps de recharge (minecraft:cooldown). */
+  cooldown?: { category: string; duration: number };
 }
 
 export interface ItemStack {

@@ -43,6 +43,8 @@ export interface BedrockBlockInfo {
   placement: { cardinal?: number; facing?: boolean; half?: boolean; face?: boolean; connections?: boolean };
   /** Composants personnalisés (scripts) : noms. */
   custom: string[];
+  /** Paramètres des composants personnalisés (2e argument des gestionnaires de script). */
+  customParams?: Record<string, unknown>;
   /** Intervalle de tick (minecraft:tick) en ticks, ou 0. */
   tick: [number, number] | null;
   randomTick: boolean;
