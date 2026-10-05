@@ -1,0 +1,27 @@
+// Test de fumée rapide : menu → nouveau monde → capture d'écran.
+import { chromium } from 'playwright';
+const url = process.env.URL ?? 'http://localhost:4173/';
+const out = process.env.OUT ?? 'screenshots';
+const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const ctx = await browser.newContext({ viewport: { width: 915, height: 412 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+const page = await ctx.newPage();
+const errors = [];
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
+page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
+await page.goto(url);
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${out}/01-menu.png` });
+await page.getByText('Nouveau monde').first().click();
+await page.waitForTimeout(300);
+await page.locator('input[type=text]').nth(1).fill('839274928');
+await page.screenshot({ path: `${out}/02-new-world.png` });
+await page.getByText('Créer le monde').click();
+const t0 = Date.now();
+await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
+console.log('monde prêt en', Date.now() - t0, 'ms');
+await page.waitForTimeout(4000);
+await page.screenshot({ path: `${out}/03-game.png` });
+const info = await page.evaluate(() => { const g = window.__lecraft; const s = g.session; return { pos: [s.player.x, s.player.y, s.player.z], chunks: s.world.chunks.size, fps: g.hud.currentFps }; });
+console.log(JSON.stringify(info));
+console.log(errors.slice(0, 20).join('\n'));
+await browser.close();

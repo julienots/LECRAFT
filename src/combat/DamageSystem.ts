@@ -1,0 +1,89 @@
+import type { DamageInfo, GameContext } from '../core/GameContext';
+import { ItemRegistry } from '../inventory/ItemRegistry';
+import type { Mob, EntitySpawner } from '../entities/Mob';
+import { Boss } from '../entities/Boss';
+import { AIState } from '../ai/StateMachine';
+
+/**
+ * Application des dégâts aux créatures : faiblesses, coups critiques, invincibilité temporaire,
+ * recul, réactions d'IA (fuite/colère/poursuite), mort, butin, XP, statistiques.
+ */
+export class DamageSystem {
+  onBossDefeated: (boss: Boss) => void = () => {};
+  onKill: (m: Mob) => void = () => {};
+
+  constructor(private ctx: () => GameContext, private spawner: EntitySpawner) {}
+
+  multiplier(m: Mob, src: DamageInfo): number {
+    let k = 1;
+    const item = src.itemId ? ItemRegistry.get(src.itemId) : undefined;
+    const w = m.def.weakness;
+    if (w && item?.tool) {
+      const t = item.tool.type;
+      if (t === 'pickaxe' || t === 'axe' || t === 'sword' || t === 'shovel') k *= w[t] ?? 1;
+      if (item.tool.material === 'gold') k *= w.gold ?? 1;
+    }
+    if (w && src.fire) k *= w.fire ?? 1;
+    if (item?.bonusVs?.[m.def.key]) k *= item.bonusVs[m.def.key];
+    if (src.crit) k *= 1.5;
+    return k;
+  }
+
+  damageMob(m: Mob, amount: number, src: DamageInfo): number {
+    const ctx = this.ctx();
+    if (m.dead || (m.iframes > 0 && src.kind !== 'environment')) return 0;
+    const dmg = amount * this.multiplier(m, src);
+    m.health -= dmg;
+    if (src.kind !== 'environment') m.iframes = 0.45;
+    m.hurtTimer = 0.3;
+    const resist = m.has('knockbackResist') ? 0.25 : 1;
+    if (src.knockX || src.knockZ) {
+      m.body.vx += (src.knockX ?? 0) * resist;
+      m.body.vz += (src.knockZ ?? 0) * resist;
+      if (m.body.onGround) m.body.vy = Math.max(m.body.vy, 5 * resist);
+    }
+    ctx.particles.burst('damage', m.x, m.y + m.body.height * 0.7, m.z, Math.min(10, 3 + Math.round(dmg)));
+    if (src.fromPlayer || src.kind === 'player') {
+      if (m.def.category === 'passive') m.fleeTimer = 5;
+      else if (m.def.category === 'neutral') m.anger = 30;
+      if (m.def.category !== 'passive') {
+        m.ai.lastSeenX = ctx.player.x;
+        m.ai.lastSeenZ = ctx.player.z;
+        if (m.ai.state !== AIState.ATTACK) m.ai.fsm.set(AIState.CHASE);
+      }
+    }
+    if (m instanceof Boss) m.onHit(ctx);
+    if (m.health <= 0) this.kill(m, src);
+    else ctx.audio.play(m.def.sounds.hurt, { x: m.x, y: m.y, z: m.z });
+    return dmg;
+  }
+
+  private kill(m: Mob, src: DamageInfo) {
+    const ctx = this.ctx();
+    m.dead = true;
+    m.health = 0;
+    m.ai.fsm.set(AIState.DEAD);
+    ctx.audio.play(m.def.sounds.death, { x: m.x, y: m.y, z: m.z });
+    ctx.particles.burst('smoke', m.x, m.y + m.body.height / 2, m.z, 12);
+    if (!m.baby) {
+      for (const d of m.def.drops) {
+        if (d.chance !== undefined && Math.random() > d.chance) continue;
+        const n = d.min + Math.floor(Math.random() * (d.max - d.min + 1));
+        if (n > 0) this.spawner.spawnItem(d.item, n, m.x, m.y + 0.5, m.z);
+      }
+    }
+    if (src.fromPlayer || src.kind === 'player') {
+      ctx.player.addXp(m.def.xp);
+      ctx.stats.inc('kills');
+      if (m.def.category === 'hostile' || m.def.category === 'boss') ctx.stats.inc('monstersKilled');
+    }
+    if (m.has('splits') && !m.baby) {
+      for (let i = 0; i < 2; i++) {
+        const c = this.spawner.spawnMob(m.def.key, m.x + (i ? 0.4 : -0.4), m.y + 0.3, m.z, { baby: true });
+        if (c) c.health = 4;
+      }
+    }
+    if (m instanceof Boss) this.onBossDefeated(m);
+    this.onKill(m);
+  }
+}

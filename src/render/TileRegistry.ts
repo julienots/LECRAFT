@@ -1,0 +1,52 @@
+import { BLOCK_DEFS } from '../data/blocks';
+
+/** Tuiles animées : nombre d'images consécutives dans l'atlas. */
+export const ANIMATED_TILES: Record<string, number> = { water: 4, lava: 4 };
+export const EXTRA_TILES = [
+  'destroy_0', 'destroy_1', 'destroy_2', 'destroy_3', 'destroy_4', 'destroy_5', 'destroy_6', 'destroy_7', 'destroy_8', 'destroy_9',
+  'water_flow', 'cloud',
+];
+export const ATLAS_COLS = 16;
+export const TILE_PX = 16;
+
+/**
+ * Liste déterministe des tuiles de l'atlas : partagée par le thread principal
+ * (génération de l'atlas) et le worker (meshing) sans dépendance au DOM.
+ */
+class TileRegistryImpl {
+  readonly names: string[] = [];
+  private map = new Map<string, number>();
+  readonly animFrames = new Uint8Array(256);
+
+  constructor() {
+    this.add('missing');
+    for (const d of BLOCK_DEFS) {
+      const t = d.textures;
+      if (!t) continue;
+      for (const n of [t.all, t.top, t.bottom, t.side, t.front, ...(t.byMeta ?? [])]) if (n) this.add(n);
+    }
+    for (const n of EXTRA_TILES) this.add(n);
+    if (this.names.length > ATLAS_COLS * ATLAS_COLS) throw new Error('Atlas plein');
+  }
+
+  private add(name: string) {
+    if (this.map.has(name)) return;
+    const frames = ANIMATED_TILES[name] ?? 1;
+    const idx = this.names.length;
+    this.map.set(name, idx);
+    this.animFrames[idx] = frames;
+    this.names.push(name);
+    for (let f = 1; f < frames; f++) this.names.push(`${name}#${f}`);
+  }
+
+  index(name: string): number {
+    const i = this.map.get(name);
+    if (i === undefined) throw new Error(`Tuile inconnue: ${name}`);
+    return i;
+  }
+  get count() {
+    return this.names.length;
+  }
+}
+
+export const TileRegistry = new TileRegistryImpl();
