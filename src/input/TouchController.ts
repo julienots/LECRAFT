@@ -14,13 +14,13 @@ export interface TouchButtonDef {
   kind: 'hold' | 'tap' | 'toggle';
 }
 
+/** Disposition par défaut : grappe d'actions en bas à droite (hors de la hotbar). */
 const BUTTONS: TouchButtonDef[] = [
-  { id: 'jump', label: '⤒', right: 28, bottom: 34, size: 84, kind: 'hold' },
-  { id: 'attack', label: '⚔', right: 128, bottom: 110, size: 70, kind: 'hold' },
-  { id: 'use', label: '✋', right: 28, bottom: 140, size: 66, kind: 'tap' },
-  { id: 'sneak', label: '⇩', right: 128, bottom: 26, size: 60, kind: 'toggle' },
-  { id: 'sprint', label: '»', left: 24, bottom: 200, size: 56, kind: 'toggle' },
-  { id: 'inventory', label: '▤', right: 214, bottom: 26, size: 56, kind: 'tap' },
+  { id: 'jump', label: '⤒', right: 22, bottom: 28, size: 78, kind: 'hold' },
+  { id: 'sneak', label: '⇩', right: 110, bottom: 20, size: 54, kind: 'toggle' },
+  { id: 'attack', label: '⚔', right: 104, bottom: 88, size: 64, kind: 'hold' },
+  { id: 'use', label: '✋', right: 22, bottom: 120, size: 62, kind: 'tap' },
+  { id: 'sprint', label: '»', left: 24, bottom: 190, size: 54, kind: 'toggle' },
 ];
 
 const LONG_PRESS_MS = 280;
@@ -133,9 +133,6 @@ export class TouchController {
           i.sprint = !i.sprint;
           this.buttons.get('sprint')!.classList.toggle('active', i.sprint);
         }
-        break;
-      case 'inventory':
-        if (down) i.push('inventory');
         break;
     }
   }

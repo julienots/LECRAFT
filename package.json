@@ -14,7 +14,11 @@
     "assets:android": "node scripts/gen-android-assets.mjs",
     "android:sync": "npm run build && npx cap sync android",
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
-    "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease bundleRelease"
+    "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease bundleRelease",
+    "e2e:gameplay": "node scripts/e2e-gameplay.mjs",
+    "perf": "node scripts/perf.mjs",
+    "screens": "node scripts/screens.mjs",
+    "tour": "node scripts/tour.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

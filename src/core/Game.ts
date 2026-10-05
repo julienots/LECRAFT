@@ -60,6 +60,7 @@ export class Game {
     this.hud = new HUD(root.querySelector('#hud') as HTMLElement, this.textures);
     this.hud.onSlotTap = (i) => this.input.push(`slot:${i}`);
     this.hud.onPause = () => this.pause();
+    this.hud.onInventory = () => this.input.push('inventory');
     this.hud.stats = () => this.debugText();
     this.touch = new TouchController(root.querySelector('#hud') as HTMLElement, this.input, this.settings);
     this.touch.setVisible(false);

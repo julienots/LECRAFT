@@ -62,7 +62,7 @@ export class HeldItem {
     tex.colorSpace = THREE.NoColorSpace;
     const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
     this.mats.push(m);
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), m);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), m);
     plane.rotation.set(0, -0.55, 0.15);
     return plane;
   }

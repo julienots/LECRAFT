@@ -226,15 +226,37 @@ export class Session implements GameContext {
       step();
     });
     const p = this.player;
-    // place le joueur sur le sol s'il est dans un bloc (nouveau monde ou terrain modifié)
-    const bx = Math.floor(p.x), bz = Math.floor(p.z);
-    if (p.body.collides(this.world, p.x, p.y, p.z) || this.isNew) {
-      let y = this.world.surfaceBelow(bx, WORLD_HEIGHT - 1, bz) + 1;
+    if (this.isNew) {
+      // nouveau monde : colonne de sol naturel (pas sur un arbre ni dans l'eau) proche du point prévu
+      const spot = this.findGroundSpot(Math.floor(p.x), Math.floor(p.z));
+      p.body.setPos(spot.x + 0.5, spot.y, spot.z + 0.5);
+      p.spawn = [spot.x + 0.5, spot.y, spot.z + 0.5];
+    } else if (p.body.collides(this.world, p.x, p.y, p.z)) {
+      // terrain modifié sous le joueur : remonte jusqu'à un espace libre
+      let y = Math.floor(p.y);
       while (y < WORLD_HEIGHT - 2 && p.body.collides(this.world, p.x, y, p.z)) y++;
       p.body.setPos(p.x, y, p.z);
-      if (this.isNew) p.spawn = [p.x, y, p.z];
     }
     this.loaded = true;
+  }
+
+  /** Cherche en spirale une colonne dont le sommet est du sol (herbe, sable, neige, terre...). */
+  private findGroundSpot(cx: number, cz: number): { x: number; y: number; z: number } {
+    const w = this.world;
+    const ground = new Set([B.GRASS, B.SAND, B.SNOWY_GRASS, B.SNOW, B.DIRT, B.STONE, B.GRAVEL, B.MUD, B.MOSS, B.SANDSTONE]);
+    for (let r = 0; r <= 12; r++)
+      for (let dz = -r; dz <= r; dz++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const x = cx + dx, z = cz + dz;
+          if (!w.isLoaded(x, z)) continue;
+          let y = WORLD_HEIGHT - 2;
+          while (y > 1 && (w.getBlock(x, y, z) === B.AIR || !BlockRegistry.solid[w.getBlock(x, y, z)]) && !BlockRegistry.liquid[w.getBlock(x, y, z)]) y--;
+          if (ground.has(w.getBlock(x, y, z)) && w.getBlock(x, y + 1, z) === B.AIR && w.getBlock(x, y + 2, z) === B.AIR) return { x, y: y + 1, z };
+        }
+    let y = w.surfaceBelow(cx, WORLD_HEIGHT - 1, cz) + 1;
+    while (y < WORLD_HEIGHT - 2 && this.player.body.collides(w, cx + 0.5, y, cz + 0.5)) y++;
+    return { x: cx, y, z: cz };
   }
 
   get isNew() {

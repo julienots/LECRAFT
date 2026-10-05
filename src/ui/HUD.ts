@@ -69,6 +69,7 @@ export class HUD implements HudApi {
   private fpsTime = 0;
   onSlotTap: (i: number) => void = () => {};
   onPause: () => void = () => {};
+  onInventory: () => void = () => {};
   stats: () => string = () => '';
 
   constructor(parent: HTMLElement, private textures: TextureManager) {
@@ -93,6 +94,13 @@ export class HUD implements HudApi {
       });
       this.hotbar.append(s);
     }
+    const invBtn = el('div', { class: 'slot inv-btn', role: 'button', 'aria-label': 'Inventaire' }, '•••');
+    invBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.onInventory();
+    });
+    this.hotbar.append(invBtn);
     this.bossName = el('div');
     this.bossFill = el('div');
     this.boss = el('div', { class: 'boss-bar hidden' }, this.bossName, el('div', { class: 'bar' }, this.bossFill));

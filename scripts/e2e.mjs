@@ -175,10 +175,10 @@ try {
   check('Sélection dans la hotbar (toucher)', (await G(() => window.__lecraft.session.player.inventory.selected)) === 2);
 
   // ---------- inventaire & crafting ----------
-  const [ix, iy] = await center('.btn-inventory');
+  const [ix, iy] = await center('.inv-btn');
   await tapAt(ix, iy, 8);
   await wait(400);
-  check('Ouverture de l’inventaire (bouton)', (await page.locator('.inv-grid').count()) >= 2);
+  check('Ouverture de l’inventaire (bouton ••• de la hotbar)', (await page.locator('.inv-grid').count()) >= 2);
   await shot('e2e-04-inventory');
   await page.locator('.tab', { hasText: 'Fabrication' }).click();
   await wait(200);

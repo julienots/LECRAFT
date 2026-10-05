@@ -116,11 +116,11 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(200, 0, 0, .55)); opacity: 0; transition: opacity .1s; }
 .underwater { position: absolute; inset: 0; pointer-events: none; background: rgba(30, 70, 160, .35); }
 .inlava { position: absolute; inset: 0; pointer-events: none; background: rgba(255, 90, 10, .55); }
-.toasts { position: absolute; top: calc(70px + var(--safe-top)); right: calc(12px + var(--safe-right)); display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.toasts { position: absolute; top: calc(44px + var(--safe-top)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(560px, 70vw); }
 .toast { background: #111a; border: 2px solid #fff3; padding: 8px 12px; border-radius: 10px; font-size: 14px; animation: toastIn .25s ease-out; max-width: 70vw; }
 .toast.achievement { border-color: var(--gold); background: #2a2410e6; }
 .toast.warn { border-color: #d84aff; background: #2a1030e6; }
-@keyframes toastIn { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes toastIn { from { transform: translateY(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
 .compass { position: absolute; top: calc(70px + var(--safe-top)); left: 50%; transform: translateX(-50%); background: #000a; border-radius: 12px; padding: 8px 14px; display: flex; align-items: center; gap: 10px; }
 .compass .arrow { font-size: 28px; display: inline-block; transition: transform .1s linear; }
 
@@ -137,7 +137,7 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .edit-banner { position: absolute; top: calc(10px + var(--safe-top)); left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 5; }
 
 /* ---------- Inventaire ---------- */
-.inv-grid { display: grid; grid-template-columns: repeat(9, 46px); gap: 3px; justify-content: center; }
+.inv-grid { display: grid; grid-template-columns: repeat(9, auto); gap: 3px; justify-content: center; }
 .inv-section { margin-bottom: 10px; }
 .inv-section h3 { margin: 4px 0 6px; font-size: 14px; color: var(--muted); }
 .inv-layout { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
@@ -151,8 +151,8 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .recipe .ing img { width: 22px; height: 22px; image-rendering: pixelated; }
 .recipe .ing.miss { color: #ff8a80; }
 .recipe .rname { font-weight: 700; font-size: 14px; }
-@media (max-height: 520px) { .slot { width: 40px; height: 40px; } .inv-grid { grid-template-columns: repeat(9, 40px); } .slot img { width: 28px; height: 28px; } }
-@media (max-width: 480px) { .slot { width: 36px; height: 36px; } .inv-grid { grid-template-columns: repeat(9, 36px); } .slot img { width: 26px; height: 26px; } }
+
+
 
 .loading { background: var(--bg); }
 .loading .bar { width: min(420px, 80vw); height: 14px; background: #0008; border: 2px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 14px; }
@@ -170,3 +170,23 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .touch-layer { z-index: 1; }
 #hud { z-index: 1; }
 #ui { z-index: 2; }
+
+.inv-btn { font-size: 14px; letter-spacing: 1px; color: #fff; cursor: pointer; background: #2a3344; }
+/* Écrans étroits : la hotbar se décale à gauche pour laisser la place aux boutons d'action */
+@media (max-width: 900px) {
+  .hud-bottom { left: calc(50% - 95px); }
+  .slot { width: 40px; height: 40px; }
+  .slot img { width: 28px; height: 28px; }
+  .icons i { width: 14px; height: 14px; background-size: 14px 14px; }
+}
+@media (max-width: 620px) {
+  .hud-bottom { left: calc(50% - 90px); }
+  .slot { width: 34px; height: 34px; }
+  .slot img { width: 24px; height: 24px; }
+  .icons i { width: 12px; height: 12px; background-size: 12px 12px; }
+  .slot .count { font-size: 11px; }
+}
+/* Portrait : hotbar centrée au-dessus des boutons */
+@media (orientation: portrait) {
+  .hud-bottom { left: 50%; bottom: calc(150px + var(--safe-bottom)); }
+}
