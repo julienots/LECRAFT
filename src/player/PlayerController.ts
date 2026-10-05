@@ -89,6 +89,13 @@ export class PlayerController {
       p.addExhaustion(p.sprinting ? 0.2 : 0.05);
     }
 
+    // échelles : monter (saut ou marche contre l'échelle), rester accroché (accroupi), descente lente
+    if (b.onLadder && !b.flying && !b.inWater) {
+      if (i.jump || (b.collidedH && mag > 0.1)) b.vy = 2.35 + b.gravity * dt;
+      else if (p.sneaking) b.vy = b.gravity * dt;
+      else b.vy = Math.max(b.vy, -2.35);
+    }
+
     // bord : l'accroupissement empêche de tomber
     if (p.sneaking && b.onGround) {
       const nx = b.x + b.vx * dt, nz = b.z + b.vz * dt;

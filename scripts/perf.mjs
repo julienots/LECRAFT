@@ -5,9 +5,11 @@ const page = await (await browser.newContext({ viewport: { width: 915, height: 4
 await page.addInitScript((q) => localStorage.setItem('lecraft.settings.v1', JSON.stringify({ quality: q, renderDistance: q === 'HIGH' ? 8 : q === 'MEDIUM' ? 5 : 3, autoQuality: false })), process.env.Q ?? 'MEDIUM');
 await page.goto('http://localhost:4173/');
 await page.waitForFunction(() => window.__lecraft?.state === 'menu');
-await page.getByText('Nouveau monde').first().click();
-await page.locator('input[type=text]').nth(1).fill('839274928');
-await page.getByText('Créer le monde').click();
+await page.getByText('Solo').first().click();
+  await page.getByText('Créer un nouveau monde').first().click();
+  await page.waitForTimeout(200);
+await page.locator('.mc-screen').last().locator('input').nth(1).fill('839274928');
+await page.locator('.mc-footer').last().getByText('Créer un nouveau monde').click();
 await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
 await page.waitForFunction(() => window.__lecraft.session.chunks.pendingCount === 0, null, { timeout: 120000 });
 const r = await page.evaluate(async () => {

@@ -5,6 +5,7 @@ import { makeStack } from '../inventory/Inventory';
 import type { World } from '../world/World';
 import { LOOT } from '../world/StructureGenerator';
 import { Rng } from '../util/math';
+import { FACING_DIR } from './Shapes';
 
 /** Temps de minage en secondes (Infinity = incassable). */
 export function breakTime(blockId: number, itemId: string | undefined, creative: boolean, underwater: boolean): number {
@@ -35,15 +36,41 @@ export function getDrops(blockId: number, meta: number, itemId: string | undefin
   if (!canHarvest(blockId, itemId)) return [];
   const out: ItemStack[] = [];
   const add = (id: string, n: number) => n > 0 && ItemRegistry.has(id) && out.push(makeStack(id, n));
+  const tool = itemId ? ItemRegistry.get(itemId)?.tool : undefined;
+  // cisailles : feuilles, herbes, toiles... récupérées telles quelles
+  if (tool?.type === 'shears' && (b.key.endsWith('_leaves') || b.key === 'short_grass' || b.key === 'fern' || b.key === 'dead_bush' || b.key === 'glow_lichen')) {
+    add(b.key, 1);
+    return out;
+  }
   if (blockId === B.WHEAT) {
     if (meta >= 7) {
       add('wheat', 1);
-      add('seeds', 1 + Math.floor(rng() * 3));
-    } else add('seeds', 1);
+      add('wheat_seeds', 1 + Math.floor(rng() * 3));
+    } else add('wheat_seeds', 1);
     return out;
   }
-  if (blockId === B.CARROTS) {
-    add('carrot', meta >= 3 ? 2 + Math.floor(rng() * 3) : 1);
+  if (blockId === B.CARROTS || blockId === B.POTATOES) {
+    const ripe = meta >= 3;
+    const crop = blockId === B.CARROTS ? 'carrot' : 'potato';
+    add(crop, ripe ? 2 + Math.floor(rng() * 3) : 1);
+    if (ripe && crop === 'potato' && rng() < 0.02) add('poisonous_potato', 1);
+    return out;
+  }
+  // porte : seule la moitié basse donne l'objet ; lit : seul le pied
+  if (b.shape === 'door') {
+    if (!(meta & 8)) add(b.key, 1);
+    return out;
+  }
+  if (b.shape === 'bed') {
+    if (!(meta & 4)) add(b.key, 1);
+    return out;
+  }
+  if (b.shape === 'slab') {
+    add(b.key, (meta & 3) === 2 ? 2 : 1);
+    return out;
+  }
+  if (b.shape === 'snow_layer') {
+    if (tool?.type === 'shovel') add('snowball', (meta & 7) + 1);
     return out;
   }
   for (const d of b.drops) {
@@ -61,8 +88,8 @@ export function blockXp(blockId: number): number {
     case B.COPPER_ORE: return 1;
     case B.IRON_ORE: return 2;
     case B.GOLD_ORE: return 3;
-    case B.CRYSTAL_ORE: return 5;
-    case B.AURITE_ORE: return 8;
+    case B.EMERALD_ORE: return 5;
+    case B.DIAMOND_ORE: return 8;
     default: return 0;
   }
 }
@@ -74,10 +101,24 @@ export function hasSupport(world: World, x: number, y: number, z: number, blockI
   const below = world.getBlock(x, y - 1, z);
   if (below < 0) return true;
   if (b.supportBlocks) return b.supportBlocks.some((k) => BlockRegistry.byName(k).id === below);
-  if (b.key === 'torch') {
-    if (BlockRegistry.solid[below]) return true;
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (world.isSolid(x + dx, y, z + dz)) return true;
-    return false;
+  if (b.shape === 'torch' || b.shape === 'ladder') {
+    const meta = world.getMeta(x, y, z);
+    // torche murale / échelle : bloc solide derrière (sens opposé à l'orientation)
+    const facing = b.shape === 'torch' ? meta - 1 : meta & 3;
+    if (b.shape === 'torch' && meta === 0) return BlockRegistry.solid[below] === 1;
+    const [dx, dz] = FACING_DIR[facing & 3];
+    return world.isSolid(x + dx, y, z + dz);
+  }
+  if (b.shape === 'bed') {
+    const meta = world.getMeta(x, y, z);
+    const [dx, dz] = FACING_DIR[meta & 3];
+    const s = meta & 4 ? -1 : 1;
+    return world.getBlock(x + dx * s, y, z + dz * s) === blockId;
+  }
+  if (b.shape === 'door') {
+    const meta = world.getMeta(x, y, z);
+    if (meta & 8) return world.getBlock(x, y - 1, z) === blockId;
+    return BlockRegistry.solid[below] === 1 && world.getBlock(x, y + 1, z) === blockId;
   }
   return BlockRegistry.solid[below] === 1;
 }
@@ -90,14 +131,14 @@ interface LootEntry {
 }
 const T = (item: string, min: number, max: number, weight: number): LootEntry => ({ item, min, max, weight });
 const LOOT_TABLES: Record<number, { rolls: [number, number]; entries: LootEntry[] }> = {
-  [LOOT.VILLAGE]: { rolls: [3, 6], entries: [T('bread', 1, 3, 10), T('apple', 1, 3, 8), T('wheat', 2, 6, 8), T('carrot', 1, 4, 6), T('iron_ingot', 1, 3, 4), T('torch', 2, 8, 6), T('seeds', 2, 6, 6), T('compass_village', 1, 1, 1), T('stone_pickaxe', 1, 1, 2), T('leather', 1, 3, 4)] },
-  [LOOT.RUINS]: { rolls: [2, 5], entries: [T('coal', 1, 6, 10), T('copper_ingot', 1, 3, 6), T('iron_ingot', 1, 2, 4), T('bone', 1, 4, 6), T('string', 1, 3, 5), T('gold_ingot', 1, 2, 2), T('ancient_relic', 1, 1, 1), T('flint', 1, 3, 4)] },
-  [LOOT.TOWER]: { rolls: [3, 6], entries: [T('arrow', 4, 12, 8), T('bow', 1, 1, 3), T('iron_ingot', 1, 4, 6), T('gold_ingot', 1, 3, 4), T('iron_helmet', 1, 1, 2), T('iron_sword', 1, 1, 2), T('crystal_shard', 1, 2, 2), T('compass_golem', 1, 1, 2)] },
-  [LOOT.TEMPLE]: { rolls: [4, 7], entries: [T('gold_ingot', 2, 6, 8), T('iron_ingot', 2, 5, 6), T('crystal_shard', 1, 3, 4), T('ancient_relic', 1, 1, 3), T('gold_sword', 1, 1, 2), T('bone', 2, 6, 6), T('raw_aurite', 1, 2, 2), T('compass_golem', 1, 1, 2)] },
-  [LOOT.MINE]: { rolls: [3, 6], entries: [T('coal', 3, 10, 10), T('raw_iron', 1, 4, 8), T('raw_copper', 2, 6, 8), T('torch', 4, 12, 6), T('iron_pickaxe', 1, 1, 2), T('raw_gold', 1, 3, 3), T('bread', 1, 3, 4), T('crystal_shard', 1, 2, 2)] },
-  [LOOT.DUNGEON]: { rolls: [4, 8], entries: [T('iron_ingot', 2, 6, 8), T('gold_ingot', 1, 4, 6), T('bone', 2, 6, 6), T('string', 2, 5, 5), T('crystal_shard', 1, 3, 4), T('raw_aurite', 1, 2, 3), T('ancient_relic', 1, 1, 3), T('iron_chestplate', 1, 1, 2), T('compass_golem', 1, 1, 3), T('arrow', 4, 10, 4), T('cooked_meat', 2, 5, 5)] },
-  [LOOT.BOSS]: { rolls: [5, 8], entries: [T('aurite_ingot', 2, 5, 8), T('crystal_shard', 3, 8, 8), T('gold_block', 1, 2, 4), T('ancient_relic', 1, 2, 5), T('aurite_sword', 1, 1, 2), T('aurite_helmet', 1, 1, 2)] },
-  [LOOT.CAMP]: { rolls: [2, 5], entries: [T('cooked_meat', 1, 4, 8), T('bread', 1, 3, 6), T('torch', 2, 6, 6), T('coal', 2, 6, 6), T('leather', 1, 3, 4), T('copper_ingot', 1, 3, 4)] },
+  [LOOT.VILLAGE]: { rolls: [3, 6], entries: [T('bread', 1, 3, 10), T('apple', 1, 3, 8), T('wheat', 2, 6, 8), T('carrot', 1, 4, 6), T('potato', 1, 4, 6), T('iron_ingot', 1, 3, 4), T('torch', 2, 8, 6), T('wheat_seeds', 2, 6, 6), T('emerald', 1, 2, 2), T('oak_sapling', 1, 2, 4), T('stone_pickaxe', 1, 1, 2), T('leather', 1, 3, 4)] },
+  [LOOT.RUINS]: { rolls: [2, 5], entries: [T('coal', 1, 6, 10), T('copper_ingot', 1, 3, 6), T('iron_ingot', 1, 2, 4), T('bone', 1, 4, 6), T('string', 1, 3, 5), T('gold_ingot', 1, 2, 2), T('ancient_relic', 1, 1, 1), T('flint', 1, 3, 4), T('gold_nugget', 2, 6, 4)] },
+  [LOOT.TOWER]: { rolls: [3, 6], entries: [T('arrow', 4, 12, 8), T('bow', 1, 1, 3), T('iron_ingot', 1, 4, 6), T('gold_ingot', 1, 3, 4), T('iron_helmet', 1, 1, 2), T('iron_sword', 1, 1, 2), T('diamond', 1, 2, 2), T('compass_golem', 1, 1, 2)] },
+  [LOOT.TEMPLE]: { rolls: [4, 7], entries: [T('gold_ingot', 2, 6, 8), T('iron_ingot', 2, 5, 6), T('emerald', 1, 3, 4), T('diamond', 1, 3, 3), T('ancient_relic', 1, 1, 3), T('golden_sword', 1, 1, 2), T('bone', 2, 6, 6), T('rotten_flesh', 2, 6, 6), T('golden_apple', 1, 1, 1), T('compass_golem', 1, 1, 2)] },
+  [LOOT.MINE]: { rolls: [3, 6], entries: [T('coal', 3, 10, 10), T('raw_iron', 1, 4, 8), T('raw_copper', 2, 6, 8), T('torch', 4, 12, 6), T('iron_pickaxe', 1, 1, 2), T('raw_gold', 1, 3, 3), T('bread', 1, 3, 4), T('lapis_lazuli', 4, 9, 3), T('redstone', 4, 9, 3), T('diamond', 1, 2, 1)] },
+  [LOOT.DUNGEON]: { rolls: [4, 8], entries: [T('iron_ingot', 2, 6, 8), T('gold_ingot', 1, 4, 6), T('bone', 2, 6, 6), T('string', 2, 5, 5), T('gunpowder', 1, 4, 5), T('rotten_flesh', 2, 6, 6), T('wheat', 2, 4, 5), T('bucket', 1, 1, 3), T('ancient_relic', 1, 1, 3), T('iron_chestplate', 1, 1, 2), T('golden_apple', 1, 1, 2), T('compass_golem', 1, 1, 3), T('arrow', 4, 10, 4), T('bread', 2, 5, 5)] },
+  [LOOT.BOSS]: { rolls: [5, 8], entries: [T('diamond', 2, 5, 8), T('emerald', 3, 8, 8), T('gold_block', 1, 2, 4), T('ancient_relic', 1, 2, 5), T('diamond_sword', 1, 1, 2), T('diamond_helmet', 1, 1, 2), T('golden_apple', 1, 2, 3)] },
+  [LOOT.CAMP]: { rolls: [2, 5], entries: [T('cooked_beef', 1, 4, 8), T('bread', 1, 3, 6), T('torch', 2, 6, 6), T('coal', 2, 6, 6), T('leather', 1, 3, 4), T('copper_ingot', 1, 3, 4)] },
 };
 
 /** Génère le contenu d'un coffre de structure de façon déterministe (seed + position). */

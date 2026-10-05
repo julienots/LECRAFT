@@ -9,8 +9,10 @@ for (const [name, w, h] of sizes) {
   await page.waitForFunction(() => window.__lecraft?.state === 'menu');
   await page.waitForTimeout(500);
   await page.screenshot({ path: `screenshots/res-${name}-menu.png` });
-  await page.getByText('Nouveau monde').first().click();
-  await page.getByText('Créer le monde').click();
+  await page.getByText('Solo').first().click();
+  await page.getByText('Créer un nouveau monde').first().click();
+  await page.waitForTimeout(200);
+  await page.locator('.mc-footer').last().getByText('Créer un nouveau monde').click();
   await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
   await page.waitForTimeout(2000);
   await page.screenshot({ path: `screenshots/res-${name}-hud.png` });

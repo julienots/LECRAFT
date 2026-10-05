@@ -23,7 +23,7 @@ export function drawLogo(tm: TextureManager): string {
   const ctx = c.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
   const stone = tm.tile(BlockRegistry.byName('stone').faceTiles[0]);
-  const grass = tm.tile(BlockRegistry.byName('grass').faceTiles[2], [124, 189, 74]);
+  const grass = tm.tile(BlockRegistry.byName('grass_block').faceTiles[2], [124, 189, 74]);
   [...text].forEach((ch, i) => {
     const g = FONT[ch];
     g.forEach((row, y) =>
@@ -50,7 +50,7 @@ export function drawLandscape(tm: TextureManager): string {
   const ctx = c.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
   const t = (k: string, face = 0, tint?: [number, number, number]) => tm.tile(BlockRegistry.byName(k).faceTiles[face], tint);
-  const grassSide = t('grass', 0, [124, 189, 74]), dirt = t('dirt'), stone = t('stone'), log = t('log'), leaves = t('leaves', 0, [95, 168, 58]), water = t('water'), sand = t('sand');
+  const grassSide = t('grass_block', 0, [124, 189, 74]), dirt = t('dirt'), stone = t('stone'), log = t('oak_log'), leaves = t('oak_leaves', 0, [95, 168, 58]), water = t('water'), sand = t('sand');
   const cols = W / S;
   const heights: number[] = [];
   for (let i = 0; i < cols; i++) {

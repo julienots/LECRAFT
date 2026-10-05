@@ -1,3 +1,4 @@
+import { BlockRegistry } from '../blocks/BlockRegistry';
 import type { Game } from './Game';
 import { WorldGenerator } from '../world/WorldGenerator';
 import { BiomeManager } from '../world/BiomeManager';
@@ -15,6 +16,11 @@ export class DebugTools {
     const s = this.game.session!;
     if (!this.gen || this.gen.seed !== s.world.seed) this.gen = new WorldGenerator(s.world.seed);
     return this.gen;
+  }
+
+  /** Identifiant numérique d'un bloc (tests automatisés). */
+  blockId(key: string): number {
+    return BlockRegistry.byName(key).id;
   }
 
   teleport(x: number, z: number, y?: number) {

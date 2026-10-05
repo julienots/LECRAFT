@@ -6,9 +6,12 @@ Le moteur est écrit en **TypeScript + Three.js (WebGL 2)** et embarqué dans un
 Android native via **Capacitor**. **Tout fonctionne hors ligne** : terrain, textures, modèles,
 sons, musique, recettes et sauvegardes sont générés ou stockés localement.
 
-> Identité originale : aucune texture, aucun son, aucun modèle, aucun nom ni code provenant de
-> Minecraft. Toutes les textures (atlas 16×16), icônes, modèles de créatures, sons et musiques
-> sont **générés procéduralement par le code du jeu**.
+> **Fidèle au jeu de blocs « Java » de référence** dans ses mécaniques (blocs, recettes en grille,
+> fourneau, inventaire à curseur, menus, HUD, créatures, lits, portes, seaux, TNT…), mais **aucun
+> fichier de Minecraft n'est distribué** : toutes les textures (atlas 16×16 dans le style vanilla),
+> icônes, skins de créatures, police pixel, sons et musiques sont **dessinés/générés par le code du jeu**.
+> Pour retrouver les textures exactes, chacun peut **importer le pack de ressources ou le `.jar` de sa
+> propre copie du jeu** directement sur son téléphone (voir [Packs de ressources](#packs-de-ressources)).
 
 ---
 
@@ -44,27 +47,45 @@ complet piloté par de vrais événements tactiles dans Chromium (même moteur q
 | Application Android | Capacitor 8, APK debug/release, AAB, icône adaptative, splash screen, plein écran immersif, écran toujours allumé, orientation configurable, bouton retour, pause/reprise sur mise en arrière-plan, vibrations |
 | Monde | Chunks 16×16×128, seed déterministe, génération + meshing dans un Web Worker, chargement/déchargement progressif, files de priorité, cache des chunks modifiés |
 | Terrain | Bruits continentalité, érosion, pics/vallées, détail, température, humidité, rivières ; plaines, collines, montagnes enneigées, vallées, océans, rivières, plages, déserts, forêts, jungles, marécages, toundra, zone glacée |
-| Biomes (14) | plaine, forêt, forêt dense, désert, jungle, savane, marais, montagne, taïga, toundra, plage, océan, rivière, zone glacée — data-driven, teinte d'herbe/feuillage par biome |
+| Biomes (14) | Plaines, Forêt, Forêt noire, Désert, Jungle, Savane, Marais, Pics enneigés, Taïga, Plaines enneigées, Plage, Océan, Rivière, Pics de glace — data-driven, teinte d'herbe/feuillage par biome |
 | Grottes | salles géantes, grands tunnels, petits tunnels, gouffres, lacs souterrains d'eau, lave en profondeur, minerais visibles, mousse et champignons lumineux, géodes de cristal |
-| Blocs (68) | dont air, terre, herbe, pierre, sable, gravier, bois, feuilles, planches, verre, eau, lave, neige, glace, charbon, cuivre, fer, or, cristal rare, minerai d'aurite… |
+| Blocs (131) | blocs vanilla aux noms officiels français : 6 essences (bûches, planches, feuilles, pousses), granite/diorite/andésite, 8 minerais et 8 blocs de minerai, 16 laines, briques, pierres taillées, verre, TNT, bibliothèque, obsidienne, coffre, table de fabrication, fourneau (allumé/éteint), cultures, cactus, canne à sucre, citrouille, pastèque, fleurs, champignons, mousse, améthyste… |
+| Formes de blocs | dalles (bas/haut/double), escaliers (4 orientations, inversés), portes (2 blocs, ouverture), échelles (escalade), torches au sol et murales, barrières et vitres connectées, lit (2 blocs), coffre, couche de neige, terre labourée, cactus, plaque de pression, lanterne — collisions, rendu et contour de sélection précis |
 | Rendu | Face culling, **greedy meshing**, atlas de textures, occlusion ambiante par sommet, éclairage ciel + blocs lissé, frustum culling, brouillard, eau/lave animées, végétation animée, ciel dégradé, soleil/lune/étoiles, nuages, particules, ombres « blob » des entités |
 | Interaction | Raycast DDA, contour du bloc visé, fissures + anneau de progression, appui long = miner, toucher = poser/utiliser, prévisualisation verte/rouge, orientation des blocs |
-| Inventaire | Hotbar 9 + 27 cases + 4 armures ; empiler, séparer (appui long), déplacer, jeter, détruire, équiper, manger, transférer avec un coffre |
-| Fabrication | 82 recettes data-driven (142 objets) (main, établi, four avec combustible), outils bois→pierre→cuivre→fer→or→aurite, armures, arc et flèches, boussoles |
+| Inventaire | Interfaces classiques au pixel près (176×166, cases de 18 px) : objet tenu au **curseur**, toucher = prendre/poser/échanger, appui long = moitié/un seul, double toucher = transfert rapide, toucher hors de la fenêtre = jeter ; armure, coffre 27 cases, info-bulles ; **inventaire créatif** par onglets |
+| Fabrication | **Grille 2×2** (inventaire) et **3×3** (table de fabrication) avec motifs vanilla (position libre, miroir, recettes sans forme, tags de bois), **livre de recettes** qui remplit la grille ; **fourneau** à cases (entrée/combustible/résultat, flamme et flèche de progression, 10 s par objet, durées de combustion vanilla, XP) — 116 recettes + 21 cuissons, 228 objets ; outils bois/pierre/cuivre/fer/or/diamant et armures cuir/fer/or/diamant aux valeurs vanilla |
 | Combat | Cadence d'attaque, dégâts par arme, critiques en chute, recul, invincibilité temporaire, armure, faiblesses des boss, projectiles |
-| Créatures (13) | 4 animaux de ferme, ours (neutre), rôdeur nocturne, arachne des cavernes, gelée (se divise), archer d'os, spectre cristallin, chef rôdeur (mini-boss), 2 boss |
+| Créatures (12) | vache (lait), mouton (laine colorée, tonte, repousse), cochon, poule (œufs), zombie, squelette (arc), araignée (neutre le jour), araignée venimeuse, slime (se divise), chef zombie (mini-boss), 2 boss — modèles aux proportions et disposition UV vanilla (compatibles avec les skins d'un pack) |
 | IA | Entity → AIController → StateMachine (IDLE, WANDER, FOLLOW, CHASE, ATTACK, FLEE, SEARCH, RETURN, DEAD), ligne de vue, évitement des falaises et de la lave, LOD de simulation |
 | Boss | **Golem des profondeurs** (3 phases : coups, bond + onde de choc, rochers, invocations ; faible aux pioches) ; **Liche de givre** (3 phases : éclats de glace ralentissants, téléportation, anneau de projectiles, pics de glace, spectres ; faible à l'or) — arènes dédiées, barre de vie, butin unique |
 | Structures | villages, maisons abandonnées, ruines, tours (escalier), temples (piège + salle cachée), sanctuaire de givre, camps, mines, donjons (salles, couloirs, pièges, cages, coffres, chef), repaire du golem |
 | Monde vivant | Cycle jour/crépuscule/nuit/aube, pluie, orage avec éclairs/tonnerre, neige selon le biome, eau et lave qui s'écoulent (sources infinies, obsidienne), sable/gravier qui tombent, plantes qui exigent un support |
-| Agriculture / élevage | Houe, terre cultivable (hydratation), blé et carottes (croissance selon lumière, eau, pluie), pousses → arbres ; nourrir, attirer, reproduire, bébés qui grandissent |
+| Agriculture / élevage | Houe, terre cultivable (hydratation), blé, carottes, pommes de terre, canne à sucre, pousses → arbres (dont chêne noir 2×2), poudre d'os ; nourrir, attirer, reproduire, bébés qui grandissent |
+| Mécaniques vanilla | lit (dormir la nuit, point de réapparition, monstres proches), portes, seaux (eau, lave, lait), briquet + TNT (mèche, explosion, cratère, réaction en chaîne), piège à plaque de pression des temples, cisailles, boussole, coffre bonus |
 | Progression | XP et niveaux (cœurs bonus), 18 succès, statistiques, biomes visités, collection d'objets rares |
-| Sauvegarde | IndexedDB, plusieurs mondes (nom, seed, date, temps de jeu, miniature), sauvegarde auto/manuelle/à la mise en arrière-plan, checksums, copie de secours automatique, copie manuelle d'un monde |
-| Interface | Menu principal (logo et paysage générés), mondes, nouveau monde, paramètres (graphismes/contrôles/audio/gameplay), aide, crédits, pause, mort, progression, éditeur de position des boutons |
-| Audio | 87 effets synthétisés (blocs par matériau, pas, armes, créatures, météo, menus), ambiances (vent, oiseaux, grillons, grotte, pluie), musique générative jour/nuit/menu |
+| Sauvegarde | IndexedDB (format v2), plusieurs mondes (nom, seed, date, temps de jeu, miniature), sauvegarde auto/manuelle/à la mise en arrière-plan, checksums, copie de secours automatique, copie manuelle d'un monde |
+| Interface | Menus du jeu de référence : écran titre (Solo, Options…, Quitter le jeu, phrase d'accueil jaune), Sélectionner un monde (Jouer / Créer / Modifier / Supprimer / Recréer / Annuler), Créer un nouveau monde (mode, difficulté, graine, coffre bonus), Menu du jeu, Options (Graphismes, Musique et sons, Commandes, Packs de ressources…), Progrès, Statistiques, « Vous êtes mort ! » avec score ; boutons pierre, curseurs, **police pixel** générée ; HUD classique (barre d'objets, cœurs, faim, armure, bulles, XP) |
+| Audio | ~100 effets synthétisés (dont portes, explosions, seaux, cisailles, XP) (blocs par matériau, pas, armes, créatures, météo, menus), ambiances (vent, oiseaux, grillons, grotte, pluie), musique générative jour/nuit/menu |
 | Performance | Détection LOW/MEDIUM/HIGH (GPU, cœurs, mémoire, écran), ajustement dynamique de la résolution puis de la distance, limitation 30/45/60 FPS, pools (modèles, particules), libération des ressources WebGL |
 
 Les éléments **non réalisés** sont listés honnêtement dans [Limites connues / TODO](#16-limites-connues--todo).
+
+### Packs de ressources
+
+**Options… → Packs de ressources… → Importer un pack…** accepte :
+- un pack de ressources au format Java (`.zip` contenant `assets/minecraft/textures/…`) ;
+- le fichier **`.jar` de version** de votre propre copie du jeu (par ex. `versions/1.21.x/1.21.x.jar`).
+
+Le fichier est lu **sur l'appareil** (lecture ZIP + `DecompressionStream`), seules les images utiles
+sont extraites et stockées dans IndexedDB (`lecraft-packs`) ; rien n'est envoyé ni téléchargé.
+Sont remplacés : les tuiles de blocs (`block/*.png`, herbe/feuilles en niveaux de gris teintées par
+biome, superposition latérale de l'herbe, eau et lave animées), les icônes d'objets (`item/*.png`,
+armure en cuir teintée), les skins des créatures (`entity/…`, modèles à disposition UV vanilla),
+les fonds des interfaces (`gui/container/*.png`), les sprites du HUD et des boutons
+(`gui/sprites/hud`, `gui/sprites/widget`, ou les anciens `gui/icons.png` / `gui/widgets.png`).
+Les textures sans équivalent (coffre et lit en entité, boss) gardent le dessin du jeu.
+« Retirer le pack » rétablit les textures d'origine. Le logo du jeu n'est jamais importé.
 
 ---
 
@@ -200,8 +221,9 @@ Version : `appVersionCode` / `appVersionName` dans `android/variables.gradle`
 │   ├── data/       blocks.ts, items.ts, recipes.ts, biomes.ts, mobs.ts   ← contenu data-driven
 │   ├── world/      World.ts, Chunk.ts, ChunkData.ts, ChunkManager.ts, WorldGenerator.ts, Noise.ts,
 │   │               BiomeManager.ts, CaveGenerator.ts, StructureGenerator.ts, Trees.ts,
-│   │               FluidSimulator.ts, WorldTicker.ts, DayCycle.ts, Weather.ts
-│   ├── blocks/     Block.ts, BlockRegistry.ts, BlockBehaviors.ts (drops, minage, butin)
+│   │               FluidSimulator.ts, WorldTicker.ts, DayCycle.ts, Weather.ts, Explosions.ts (TNT)
+│   ├── blocks/     Block.ts, BlockRegistry.ts, BlockBehaviors.ts (drops, minage, butin, supports),
+│   │               Shapes.ts (dalles, escaliers, portes, lits… : rendu, collisions, visée)
 │   ├── player/     Player.ts, PlayerController.ts, PlayerPhysics.ts, PlayerInteraction.ts
 │   ├── inventory/  Inventory.ts, Item.ts, ItemRegistry.ts
 │   ├── crafting/   Recipe.ts, RecipeRegistry.ts, CraftingSystem.ts
@@ -211,17 +233,19 @@ Version : `appVersionCode` / `appVersionName` dans `android/variables.gradle`
 │   ├── combat/     CombatSystem.ts, DamageSystem.ts
 │   ├── render/     Renderer.ts, ChunkMesher.ts, Lighting.ts, ChunkMaterial.ts, Padded.ts,
 │   │               TextureGenerator.ts, TileRegistry.ts, TextureManager.ts, Sky.ts, MobModels.ts,
+│   │               MobSkins.ts (skins UV vanilla), VoxelModels.ts (boss), ResourcePack.ts (import .zip/.jar),
 │   │               ParticleSystem.ts, WeatherRenderer.ts, BlockHighlight.ts, HeldItem.ts
 │   ├── input/      InputState.ts, TouchController.ts, VirtualJoystick.ts, KeyboardMouse.ts
 │   ├── save/       SaveManager.ts, WorldSerializer.ts
 │   ├── ui/         UIManager.ts, HUD.ts, Screens.ts (menus), SettingsUI.ts, InventoryUI.ts,
-│   │               MenuArt.ts, IconTemplates.ts, dom.ts, styles.css
+│   │               Mc.ts (widgets), Theme.ts, PixelFont.ts + FontBuilder.ts (police TrueType générée),
+│   │               ContainerArt.ts (fonds des conteneurs), HudArt.ts, MenuArt.ts, IconTemplates.ts, dom.ts, styles.css
 │   ├── audio/      AudioManager.ts, Synth.ts
 │   ├── platform/   Platform.ts (Capacitor : retour, cycle de vie, orientation, vibrations)
 │   └── workers/    world.worker.ts, protocol.ts
 ├── android/                   # projet Android (Gradle) généré par Capacitor et personnalisé
 │   └── app/src/main/java/com/lecraft/game/MainActivity.java  (plein écran immersif)
-├── scripts/                   # e2e.mjs, e2e-gameplay.mjs, perf.mjs, screens.mjs, tour.mjs,
+├── scripts/                   # e2e.mjs, e2e-gameplay.mjs, e2e-vanilla.mjs, perf.mjs, screens.mjs, tour.mjs,
 │                              # gen-android-assets.mjs
 └── tests/                     # tests unitaires Vitest
 ```
@@ -295,19 +319,24 @@ Les icônes `sprite` utilisent les gabarits pixel-art de `src/ui/IconTemplates.t
 armures : `armor: { slot, defense, durability, material }`, usages : `use: 'till' | 'plant' | 'shoot' | 'compass' | 'cast'`.
 
 ### Ajouter une recette
-`src/data/recipes.ts` :
+`src/data/recipes.ts` — recettes à motif (comme les fichiers JSON du jeu de référence) :
 ```ts
-r('ruby_block', 1, 'table', ['ruby', 9]),
-r('stew', 1, 'furnace', ['raw_meat', 1], ['carrot', 2]),   // le four consomme 1 unité de combustible
+shaped('ruby_block', 1, ['RRR', 'RRR', 'RRR'], { R: 'ruby' }),
+shapeless('ruby', 9, 'ruby_block'),
+smelt('raw_ruby', 'ruby', 1.0),           // fourneau : 10 s par objet, XP
 ```
-Stations : `hand`, `table`, `furnace`. Groupes interchangeables : `tag:log`, `tag:coal` (table `TAGS`).
+Un motif de 2×2 au plus est réalisable dans l'inventaire, les autres demandent la table de
+fabrication. Le motif peut être placé n'importe où dans la grille et est aussi reconnu en miroir.
+Groupes interchangeables : `tag:planks`, `tag:logs`, `tag:wool`, `tag:coals`, `tag:stone_tool` (table `TAGS`).
 
 ### Ajouter une créature
 1. `src/data/mobs.ts`, à la fin de `MOB_DEFS` : santé, dégâts, vitesse, `detectionRange`,
    `attackRange`, `attackCooldown`, `drops`, `xp`, `food` (reproduction), `ranged`, `traits`
    (`burnsInSun`, `climbs`, `hops`, `flies`, `splits`, `knockbackResist`), `spawn`
    (`where: 'surface' | 'cave'`, `light`, `group`, `weight`), `sounds`, `weakness`.
-2. Modèle dans `src/render/MobModels.ts` (`MODELS.maCreature = () => quadruped({...})` ou `humanoid({...})`).
+2. Modèle dans `src/render/MobModels.ts` (`VANILLA.maCreature`, cubes en pixels au format des modèles
+   du jeu de référence : origine UV, taille, pivot) et skin procédurale dans `src/render/MobSkins.ts`
+   (même disposition UV : un pack de ressources peut la remplacer, chemin dans `SKIN_PATHS` de `TextureManager`).
 3. Rendre la créature présente dans un biome : ajouter sa clé à `animals` ou `hostiles` dans `src/data/biomes.ts`.
    L'IA est générique (catégories passive/neutre/hostile) ; un comportement spécial peut être ajouté
    en dérivant `Monster`/`Animal` ou via des handlers d'états personnalisés (voir `Boss.ts`).
@@ -383,6 +412,9 @@ simulation ≈ 0,7 ms/frame en moyenne, meshing ≈ 10 ms/chunk dans le worker, 
 poser / ouvrir / manger / utiliser (maintenir pour poser en continu, maintenir puis relâcher avec un arc) ;
 ⤒ sauter/nager (double appui = voler en créatif) ; ⇩ accroupi (empêche de tomber) ; » sprint ;
 `•••` en bout de hotbar = inventaire ; ❚❚ pause ; bouton **Retour Android** = fermer / pause / reprendre.
+**Inventaire** : toucher = prendre/poser/échanger le stack (clic gauche), appui long = prendre la moitié /
+poser un seul objet (clic droit), double toucher = transfert rapide (Maj + clic), toucher hors de la
+fenêtre = jeter ; bouton vert = livre de recettes (toucher une recette remplit la grille, appui long = autant que possible).
 Personnalisation : sensibilité, inversion, taille du joystick et des boutons, mode gaucher,
 saut automatique, et **déplacement libre des boutons** (Paramètres → Contrôles → Personnaliser).
 
@@ -394,21 +426,25 @@ clic droit (utiliser), molette/1–9 (hotbar), E (inventaire), G (jeter), F3 (di
 ## 14. Tests
 
 ```bash
-npm test                         # 36 tests unitaires : génération déterministe, biomes, grottes,
-                                 # mesher/lumière, physique, liquides, inventaire, recettes, drops,
-                                 # butin, survie, sauvegarde/corruption (fake-indexeddb)
+npm test                         # 44 tests unitaires : génération déterministe, biomes, grottes,
+                                 # mesher/lumière, physique, liquides, inventaire, grilles 2x2/3x3,
+                                 # fourneau, formes/orientations, drops, butin, survie, police TrueType,
+                                 # sauvegarde/corruption (fake-indexeddb)
 npm run build && npm run preview &   # puis, dans un autre terminal :
-npm run e2e                      # 37 vérifications pilotées par de vrais événements tactiles (CDP)
-npm run e2e:gameplay             # 21 vérifications : agriculture, élevage, four, structures, coffres,
-                                 # liquides, lave, météo, apparitions nocturnes, boss à phases, mémoire
+npm run e2e                      # 39 vérifications pilotées par de vrais événements tactiles (CDP)
+npm run e2e:gameplay             # 23 vérifications : agriculture, élevage, fourneau à cases, structures,
+                                 # coffres, liquides, lave, météo, apparitions nocturnes, boss, mémoire
+npm run e2e:vanilla              # 21 vérifications : dalles, porte, lit et sommeil, seaux, poudre d'os,
+                                 # cisailles, échelle, TNT et explosion, import/retrait d'un pack de ressources
 npm run screens                  # captures 16:9, 20:9, petit écran, tablette, portrait
 npm run perf                     # coûts CPU par frame
 ```
 Les scripts Playwright utilisent Chromium (variable `CHROME` pour indiquer un autre binaire).
 
-Scénario E2E couvert : lancement → menu → paramètres → nouveau monde (seed) → génération →
+Scénario E2E couvert : lancement → écran titre → Options → Solo → créer un monde (graine) → génération →
 déplacement au joystick → caméra → saut → minage par appui long → ramassage → pose → hotbar →
-inventaire → fabrication (planches, établi, pioche) → déplacement d'objet → établi posé et ouvert →
+inventaire à curseur → grille 2×2 (planches) → livre de recettes (table, bâtons) → déplacement d'objet →
+table posée et ouverte → grille 3×3 (pioche) →
 attaque d'une créature → fuite (IA) → poursuite par un monstre → dégâts reçus → pause (retour) →
 simulation figée → reprise → sauvegarde → quitter → **rechargement de la page** → liste des mondes →
 reprise de la partie (position, inventaire, blocs modifiés restaurés) → mort → réapparition.
@@ -441,9 +477,15 @@ Ces éléments ne sont **pas** réalisés (ou partiellement) — ils ne sont pas
   Pas de normal mapping (inutile pour ce style pixel-art).
 - **TODO — LOD des chunks lointains et instancing** : la distance de rendu + le brouillard en tiennent lieu ;
   les créatures sont peu nombreuses (pool de modèles au lieu d'instancing).
-- **TODO** : seau (transporter l'eau/la lave), portes, échelles, escaliers et dalles, lits,
-  villageois (PNJ), décomposition des feuilles, animation de chute du sable (la chute est instantanée),
-  récupération des flèches tirées, enchantements, mode multijoueur.
+- **Non reproduits du jeu de référence** (volontairement ou faute de temps) : Creeper et autres créatures
+  à design protégé, Nether, End, circuits de redstone, enchantements, alambics, villageois et commerce,
+  feu qui se propage, mode multijoueur, Realms. Le briquet n'allume que la TNT.
+- **TODO** : décomposition des feuilles, animation de chute du sable (la chute est instantanée),
+  récupération des flèches tirées, charnières de portes (toujours à gauche), glisser-déposer pour
+  répartir un stack sur plusieurs cases, panorama 3D de l'écran titre (remplacé par un paysage animé),
+  rendu 3D du coffre et du lit en main.
+- **Mondes de la version 1** : l'identifiant des blocs a changé avec la refonte vanilla ; un ancien
+  monde est signalé « incompatible » et peut être **recréé avec la même graine**.
 - La lumière est recalculée par chunk avec une marge de 14 blocs : une source lumineuse située à plus
   de 14 blocs du bord d'un chunk voisin n'éclaire pas ce chunk (approximation imperceptible en pratique).
 - Un seul Web Worker gère génération et meshing (suffisant pour les profils ciblés).

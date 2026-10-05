@@ -6,7 +6,8 @@
  * - plantes en croix, liquides avec hauteur variable
  * Sortie : deux géométries (opaque/cutout et translucide) en tableaux typés compacts.
  */
-import { BlockRegistry } from '../blocks/BlockRegistry';
+import { BlockRegistry, SHAPES } from '../blocks/BlockRegistry';
+import { modelBoxes } from '../blocks/Shapes';
 import { CHUNK_SIZE, WORLD_HEIGHT, LIGHT_PADDING } from '../core/Config';
 import { TileRegistry } from './TileRegistry';
 
@@ -17,7 +18,7 @@ export const FLAG_LIQUID = 16;
 
 export interface MeshArrays {
   pos: Int16Array; // xyz * 16
-  uv: Uint8Array;
+  uv: Uint16Array; // en 1/16 de tuile
   info: Uint8Array; // tile, flags, sky*16, block*16
   tint: Uint8Array; // r, g, b, shade
   index: Uint16Array | Uint32Array;
@@ -26,7 +27,7 @@ export interface MeshArrays {
 
 class Builder {
   pos: Int16Array;
-  uv: Uint8Array;
+  uv: Uint16Array;
   info: Uint8Array;
   tint: Uint8Array;
   idx: Uint32Array;
@@ -34,7 +35,7 @@ class Builder {
   i = 0;
   constructor(cap = 65536) {
     this.pos = new Int16Array(cap * 3);
-    this.uv = new Uint8Array(cap * 2);
+    this.uv = new Uint16Array(cap * 2);
     this.info = new Uint8Array(cap * 4);
     this.tint = new Uint8Array(cap * 4);
     this.idx = new Uint32Array(cap * 1.5);
@@ -44,7 +45,7 @@ class Builder {
     this.i = 0;
   }
   private grow() {
-    const g = <T extends Int16Array | Uint8Array | Uint32Array>(a: T): T => {
+    const g = <T extends Int16Array | Uint8Array | Uint16Array | Uint32Array>(a: T): T => {
       const n = new (a.constructor as { new (n: number): T })(a.length * 2);
       n.set(a);
       return n;
@@ -104,8 +105,8 @@ const DIRS = [
 ];
 const FACE_SHADE = [0.78, 0.78, 1.0, 0.55, 0.9, 0.9];
 const AO_CURVE = [1.0, 0.78, 0.62, 0.48];
-// face avant selon la méta d'orientation : 0 +Z, 1 +X, 2 -Z, 3 -X
-const FRONT_FACE = [4, 0, 5, 1];
+// face avant selon la méta d'orientation : 0 sud(+Z), 1 ouest(-X), 2 nord(-Z), 3 est(+X)
+const FRONT_FACE = [4, 1, 5, 0];
 
 export interface MeshInput {
   /** Volume padded (W x H x W) des ID de blocs. */
@@ -119,13 +120,6 @@ export interface MeshInput {
   foliageTint: Uint8Array;
   maxY: number;
 }
-
-/** 0 : pas de teinte, 1 : herbe, 2 : feuillage (couleur de biome). */
-const TINT_TYPE = new Uint8Array(256);
-BlockRegistry.blocks.forEach((b) => {
-  if (b.key === 'grass' || b.key === 'tall_grass') TINT_TYPE[b.id] = 1;
-  else if (b.key.endsWith('leaves')) TINT_TYPE[b.id] = 2;
-});
 
 const P = LIGHT_PADDING;
 const W = CHUNK_SIZE + 2 * P;
@@ -224,13 +218,7 @@ export class ChunkMesher {
             if (first < 0) first = packed;
             else if (packed !== first) uniform = false;
           }
-          const tinted = TINT_TYPE[b];
-          let tint = 0xffffff;
-          if (tinted) {
-            const col = (x + z * CHUNK_SIZE) * 3;
-            const src = tinted === 2 ? inp.foliageTint : inp.grassTint;
-            tint = (src[col] << 16) | (src[col + 1] << 8) | src[col + 2];
-          }
+          const tint = this.tintOf(inp, b, x, z);
           mk[m] = tile | (flags << 8) | (layer << 16) | ((uniform ? 1 : 0) << 17);
           ml[m] = uniform ? first : -2 - m; // valeurs uniques pour empêcher la fusion
           mt[m] = tint;
@@ -284,7 +272,7 @@ export class ChunkMesher {
       [u, v], [u + w, v], [u + w, v + h], [u, v + h],
     ];
     const uvs = [
-      [0, 0], [w, 0], [w, h], [0, h],
+      [0, 0], [w * 16, 0], [w * 16, h * 16], [0, h * 16],
     ];
     const ids: number[] = [];
     const aos: number[] = [];
@@ -326,6 +314,7 @@ export class ChunkMesher {
           const rt = R.renderType[b];
           if (rt === 3) this.cross(inp, x, y, z, pi, b);
           else if (rt === 4) this.liquid(blocks, meta, sky, blk, x, y, z, pi, b);
+          else if (rt === 6) this.model(inp, x, y, z, pi, b);
         }
   }
 
@@ -334,9 +323,8 @@ export class ChunkMesher {
     const m = inp.meta[x + z * 16 + y * 256];
     const tile = block.metaTiles ? block.metaTiles[Math.min(m, block.metaTiles.length - 1)] : block.faceTiles[0];
     const sl = inp.sky[pi] * 16, bl = inp.blk[pi] * 16;
-    const tinted = block.key === 'tall_grass';
-    const col = (x + z * CHUNK_SIZE) * 3;
-    const r = tinted ? inp.grassTint[col] : 255, g = tinted ? inp.grassTint[col + 1] : 255, bb = tinted ? inp.grassTint[col + 2] : 255;
+    const tint = this.tintOf(inp, b, x, z);
+    const r = (tint >> 16) & 255, g = (tint >> 8) & 255, bb = tint & 255;
     const sway = block.sway ? FLAG_SWAY : 0;
     const o = 0.15, e = 0.85;
     const quads = [
@@ -346,11 +334,80 @@ export class ChunkMesher {
     const B = this.opaque;
     for (const [x0, z0, x1, z1] of quads) {
       const a = B.vertex(x0, y, z0, 0, 0, tile, 0, sl, bl, r, g, bb, 230);
-      const c = B.vertex(x1, y, z1, 1, 0, tile, 0, sl, bl, r, g, bb, 230);
-      const d = B.vertex(x1, y + 1, z1, 1, 1, tile, sway, sl, bl, r, g, bb, 230);
-      const f = B.vertex(x0, y + 1, z0, 0, 1, tile, sway, sl, bl, r, g, bb, 230);
+      const c = B.vertex(x1, y, z1, 16, 0, tile, 0, sl, bl, r, g, bb, 230);
+      const d = B.vertex(x1, y + 1, z1, 16, 16, tile, sway, sl, bl, r, g, bb, 230);
+      const f = B.vertex(x0, y + 1, z0, 0, 16, tile, sway, sl, bl, r, g, bb, 230);
       B.quad(a, c, d, f, false);
       B.quad(a, f, d, c, false);
+    }
+  }
+
+  /** Couleur de teinte (biome ou fixe) d'un bloc dans une colonne. */
+  private tintOf(inp: MeshInput, b: number, x: number, z: number): number {
+    const t = BlockRegistry.tintType[b];
+    if (t === 0) return 0xffffff;
+    if (t === 3) return BlockRegistry.tintColor[b];
+    const col = (x + z * CHUNK_SIZE) * 3;
+    const src = t === 2 ? inp.foliageTint : inp.grassTint;
+    return (src[col] << 16) | (src[col + 1] << 8) | src[col + 2];
+  }
+
+  /** Bloc à forme : rendu de chaque boîte (faces au bord masquées par un voisin opaque). */
+  private model(inp: MeshInput, x: number, y: number, z: number, pi: number, b: number) {
+    const R = BlockRegistry;
+    const block = R.blocks[b];
+    const { blocks, sky, blk } = inp;
+    const m = inp.meta[x + z * 16 + y * 256];
+    const kind = SHAPES[R.shape[b] - 1];
+    const nb = (dx: number, dy: number, dz: number) => {
+      const yy = y + dy;
+      if (yy < 0 || yy >= WORLD_HEIGHT) return 0;
+      return blocks[pi + dx + dy * AREA + dz * W];
+    };
+    const boxes = modelBoxes(b, m, nb);
+    const tint = this.tintOf(inp, b, x, z);
+    const tr = (tint >> 16) & 255, tg = (tint >> 8) & 255, tb = tint & 255;
+    const builder = this.opaque;
+    const flags = 0;
+    for (const bx of boxes) {
+      const x0 = bx[0] / 16, y0 = bx[1] / 16, z0 = bx[2] / 16, x1 = bx[3] / 16, y1 = bx[4] / 16, z1 = bx[5] / 16;
+      for (let d = 0; d < 6; d++) {
+        const [dx, dy, dz] = DIRS[d];
+        const onEdge = (d === 0 && bx[3] === 16) || (d === 1 && bx[0] === 0) || (d === 2 && bx[4] === 16) || (d === 3 && bx[1] === 0) || (d === 4 && bx[5] === 16) || (d === 5 && bx[2] === 0);
+        let li = pi;
+        if (onEdge) {
+          if (y + dy < 0 || y + dy >= WORLD_HEIGHT) {
+            if (dy < 0) continue;
+          } else {
+            const ni = pi + dx + dy * AREA + dz * W;
+            if (R.opaque[blocks[ni]]) continue;
+            li = ni;
+          }
+        }
+        // tuile de la face
+        let tile = block.faceTiles[d];
+        if (kind === 'door' && block.metaTiles) tile = block.metaTiles[(m >> 3) & 1];
+        else if (kind === 'bed' && block.metaTiles && d === 2) tile = block.metaTiles[(m >> 2) & 1];
+        else if (kind === 'farmland' && block.metaTiles && d === 2) tile = block.metaTiles[m & 1];
+        else if (block.orientable && d !== 2 && d !== 3) tile = d === FRONT_FACE[m & 3] ? block.faceTiles[4] : block.faceTiles[0];
+        const sl = li < blocks.length ? sky[li] * 16 : 240, bl = li < blocks.length ? blk[li] * 16 : 0;
+        const shade = Math.round(255 * FACE_SHADE[d]);
+        // sommets (même ordre CCW que les liquides) et UV en pixels de texture
+        let c: number[][];
+        let uv: number[][];
+        const X0 = x + x0, X1 = x + x1, Y0 = y + y0, Y1 = y + y1, Z0 = z + z0, Z1 = z + z1;
+        const px0 = bx[0], px1 = bx[3], py0 = bx[1], py1 = bx[4], pz0 = bx[2], pz1 = bx[5];
+        switch (d) {
+          case 0: c = [[X1, Y0, Z1], [X1, Y0, Z0], [X1, Y1, Z0], [X1, Y1, Z1]]; uv = [[16 - pz1, py0], [16 - pz0, py0], [16 - pz0, py1], [16 - pz1, py1]]; break;
+          case 1: c = [[X0, Y0, Z0], [X0, Y0, Z1], [X0, Y1, Z1], [X0, Y1, Z0]]; uv = [[pz0, py0], [pz1, py0], [pz1, py1], [pz0, py1]]; break;
+          case 2: c = [[X0, Y1, Z1], [X1, Y1, Z1], [X1, Y1, Z0], [X0, Y1, Z0]]; uv = [[px0, 16 - pz1], [px1, 16 - pz1], [px1, 16 - pz0], [px0, 16 - pz0]]; break;
+          case 3: c = [[X0, Y0, Z0], [X1, Y0, Z0], [X1, Y0, Z1], [X0, Y0, Z1]]; uv = [[px0, pz0], [px1, pz0], [px1, pz1], [px0, pz1]]; break;
+          case 4: c = [[X0, Y0, Z1], [X1, Y0, Z1], [X1, Y1, Z1], [X0, Y1, Z1]]; uv = [[px0, py0], [px1, py0], [px1, py1], [px0, py1]]; break;
+          default: c = [[X1, Y0, Z0], [X0, Y0, Z0], [X0, Y1, Z0], [X1, Y1, Z0]]; uv = [[16 - px1, py0], [16 - px0, py0], [16 - px0, py1], [16 - px1, py1]]; break;
+        }
+        const ids = c.map((p, k) => builder.vertex(p[0], p[1], p[2], uv[k][0], uv[k][1], tile, flags, sl, bl, tr, tg, tb, shade));
+        builder.quad(ids[0], ids[1], ids[2], ids[3], false);
+      }
     }
   }
 
@@ -390,11 +447,12 @@ export class ChunkMesher {
         default: c = [[x + 1, y0, z], [x, y0, z], [x, y1, z], [x + 1, y1, z]]; break;
       }
       const vh = d === 2 || d === 3 ? 1 : h;
-      const ids = c.map((p, k) => builder.vertex(p[0], p[1], p[2], k === 1 || k === 2 ? 1 : 0, k >= 2 ? Math.ceil(vh) : 0, tile, flags, sl, bl, 255, 255, 255, shade));
+      const ids = c.map((p, k) => builder.vertex(p[0], p[1], p[2], k === 1 || k === 2 ? 16 : 0, k >= 2 ? Math.round(vh * 16) : 0, tile, flags, sl, bl, 255, 255, 255, shade));
       builder.quad(ids[0], ids[1], ids[2], ids[3], false);
     }
   }
 }
 
 export const PADDED_W = W;
+
 export const PADDED_AREA = AREA;

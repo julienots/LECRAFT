@@ -8,6 +8,8 @@ import { FluidSimulator } from './FluidSimulator';
 import { idx } from './ChunkData';
 import type { TreeType } from '../data/biomes';
 
+const SAPLING_TREES: Record<string, TreeType> = { oak_sapling: 'oak', spruce_sapling: 'spruce', birch_sapling: 'birch', jungle_sapling: 'jungle', acacia_sapling: 'acacia', dark_oak_sapling: 'dark_oak' };
+
 /**
  * Mises à jour du monde à 20 Hz :
  * - file des mises à jour voisines (liquides, gravité du sable/gravier, plantes sans support)
@@ -90,7 +92,7 @@ export class WorldTicker {
     // terre cultivable écrasée
     if (id === B.FARMLAND && BlockRegistry.solid[Math.max(0, w.getBlock(x, y + 1, z))]) w.setBlock(x, y, z, B.DIRT);
     // herbe recouverte
-    if (id === B.GRASS && BlockRegistry.opaque[Math.max(0, w.getBlock(x, y + 1, z))]) w.setBlock(x, y, z, B.DIRT);
+    if (id === B.GRASS_BLOCK && BlockRegistry.opaque[Math.max(0, w.getBlock(x, y + 1, z))]) w.setBlock(x, y, z, B.DIRT);
   }
 
   /** Lumière effective (0..15) d'une cellule (jour/nuit pris en compte). */
@@ -105,12 +107,39 @@ export class WorldTicker {
     return false;
   }
 
+  /** Fait pousser une pousse en arbre (tick aléatoire ou poudre d'os). Retourne vrai si réussi. */
+  growSapling(ctx: GameContext, x: number, y: number, z: number, id: number): boolean {
+    const w = ctx.world;
+    const kind = SAPLING_TREES[BlockRegistry.get(id).key];
+    if (!kind) return false;
+    for (let dy = 1; dy < 7; dy++) {
+      const b = w.getBlock(x, y + dy, z);
+      if (b !== B.AIR && b > 0 && !BlockRegistry.replaceable[b] && !BlockRegistry.get(b).key.endsWith('leaves')) return false;
+    }
+    w.setBlock(x, y, z, B.AIR, 0, false);
+    w.setBlock(x, y - 1, z, B.DIRT, 0, false);
+    buildTree(kind, x, y, z, (Math.random() * 1e9) | 0, (tx, ty, tz, b, onlyIfAir) => {
+      const cur = w.getBlock(tx, ty, tz);
+      if (cur < 0) return;
+      if (onlyIfAir && cur !== B.AIR && !BlockRegistry.replaceable[cur]) return;
+      w.setBlock(tx, ty, tz, b, 0, false);
+    });
+    ctx.particles.burst('hearts', x + 0.5, y + 1, z + 0.5, 3);
+    ctx.stats.inc('treesGrown');
+    return true;
+  }
+
   private randomTick(ctx: GameContext, x: number, y: number, z: number, id: number) {
     const w = ctx.world;
     const rain = ctx.raining();
+    if (SAPLING_TREES[BlockRegistry.get(id).key]) {
+      if (this.lightAt(ctx, x, y, z) >= 9 && Math.random() < 0.12) this.growSapling(ctx, x, y, z, id);
+      return;
+    }
     switch (id) {
       case B.WHEAT:
-      case B.CARROTS: {
+      case B.CARROTS:
+      case B.POTATOES: {
         const max = id === B.WHEAT ? 7 : 3;
         const meta = w.getMeta(x, y, z);
         if (meta >= max) return;
@@ -129,27 +158,18 @@ export class WorldTicker {
           if (meta === 1) w.setBlock(x, y, z, B.FARMLAND, 0, false);
           else {
             const above = w.getBlock(x, y + 1, z);
-            if (above !== B.WHEAT && above !== B.CARROTS && Math.random() < 0.1) w.setBlock(x, y, z, B.DIRT);
+            if (above !== B.WHEAT && above !== B.CARROTS && above !== B.POTATOES && Math.random() < 0.1) w.setBlock(x, y, z, B.DIRT);
           }
         }
         return;
       }
-      case B.SAPLING: {
-        if (this.lightAt(ctx, x, y, z) < 9 || Math.random() > 0.12) return;
-        const biome = w.biomeAt(x, z);
-        const type: TreeType = (biome.trees[0]?.type && biome.trees[0].type !== 'cactus' ? biome.trees[0].type : 'oak') as TreeType;
-        // espace libre au-dessus
-        for (let dy = 1; dy < 7; dy++) if (w.getBlock(x, y + dy, z) !== B.AIR && w.getBlock(x, y + dy, z) > 0 && !BlockRegistry.replaceable[w.getBlock(x, y + dy, z)] && !BlockRegistry.get(w.getBlock(x, y + dy, z)).key.endsWith('leaves')) return;
-        w.setBlock(x, y, z, B.AIR, 0, false);
-        w.setBlock(x, y - 1, z, B.DIRT, 0, false);
-        buildTree(type === 'jungle' ? 'oak' : type, x, y, z, (Math.random() * 1e9) | 0, (tx, ty, tz, b, onlyIfAir) => {
-          const cur = w.getBlock(tx, ty, tz);
-          if (cur < 0) return;
-          if (onlyIfAir && cur !== B.AIR && !BlockRegistry.replaceable[cur]) return;
-          w.setBlock(tx, ty, tz, b, 0, false);
-        });
-        ctx.particles.burst('hearts', x + 0.5, y + 1, z + 0.5, 3);
-        ctx.stats.inc('treesGrown');
+      case B.SUGAR_CANE: {
+        // pousse jusqu'à 3 blocs si de l'eau touche la base
+        let base = y;
+        while (w.getBlock(x, base - 1, z) === B.SUGAR_CANE) base--;
+        if (y - base >= 2 || w.getBlock(x, y + 1, z) !== B.AIR || Math.random() > 0.15) return;
+        const g = base - 1;
+        if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => w.getBlock(x + dx, g, z + dz) === B.WATER)) w.setBlock(x, y + 1, z, B.SUGAR_CANE, 0, false);
         return;
       }
       case B.DIRT: {
@@ -157,14 +177,14 @@ export class WorldTicker {
         if (this.lightAt(ctx, x, y + 1, z) < 9) return;
         for (let i = 0; i < 4; i++) {
           const dx = ((Math.random() * 3) | 0) - 1, dy = ((Math.random() * 3) | 0) - 1, dz = ((Math.random() * 3) | 0) - 1;
-          if (w.getBlock(x + dx, y + dy, z + dz) === B.GRASS) {
-            w.setBlock(x, y, z, B.GRASS, 0, false);
+          if (w.getBlock(x + dx, y + dy, z + dz) === B.GRASS_BLOCK) {
+            w.setBlock(x, y, z, B.GRASS_BLOCK, 0, false);
             return;
           }
         }
         return;
       }
-      case B.GRASS: {
+      case B.GRASS_BLOCK: {
         if (BlockRegistry.opaque[Math.max(0, w.getBlock(x, y + 1, z))]) w.setBlock(x, y, z, B.DIRT, 0, false);
         return;
       }

@@ -73,11 +73,11 @@ function styleFor(biomeKey: string): HouseStyle {
       return { wall: B.SANDSTONE, corner: B.SANDSTONE, floor: B.SANDSTONE, roof: B.SANDSTONE };
     case 'taiga':
     case 'tundra':
-      return { wall: B.PLANKS, corner: B.SPRUCE_LOG, floor: B.PLANKS, roof: B.SPRUCE_LOG };
+      return { wall: B.OAK_PLANKS, corner: B.SPRUCE_LOG, floor: B.OAK_PLANKS, roof: B.SPRUCE_LOG };
     case 'savanna':
-      return { wall: B.PLANKS, corner: B.ACACIA_LOG, floor: B.PLANKS, roof: B.HAY };
+      return { wall: B.OAK_PLANKS, corner: B.ACACIA_LOG, floor: B.OAK_PLANKS, roof: B.HAY_BLOCK };
     default:
-      return { wall: B.PLANKS, corner: B.LOG, floor: B.COBBLESTONE, roof: B.LOG };
+      return { wall: B.OAK_PLANKS, corner: B.OAK_LOG, floor: B.COBBLESTONE, roof: B.OAK_LOG };
   }
 }
 
@@ -97,7 +97,7 @@ function house(w: StructWriter, t: TerrainQuery, cx: number, cz: number, rng: Rn
         if (!edgeX && !edgeZ) continue;
         if (decay && rng.next() < 0.25) continue;
         let b = edgeX && edgeZ ? style.corner : style.wall;
-        if (decay && rng.next() < 0.3) b = B.MOSSY_COBBLE;
+        if (decay && rng.next() < 0.3) b = B.MOSSY_COBBLESTONE;
         const window = yy === y + 2 && ((edgeZ && !edgeX && Math.abs(x - cx) === 1) || (edgeX && !edgeZ && Math.abs(z - cz) === 1));
         w.set(x, yy, z, window ? (decay ? B.AIR : B.GLASS) : b);
       }
@@ -112,7 +112,7 @@ function house(w: StructWriter, t: TerrainQuery, cx: number, cz: number, rng: Rn
       for (let x = rx0; x <= rx1; x++) {
         if (decay && rng.next() < 0.2) continue;
         const edge = x === rx0 || x === rx1 || z === rz0 || z === rz1;
-        if (edge) w.set(x, y + H + 1 + k, z, k === 0 ? style.roof : B.PLANKS);
+        if (edge) w.set(x, y + H + 1 + k, z, k === 0 ? style.roof : B.OAK_PLANKS);
       }
   }
   // mobilier
@@ -131,7 +131,7 @@ function path(w: StructWriter, t: TerrainQuery, ax: number, az: number, bx: numb
     const x = Math.round(ax + ((bx - ax) * i) / n), z = Math.round(az + ((bz - az) * i) / n);
     for (const [dx, dz] of [[0, 0], [1, 0]]) {
       const h = t.heightAt(x + dx, z + dz);
-      if (h < SEA_LEVEL) w.set(x + dx, SEA_LEVEL, z + dz, B.PLANKS);
+      if (h < SEA_LEVEL) w.set(x + dx, SEA_LEVEL, z + dz, B.OAK_PLANKS);
       else w.set(x + dx, h, z + dz, B.DIRT_PATH);
     }
   }
@@ -142,7 +142,7 @@ function spawner(w: StructWriter, x: number, y: number, z: number, mob: number) 
 }
 
 // Index des créatures (doit correspondre à l'ordre de data/mobs.ts)
-export const MOB_INDEX = { rodeur: 4, arachne: 5, gelee: 6, archer: 7, chef: 8 } as const;
+export const MOB_INDEX = { zombie: 4, spider: 5, slime: 6, skeleton: 7, chef: 8, cave_spider: 9 } as const;
 
 // ---------- types de structures ----------
 const TYPES: StructureType[] = [
@@ -161,7 +161,7 @@ const TYPES: StructureType[] = [
       fill(w, ox - 2, cy + 1, oz - 2, ox + 2, cy + 5, oz + 2, B.AIR);
       fill(w, ox - 1, cy - 3, oz - 1, ox + 1, cy, oz + 1, B.WATER);
       for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) fill(w, ox + dx, cy + 1, oz + dz, ox + dx, cy + 3, oz + dz, style.corner);
-      fill(w, ox - 2, cy + 4, oz - 2, ox + 2, cy + 4, oz + 2, B.PLANKS);
+      fill(w, ox - 2, cy + 4, oz - 2, ox + 2, cy + 4, oz + 2, B.OAK_PLANKS);
       const n = rng.int(3, 6);
       const a0 = rng.next() * Math.PI * 2;
       for (let i = 0; i < n; i++) {
@@ -174,7 +174,7 @@ const TYPES: StructureType[] = [
         // lampadaire
         const lx = door.doorX + 2, lz = door.doorZ - 1, ly = t.heightAt(lx, lz) + 1;
         if (ly > SEA_LEVEL) {
-          fill(w, lx, ly, lz, lx, ly + 1, lz, B.LOG);
+          fill(w, lx, ly, lz, lx, ly + 1, lz, B.OAK_LOG);
           w.set(lx, ly + 2, lz, B.LANTERN);
         }
       }
@@ -188,7 +188,7 @@ const TYPES: StructureType[] = [
         for (let z = fz - 3; z <= fz + 3; z++)
           for (let x = fx - 3; x <= fx + 3; x++) {
             const border = Math.abs(x - fx) === 3 || Math.abs(z - fz) === 3;
-            if (border) w.set(x, fy, z, B.LOG);
+            if (border) w.set(x, fy, z, B.OAK_LOG);
             else if (x === fx) w.set(x, fy, z, B.WATER);
             else {
               w.set(x, fy, z, B.FARMLAND, 1);
@@ -220,11 +220,11 @@ const TYPES: StructureType[] = [
           const edge = Math.abs(x - ox) === 5 || Math.abs(z - oz) === 5;
           const hy = t.heightAt(x, z);
           if (!edge) {
-            if (rng.next() < 0.5) w.set(x, hy, z, rng.pick([B.COBBLESTONE, B.MOSSY_COBBLE, B.GRAVEL]));
+            if (rng.next() < 0.5) w.set(x, hy, z, rng.pick([B.COBBLESTONE, B.MOSSY_COBBLESTONE, B.GRAVEL]));
             continue;
           }
           const hgt = rng.int(0, 4);
-          for (let k = 1; k <= hgt; k++) w.set(x, hy + k, z, rng.pick([B.STONE_BRICKS, B.CRACKED_BRICKS, B.MOSSY_COBBLE]));
+          for (let k = 1; k <= hgt; k++) w.set(x, hy + k, z, rng.pick([B.STONE_BRICKS, B.CRACKED_STONE_BRICKS, B.MOSSY_COBBLESTONE]));
         }
       w.set(ox, y, oz, B.CHEST, chestMeta(LOOT.RUINS));
       w.set(ox, y - 1, oz, B.COBBLESTONE);
@@ -244,12 +244,12 @@ const TYPES: StructureType[] = [
       for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) w.set(ox + dx, y, oz + dz, B.COBBLESTONE);
       w.set(ox, y, oz, B.LANTERN);
       // bancs
-      fill(w, ox - 3, y, oz - 3, ox - 1, y, oz - 3, B.LOG);
-      fill(w, ox + 1, y, oz + 3, ox + 3, y, oz + 3, B.LOG);
+      fill(w, ox - 3, y, oz - 3, ox - 1, y, oz - 3, B.OAK_LOG);
+      fill(w, ox + 1, y, oz + 3, ox + 3, y, oz + 3, B.OAK_LOG);
       // tente de laine
       for (let k = 0; k < 3; k++) {
-        fill(w, ox + 2 + k, y + k, oz - 3, ox + 2 + k, y + k, oz, B.WOOL);
-        fill(w, ox + 6 - k, y + k, oz - 3, ox + 6 - k, y + k, oz, B.WOOL);
+        fill(w, ox + 2 + k, y + k, oz - 3, ox + 2 + k, y + k, oz, B.WHITE_WOOL);
+        fill(w, ox + 6 - k, y + k, oz - 3, ox + 6 - k, y + k, oz, B.BROWN_WOOL);
       }
       w.set(ox + 4, y, oz - 2, B.CHEST, chestMeta(LOOT.CAMP, 2));
       if (rng.next() < 0.5) w.set(ox - 3, y, oz + 2, B.CRAFTING_TABLE);
@@ -264,7 +264,7 @@ const TYPES: StructureType[] = [
       const y = t.heightAt(ox, oz) + 1;
       const H = 18;
       foundation(w, t, ox - 3, oz - 3, ox + 3, oz + 3, y, B.STONE_BRICKS);
-      box(w, ox - 3, y - 1, oz - 3, ox + 3, y + H, oz + 3, B.STONE_BRICKS, rng, B.CRACKED_BRICKS, 0.2);
+      box(w, ox - 3, y - 1, oz - 3, ox + 3, y + H, oz + 3, B.STONE_BRICKS, rng, B.CRACKED_STONE_BRICKS, 0.2);
       // escalier en colimaçon (anneau intérieur)
       const ring: [number, number][] = [];
       for (let i = -2; i <= 2; i++) ring.push([i, -2]);
@@ -273,10 +273,10 @@ const TYPES: StructureType[] = [
       for (let i = 1; i >= -1; i--) ring.push([-2, i]);
       for (let s = 0; s < H - 1; s++) {
         const [dx, dz] = ring[s % ring.length];
-        w.set(ox + dx, y + s, oz + dz, B.PLANKS);
+        w.set(ox + dx, y + s, oz + dz, B.OAK_PLANKS);
       }
       // plancher du sommet avec trémie
-      fill(w, ox - 2, y + H - 1, oz - 2, ox + 2, y + H - 1, oz + 2, B.PLANKS);
+      fill(w, ox - 2, y + H - 1, oz - 2, ox + 2, y + H - 1, oz + 2, B.OAK_PLANKS);
       const [ex, ez] = ring[(H - 2) % ring.length];
       w.set(ox + ex, y + H - 1, oz + ez, B.AIR);
       fill(w, ox - 2, y + H, oz - 2, ox + 2, y + H + 3, oz + 2, B.AIR);
@@ -290,7 +290,7 @@ const TYPES: StructureType[] = [
       }
       w.set(ox, y, oz - 3, B.AIR);
       w.set(ox, y + 1, oz - 3, B.AIR);
-      spawner(w, ox, y, oz, MOB_INDEX.archer);
+      spawner(w, ox, y, oz, MOB_INDEX.skeleton);
     },
   },
   {
@@ -300,7 +300,7 @@ const TYPES: StructureType[] = [
     radius: 10,
     build(w, ox, oz, rng, t) {
       const biome = BiomeManager.get(t.biomeAt(ox, oz));
-      const mat = biome.key === 'jungle' ? B.MOSSY_COBBLE : B.SANDSTONE;
+      const mat = biome.key === 'jungle' ? B.MOSSY_COBBLESTONE : B.SANDSTONE;
       const y = t.heightAt(ox, oz) + 1;
       foundation(w, t, ox - 8, oz - 8, ox + 8, oz + 8, y, mat);
       for (let k = 0; k <= 8; k++) {
@@ -314,12 +314,17 @@ const TYPES: StructureType[] = [
       box(w, ox - 3, y - 6, oz - 3, ox + 3, y - 1, oz + 3, mat);
       w.set(ox, y - 1, oz, B.AIR);
       w.set(ox, y - 2, oz, B.AIR);
+      // quatre coffres contre les murs et piège : plaque de pression au-dessus de TNT
       w.set(ox - 2, y - 5, oz, B.CHEST, chestMeta(LOOT.TEMPLE, 3));
       w.set(ox + 2, y - 5, oz, B.CHEST, chestMeta(LOOT.TEMPLE, 1));
-      for (const [dx, dz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) w.set(ox + dx, y - 5, oz + dz, B.SPIKE_TRAP);
-      w.set(ox, y - 5, oz - 2, B.LANTERN);
+      w.set(ox, y - 5, oz - 2, B.CHEST, chestMeta(LOOT.TEMPLE, 0));
+      w.set(ox, y - 5, oz + 2, B.CHEST, chestMeta(LOOT.TEMPLE, 2));
+      w.set(ox, y - 5, oz, B.STONE_PRESSURE_PLATE);
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) w.set(ox + dx, y - 8, oz + dz, B.TNT);
+      fill(w, ox - 1, y - 7, oz - 1, ox + 1, y - 7, oz + 1, mat);
+      w.set(ox - 2, y - 3, oz - 2, B.TORCH, 2);
       w.set(ox, y + 1, oz, B.GOLD_BLOCK);
-      if (rng.next() < 0.5) spawner(w, ox + 4, y, oz + 4, MOB_INDEX.rodeur);
+      if (rng.next() < 0.5) spawner(w, ox + 4, y, oz + 4, MOB_INDEX.zombie);
     },
   },
   {
@@ -376,14 +381,14 @@ const TYPES: StructureType[] = [
           if (Math.abs(x - ox) > 38 || Math.abs(z - oz) > 38) break;
           const px = dz !== 0 ? 1 : 0, pz = dx !== 0 ? 1 : 0;
           for (let k = -1; k <= 1; k++) for (let yy = y; yy <= y + 2; yy++) w.set(x + px * k, yy, z + pz * k, B.AIR);
-          w.set(x, y - 1, z, B.PLANKS);
+          w.set(x, y - 1, z, B.OAK_PLANKS);
           if (i % 4 === 0) {
-            for (const k of [-1, 1]) for (let yy = y; yy <= y + 1; yy++) w.set(x + px * k, yy, z + pz * k, B.LOG);
-            for (let k = -1; k <= 1; k++) w.set(x + px * k, y + 2, z + pz * k, B.PLANKS);
+            for (const k of [-1, 1]) for (let yy = y; yy <= y + 1; yy++) w.set(x + px * k, yy, z + pz * k, B.OAK_LOG);
+            for (let k = -1; k <= 1; k++) w.set(x + px * k, y + 2, z + pz * k, B.OAK_PLANKS);
             if (rng.next() < 0.35) w.set(x + px, y, z + pz, B.TORCH);
           }
           if (rng.next() < 0.015) w.set(x - px, y, z - pz, B.CHEST, chestMeta(LOOT.MINE));
-          if (rng.next() < 0.004) spawner(w, x, y, z, MOB_INDEX.arachne);
+          if (rng.next() < 0.004) spawner(w, x, y, z, MOB_INDEX.cave_spider);
         }
       }
     },
@@ -404,14 +409,13 @@ const TYPES: StructureType[] = [
         if (rooms.some((r) => r.x === ox + gx * 14 && r.z === oz + gz * 14)) continue;
         rooms.push({ x: ox + gx * 14, z: oz + gz * 14, r: rng.int(3, 5) });
       }
-      rooms.forEach((r) => box(w, r.x - r.r, y - 1, r.z - r.r, r.x + r.r, y + 4, r.z + r.r, B.MOSSY_COBBLE, rng, B.STONE_BRICKS, 0.5));
+      rooms.forEach((r) => box(w, r.x - r.r, y - 1, r.z - r.r, r.x + r.r, y + 4, r.z + r.r, B.MOSSY_COBBLESTONE, rng, B.STONE_BRICKS, 0.5));
       // couloirs (en L) entre salles consécutives, creusés après les salles (portes implicites)
       const corridor = (x0: number, z0: number, x1: number, z1: number) => {
         for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++)
           for (let z = Math.min(z0, z1); z <= Math.max(z0, z1); z++) {
             for (let yy = y; yy <= y + 2; yy++) w.set(x, yy, z, B.AIR);
             w.set(x, y - 1, z, B.STONE_BRICKS);
-            if (rng.next() < 0.04) w.set(x, y, z, B.SPIKE_TRAP);
           }
       };
       for (let i = 1; i < rooms.length; i++) {
@@ -423,7 +427,7 @@ const TYPES: StructureType[] = [
       rooms.forEach((r, i) => {
         w.set(r.x - r.r + 1, y + 2, r.z + r.r - 1, B.LANTERN);
         if (i === rooms.length - 1 && rooms.length >= 4) spawner(w, r.x + 1, y, r.z + 1, MOB_INDEX.chef);
-        else spawner(w, r.x + 1, y, r.z + 1, rng.pick([MOB_INDEX.rodeur, MOB_INDEX.arachne, MOB_INDEX.gelee, MOB_INDEX.archer]));
+        else spawner(w, r.x + 1, y, r.z + 1, rng.pick([MOB_INDEX.zombie, MOB_INDEX.skeleton, MOB_INDEX.zombie, MOB_INDEX.spider]));
         w.set(r.x + r.r - 1, y, r.z + r.r - 1, B.CHEST, chestMeta(LOOT.DUNGEON, 2));
         if (rng.next() < 0.5) w.set(r.x - r.r + 1, y, r.z - r.r + 1, B.CHEST, chestMeta(LOOT.DUNGEON, 0));
       });
@@ -458,10 +462,10 @@ const TYPES: StructureType[] = [
         if (s % 6 === 0) w.set(ox, yy, oz, B.AIR);
       }
       // arène
-      box(w, ox - 11, ay - 1, oz - 11, ox + 11, ay + 9, oz + 11, B.STONE_BRICKS, rng, B.CRACKED_BRICKS, 0.25);
+      box(w, ox - 11, ay - 1, oz - 11, ox + 11, ay + 9, oz + 11, B.STONE_BRICKS, rng, B.CRACKED_STONE_BRICKS, 0.25);
       fill(w, ox - 1, ay, oz - 1, ox + 1, ay + 9, oz + 1, B.AIR);
       for (const [dx, dz] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) {
-        fill(w, ox + dx, ay, oz + dz, ox + dx, ay + 8, oz + dz, B.MOSSY_COBBLE);
+        fill(w, ox + dx, ay, oz + dz, ox + dx, ay + 8, oz + dz, B.MOSSY_COBBLESTONE);
         w.set(ox + dx, ay + 3, oz + dz - Math.sign(dz), B.LANTERN);
       }
       w.set(ox + 6, ay, oz, B.BOSS_ALTAR, BOSS.GOLEM);

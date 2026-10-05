@@ -16,7 +16,10 @@ import { ParticleSystem } from '../render/ParticleSystem';
 import { WeatherRenderer } from '../render/WeatherRenderer';
 import { BlockHighlight } from '../render/BlockHighlight';
 import { HeldItem } from '../render/HeldItem';
-import { CraftingSystem } from '../crafting/CraftingSystem';
+import { Explosions } from '../world/Explosions';
+import { Monster } from '../entities/Monster';
+import { FACING_DIR, boundsOf, modelBoxes } from '../blocks/Shapes';
+import { CraftingSystem, tickFurnace, type FurnaceState } from '../crafting/CraftingSystem';
 import { Progression } from './Progression';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
 import { ItemRegistry } from '../inventory/ItemRegistry';
@@ -35,7 +38,8 @@ export interface WorldState {
   spawners: Record<string, number>;
   defeatedBosses: string[];
   progression: ReturnType<Progression['serialize']>;
-  fuel: number;
+  fuel?: number;
+  furnaces?: Record<string, FurnaceState>;
   mobs: SavedMob[];
 }
 
@@ -57,6 +61,8 @@ export class Session implements GameContext {
   readonly weatherFx = new WeatherRenderer();
   readonly highlight: BlockHighlight;
   readonly held: HeldItem;
+  readonly explosions: Explosions;
+  private plateTimer = 0;
   readonly crafting = new CraftingSystem();
   readonly progression = new Progression();
   readonly defeatedBosses = new Set<string>();
@@ -74,6 +80,8 @@ export class Session implements GameContext {
   private wasInWater = false;
   loaded = false;
   paused = false;
+  /** Option « Coffre bonus » à la création du monde. */
+  bonusChest = false;
   elapsed = 0;
   saving: Promise<void> | null = null;
   readonly stats: StatsApi;
@@ -110,16 +118,21 @@ export class Session implements GameContext {
     this.particles.limit = this.particleLimit();
     this.highlight = new BlockHighlight(game.textures);
     this.held = new HeldItem(game.textures);
-    this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group);
+    this.explosions = new Explosions(game.textures);
+    this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group);
     this.controller = new PlayerController(this.player, game.input, game.settings);
     this.controller.onStep = (below) => {
       if (below > 0) this.audio.blockSound('step', BlockRegistry.get(below).sound, this.player.x, this.player.y, this.player.z);
     };
     this.controller.onJump = () => this.audio.play('jump', { volume: 0.4 });
     this.interaction = new PlayerInteraction(this, game.input, this.entities, {
-      openStation: (k) => game.openInventory(k === 'crafting' ? 'table' : 'furnace'),
+      openStation: (k, x, y, z) => game.openInventory(k === 'crafting' ? 'table' : 'furnace', { x, y, z }),
       openChest: (x, y, z) => game.openInventory('chest', { x, y, z }),
       useCompass: (t) => this.useCompass(t),
+      primeTnt: (x, y, z) => this.explosions.prime(this, x, y, z),
+      sleep: (x, y, z) => this.trySleep(x, y, z),
+      growSapling: (x, y, z, id) => this.ticker.growSapling(this, x, y, z, id),
+      spawnCompass: () => this.hud.showCompass(this.player.spawn[0], this.player.spawn[2], 'spawn'),
     });
     this.fovCurrent = game.settings.fov;
     // événements joueur
@@ -169,6 +182,9 @@ export class Session implements GameContext {
   get audio() {
     return this.game.audio;
   }
+  get skins() {
+    return this.game.textures;
+  }
   get hud() {
     return this.game.hud;
   }
@@ -206,7 +222,7 @@ export class Session implements GameContext {
   }
 
   private giveCreativeKit() {
-    const kit = ['grass', 'dirt', 'stone', 'cobblestone', 'planks', 'log', 'glass', 'torch', 'bricks', 'stone_bricks', 'sand', 'wool', 'lantern', 'crafting_table', 'chest', 'furnace', 'aurite_pickaxe', 'aurite_sword', 'bow', 'arrow', 'seeds', 'golem_mace'];
+    const kit = ['grass_block', 'dirt', 'stone', 'cobblestone', 'oak_planks', 'oak_log', 'glass', 'torch', 'bricks', 'stone_bricks', 'sand', 'white_wool', 'lantern', 'crafting_table', 'chest', 'furnace', 'diamond_pickaxe', 'diamond_sword', 'bow', 'arrow', 'wheat_seeds', 'oak_door', 'oak_stairs', 'oak_slab', 'ladder', 'red_bed', 'water_bucket'];
     for (const k of kit) if (ItemRegistry.has(k)) this.player.inventory.add({ id: k, count: ItemRegistry.maxStack(k) });
   }
 
@@ -231,6 +247,7 @@ export class Session implements GameContext {
       const spot = this.findGroundSpot(Math.floor(p.x), Math.floor(p.z));
       p.body.setPos(spot.x + 0.5, spot.y, spot.z + 0.5);
       p.spawn = [spot.x + 0.5, spot.y, spot.z + 0.5];
+      if (this.bonusChest) this.placeBonusChest(spot.x, spot.z);
     } else if (p.body.collides(this.world, p.x, p.y, p.z)) {
       // terrain modifié sous le joueur : remonte jusqu'à un espace libre
       let y = Math.floor(p.y);
@@ -240,10 +257,34 @@ export class Session implements GameContext {
     this.loaded = true;
   }
 
+  /** Coffre bonus près du point d'apparition (bois, outils en bois, pommes, pain). */
+  private placeBonusChest(cx: number, cz: number) {
+    const w = this.world;
+    for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 2], [-2, -2]]) {
+      const x = cx + dx, z = cz + dz;
+      let y = w.surfaceBelow(x, WORLD_HEIGHT - 2, z);
+      while (y > 1 && !BlockRegistry.solid[w.getBlock(x, y, z)]) y--;
+      if (BlockRegistry.liquid[w.getBlock(x, y + 1, z)] || w.getBlock(x, y + 1, z) > 0 && !BlockRegistry.replaceable[w.getBlock(x, y + 1, z)]) continue;
+      w.setBlock(x, y + 1, z, B.CHEST, 0);
+      const inv = w.getChest(x, y + 1, z)!;
+      const r = () => Math.random();
+      const loot: [string, number][] = [['oak_log', 1 + Math.floor(r() * 3)], ['oak_planks', 1 + Math.floor(r() * 12)], ['stick', 1 + Math.floor(r() * 12)], ['apple', 1 + Math.floor(r() * 3)], ['bread', 1 + Math.floor(r() * 3)], [r() < 0.5 ? 'wooden_axe' : 'stone_axe', 1], [r() < 0.5 ? 'wooden_pickaxe' : 'stone_pickaxe', 1]];
+      loot.forEach(([id, n], i) => ItemRegistry.has(id) && (inv.slots[(i * 5 + 2) % inv.size] = { id, count: n, ...(ItemRegistry.maxDurability(id) > 0 ? { durability: ItemRegistry.maxDurability(id) } : {}) }));
+      for (const [tx, tz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (w.getBlock(x + tx, y + 1, z + tz) === B.AIR && w.isSolid(x + tx, y, z + tz)) w.setBlock(x + tx, y + 1, z + tz, B.TORCH, 0);
+      return;
+    }
+  }
+
+  clearIconCache() {
+    this.iconTex.forEach((t) => t.dispose());
+    this.iconTex.clear();
+    this.held.setItem('');
+  }
+
   /** Cherche en spirale une colonne dont le sommet est du sol (herbe, sable, neige, terre...). */
   private findGroundSpot(cx: number, cz: number): { x: number; y: number; z: number } {
     const w = this.world;
-    const ground = new Set([B.GRASS, B.SAND, B.SNOWY_GRASS, B.SNOW, B.DIRT, B.STONE, B.GRAVEL, B.MUD, B.MOSS, B.SANDSTONE]);
+    const ground = new Set([B.GRASS_BLOCK, B.SAND, B.SNOWY_GRASS_BLOCK, B.SNOW, B.DIRT, B.STONE, B.GRAVEL, B.MUD, B.MOSS_BLOCK, B.SANDSTONE]);
     for (let r = 0; r <= 12; r++)
       for (let dz = -r; dz <= r; dz++)
         for (let dx = -r; dx <= r; dx++) {
@@ -277,7 +318,7 @@ export class Session implements GameContext {
     this.savedSpawners = s.spawners ?? {};
     for (const b of s.defeatedBosses ?? []) this.defeatedBosses.add(b);
     if (s.progression) this.progression.load(s.progression);
-    this.crafting.fuel = s.fuel ?? 0;
+    for (const [k, f] of Object.entries(s.furnaces ?? {})) this.world.furnaces.set(k, f);
     if (s.mobs) this.pendingMobs = s.mobs;
   }
   private pendingMobs: SavedMob[] | null = null;
@@ -288,7 +329,7 @@ export class Session implements GameContext {
     const spawners: Record<string, number> = { ...this.savedSpawners };
     for (const [k, s] of this.world.specials) if (s.spawned) spawners[k] = s.spawned;
     return {
-      version: 1,
+      version: 2,
       player: this.player.snapshot(),
       time: { time: this.dayCycle.time, day: this.dayCycle.day },
       weather: this.weather.serialize(),
@@ -296,7 +337,7 @@ export class Session implements GameContext {
       spawners,
       defeatedBosses: [...this.defeatedBosses],
       progression: this.progression.serialize(),
-      fuel: this.crafting.fuel,
+      furnaces: Object.fromEntries(this.world.furnaces),
       mobs: this.entities.serialize(),
     };
   }
@@ -415,6 +456,9 @@ export class Session implements GameContext {
     p.tick(dt);
     this.entities.update(this, dt);
     this.ticker.tick(this);
+    this.tickFurnaces(dt);
+    this.explosions.update(this, this.entities, dt);
+    this.checkPressurePlate(dt);
     if (this.pendingMobs && this.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) {
       this.entities.load(this.pendingMobs.filter((m) => this.world.isLoaded(Math.floor(m.x), Math.floor(m.z))));
       this.pendingMobs = null;
@@ -451,6 +495,67 @@ export class Session implements GameContext {
     if (this.autosaveTimer <= 0) {
       this.autosaveTimer = 60;
       this.save(true).catch(() => {});
+    }
+  }
+
+  /** Plaque de pression : déclenche la TNT cachée en dessous (piège des temples). */
+  private checkPressurePlate(dt: number) {
+    this.plateTimer -= dt;
+    const p = this.player;
+    if (this.plateTimer > 0 || p.dead || !p.body.onGround) return;
+    const x = Math.floor(p.x), y = Math.floor(p.y + 0.05), z = Math.floor(p.z);
+    if (this.world.getBlock(x, y, z) !== B.STONE_PRESSURE_PLATE) return;
+    this.plateTimer = 1;
+    this.audio.play('click', { x, y, z, pitch: 0.6 });
+    for (let dy = -4; dy <= -1; dy++)
+      for (let dz = -2; dz <= 2; dz++)
+        for (let dx = -2; dx <= 2; dx++) if (this.world.getBlock(x + dx, y + dy, z + dz) === B.TNT) this.explosions.prime(this, x + dx, y + dy, z + dz, 1 + Math.random());
+  }
+
+  /** Lit : dormir la nuit (passe au matin) et définir le point de réapparition. */
+  private trySleep(x: number, y: number, z: number) {
+    const w = this.world;
+    const meta = w.getMeta(x, y, z);
+    // coordonnées de la tête du lit
+    let hx = x, hz = z;
+    if (!(meta & 4)) {
+      const [dx, dz] = FACING_DIR[meta & 3];
+      hx += dx;
+      hz += dz;
+    }
+    const p = this.player;
+    if (Math.hypot(p.x - (hx + 0.5), p.z - (hz + 0.5)) > 3.5 || Math.abs(p.y - y) > 2.5) {
+      this.hud.toast('Vous êtes trop loin du lit', 'warn');
+      return;
+    }
+    p.spawn = [hx + 0.5, y + 0.6, hz + 0.5];
+    if (!this.dayCycle.isNight && !this.weather.raining) {
+      this.hud.toast('Point de réapparition défini. Vous ne pouvez dormir que la nuit ou pendant un orage.');
+      return;
+    }
+    const near = this.entities.entities.some((e) => e instanceof Monster && !e.dead && Math.hypot(e.x - p.x, e.y - p.y, e.z - p.z) < 8);
+    if (near) {
+      this.hud.toast('Vous ne pouvez pas dormir, des monstres rôdent à proximité', 'warn');
+      return;
+    }
+    this.hud.toast('Point de réapparition défini');
+    this.game.sleepTransition(() => {
+      if (this.dayCycle.time > 0.3) this.dayCycle.day++;
+      this.dayCycle.time = 0.0;
+      if (this.weather.state !== 'clear') this.weather.load({ state: 'clear', timer: 300 + Math.random() * 600 });
+      this.progression.inc('nightsSlept');
+    });
+  }
+
+  /** Fourneaux : cuisson et bascule allumé/éteint du bloc (en conservant l'orientation). */
+  private tickFurnaces(dt: number) {
+    for (const [k, f] of this.world.furnaces) {
+      if (!f.input && f.burn <= 0) continue;
+      if (!tickFurnace(f, dt)) continue;
+      const [x, y, z] = k.split(',').map(Number);
+      const id = this.world.getBlock(x, y, z);
+      if (id !== B.FURNACE && id !== B.LIT_FURNACE) continue;
+      this.world.setBlock(x, y, z, f.burn > 0 ? B.LIT_FURNACE : B.FURNACE, this.world.getMeta(x, y, z), false);
     }
   }
 
@@ -495,7 +600,13 @@ export class Session implements GameContext {
     const sheltered = light.sky < 12;
     this.weatherFx.update(this.elapsed, cam.position, rain, this.biomeWeather() === 'snow', sheltered);
     // surbrillance & objet en main
-    this.highlight.update(this.interaction.target, this.interaction.miningProgress, this.interaction.preview, true);
+    const tg = this.interaction.target;
+    let box: [number, number, number, number, number, number] | undefined;
+    if (tg && BlockRegistry.shape[tg.block]) {
+      const w = this.world;
+      box = boundsOf(modelBoxes(tg.block, w.getMeta(tg.x, tg.y, tg.z), (dx, dy, dz) => Math.max(0, w.getBlock(tg.x + dx, tg.y + dy, tg.z + dz))));
+    } else if (tg && BlockRegistry.get(tg.block).render === 'cross') box = [2, 0, 2, 14, 13, 14];
+    this.highlight.update(tg ? { x: tg.x, y: tg.y, z: tg.z, box } : null, this.interaction.miningProgress, this.interaction.preview, true);
     const held = p.inventory.selectedStack?.id ?? '';
     this.held.setItem(held);
     const br = Math.max(0.15, Math.pow(Math.max((light.sky / 15) * this.dayCycle.daylight, light.block / 15), 1.2));
@@ -565,9 +676,10 @@ export class Session implements GameContext {
     this.weatherFx.dispose();
     this.highlight.dispose();
     this.held.dispose();
+    this.explosions.dispose();
     this.shadowTexture.dispose();
     this.iconTex.forEach((t) => t.dispose());
-    this.scene.remove(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group);
+    this.scene.remove(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group);
     this.audio.stopAmbience();
   }
 }

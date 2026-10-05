@@ -3,32 +3,7 @@ import type { Session } from '../core/Session';
 import type { TextureManager } from '../render/TextureManager';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { el } from './dom';
-
-const ICONS: Record<string, string[]> = {
-  heart: ['.kk.kk..', 'krrkrrk.', 'krwrrrk.', 'krrrrrk.', '.krrrk..', '..krk...', '...k....', '........'],
-  heart_half: ['.kk.kk..', 'krrk..k.', 'krwk..k.', 'krrk..k.', '.krk.k..', '..kkk...', '...k....', '........'],
-  heart_empty: ['.kk.kk..', 'k..k..k.', 'k.....k.', 'k.....k.', '.k...k..', '..k.k...', '...k....', '........'],
-  food: ['....kk..', '...kbbk.', '..kbbbk.', '.kbbbbk.', 'kbbbbk..', 'kwkkk...', 'kwk.....', '.k......'],
-  food_half: ['....kk..', '...k..k.', '..k...k.', '.kbb..k.', 'kbbbbk..', 'kwkkk...', 'kwk.....', '.k......'],
-  food_empty: ['....kk..', '...k..k.', '..k...k.', '.k....k.', 'k....k..', 'k.kkk...', 'k.k.....', '.k......'],
-  bubble: ['..kkk...', '.kcccck.', 'kcwcccck', 'kcccccck', 'kcccccck', '.kcccck.', '..kkkk..', '........'],
-  armor: ['kk...kk.', 'kakkkak.', 'kaaaaak.', 'kaaaaak.', 'kaaaaak.', '.kaaak..', '..kkk...', '........'],
-};
-const PAL: Record<string, string> = { k: '#1a0c0c', r: '#e3302d', w: '#ffd0d0', b: '#b8743a', c: '#6ab8ff', a: '#c8ccd4' };
-
-function iconURL(name: string): string {
-  const c = document.createElement('canvas');
-  c.width = c.height = 16;
-  const ctx = c.getContext('2d')!;
-  ICONS[name].forEach((row, y) =>
-    [...row].forEach((ch, x) => {
-      if (ch === '.') return;
-      ctx.fillStyle = PAL[ch];
-      ctx.fillRect(x * 2, y * 2, 2, 2);
-    }),
-  );
-  return c.toDataURL();
-}
+import { buildHudSprites, type HudSprites } from './HudArt';
 
 /**
  * Affichage tête haute : réticule, indice d'interaction, progression du minage, santé, faim,
@@ -36,7 +11,10 @@ function iconURL(name: string): string {
  */
 export class HUD implements HudApi {
   readonly root: HTMLElement;
-  private icons: Record<string, string> = {};
+  private icons: HudSprites = {};
+  private hotbarBg: HTMLElement;
+  private selEl: HTMLElement;
+  private xpBg: HTMLElement;
   private hearts: HTMLElement;
   private food: HTMLElement;
   private armor: HTMLElement;
@@ -73,20 +51,23 @@ export class HUD implements HudApi {
   stats: () => string = () => '';
 
   constructor(parent: HTMLElement, private textures: TextureManager) {
-    for (const k of Object.keys(ICONS)) this.icons[k] = iconURL(k);
+    this.icons = buildHudSprites(textures);
     this.root = el('div', { class: 'hud-root hidden' });
     this.hint = el('div', { class: 'hint hidden' });
     this.ring = el('canvas', { class: 'mining-ring', width: '46', height: '46' });
-    this.hearts = el('div', { class: 'icons' });
-    this.food = el('div', { class: 'icons', style: 'flex-direction:row-reverse' });
-    this.armor = el('div', { class: 'icons' });
-    this.air = el('div', { class: 'icons', style: 'flex-direction:row-reverse' });
-    this.xpFill = el('div');
-    this.xpLevel = el('div', { class: 'xp-level' });
-    this.hotbar = el('div', { class: 'hotbar' });
-    this.itemName = el('div', { class: 'item-name' });
+    this.hearts = el('div', { class: 'mc-icons gp', style: '--x:0;--y:10' });
+    this.food = el('div', { class: 'mc-icons gp rev', style: '--x:101;--y:10' });
+    this.armor = el('div', { class: 'mc-icons gp', style: '--x:0;--y:0' });
+    this.air = el('div', { class: 'mc-icons gp rev', style: '--x:101;--y:0' });
+    this.xpFill = el('div', { class: 'mc-xpfill' });
+    this.xpBg = el('div', { class: 'mc-xp gp', style: '--x:0;--y:20;--w:182;--h:5' }, this.xpFill);
+    this.xpLevel = el('div', { class: 'mc-level' });
+    this.hotbar = el('div', { class: 'mc-hotbar gp', style: '--x:0;--y:27;--w:182;--h:22' });
+    this.hotbarBg = this.hotbar;
+    this.selEl = el('div', { class: 'mc-hsel' });
+    this.itemName = el('div', { class: 'mc-itemname' });
     for (let i = 0; i < 9; i++) {
-      const s = el('div', { class: 'slot', 'data-slot': String(i) });
+      const s = el('div', { class: 'mc-hslot', 'data-slot': String(i), style: `--i:${i}` });
       s.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -94,13 +75,14 @@ export class HUD implements HudApi {
       });
       this.hotbar.append(s);
     }
-    const invBtn = el('div', { class: 'slot inv-btn', role: 'button', 'aria-label': 'Inventaire' }, '•••');
+    this.hotbar.append(this.selEl);
+    const invBtn = el('div', { class: 'mc-invbtn gp', style: '--x:184;--y:27;--w:22;--h:22', role: 'button', 'aria-label': 'Inventaire' }, '•••');
     invBtn.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       e.preventDefault();
       this.onInventory();
     });
-    this.hotbar.append(invBtn);
+    this.applySprites();
     this.bossName = el('div');
     this.bossFill = el('div');
     this.boss = el('div', { class: 'boss-bar hidden' }, this.bossName, el('div', { class: 'bar' }, this.bossFill));
@@ -130,16 +112,24 @@ export class HUD implements HudApi {
       this.toasts,
       this.debug,
       pause,
-      el(
-        'div',
-        { class: 'hud-bottom' },
-        this.itemName,
-        el('div', { class: 'stats-row' }, el('div', { class: 'col', style: 'gap:2px' }, this.armor, this.hearts), el('div', { class: 'col', style: 'gap:2px;align-items:flex-end' }, this.air, this.food)),
-        el('div', { class: 'xpbar' }, this.xpFill, this.xpLevel),
-        this.hotbar,
-      ),
+      el('div', { class: 'mc-hud' }, this.itemName, this.armor, this.hearts, this.air, this.food, this.xpBg, this.xpLevel, this.hotbar, invBtn),
     );
     parent.append(this.root);
+  }
+
+  private applySprites() {
+    this.hotbarBg.style.backgroundImage = `url(${this.icons.hotbar})`;
+    this.selEl.style.backgroundImage = `url(${this.icons.selection})`;
+    this.xpBg.style.backgroundImage = `url(${this.icons.xp_bg})`;
+    this.xpFill.style.backgroundImage = `url(${this.icons.xp_fill})`;
+  }
+
+  /** Recharge les sprites (changement de pack de ressources). */
+  refreshTheme() {
+    this.icons = buildHudSprites(this.textures);
+    this.applySprites();
+    this.last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1 };
+    this.hotbarDirty = true;
   }
 
   show(v: boolean) {
@@ -177,7 +167,7 @@ export class HUD implements HudApi {
   }
 
   showCompass(x: number, z: number, target: string) {
-    const names: Record<string, string> = { golem_lair: 'Repaire du Golem', ice_temple: 'Sanctuaire de givre', village: 'Village' };
+    const names: Record<string, string> = { spawn: "Point d'apparition", golem_lair: 'Repaire du Golem', ice_temple: 'Sanctuaire de givre', village: 'Village' };
     this.compassTarget = { x, z, until: performance.now() + 45000, name: names[target] ?? target };
     this.compass.classList.remove('hidden');
   }
@@ -192,32 +182,37 @@ export class HUD implements HudApi {
     this.inlava.classList.toggle('hidden', !lava);
   }
 
-  private renderIcons(container: HTMLElement, value: number, max: number, full: string, half: string, empty: string) {
+  /** Rangée d'icônes 9x9 (2 points par icône) : pleine / moitié / vide. */
+  private renderIcons(container: HTMLElement, value: number, max: number, prefix: string, hideEmpty = false) {
     const n = Math.ceil(max / 2);
     let html = '';
     for (let i = 0; i < n; i++) {
       const v = value - i * 2;
-      const icon = v >= 2 ? full : v === 1 ? half : empty;
-      html += `<i style="background-image:url(${this.icons[icon]})"></i>`;
+      const kind = v >= 2 ? 'full' : v === 1 ? 'half' : 'empty';
+      if (hideEmpty && kind === 'empty') {
+        html += '<i style="visibility:hidden"></i>';
+        continue;
+      }
+      html += `<i style="background-image:url(${this.icons[`${prefix}_${kind}`]})"></i>`;
     }
     container.innerHTML = html;
   }
 
   private renderHotbar(s: Session) {
     const inv = s.player.inventory;
-    const slots = this.hotbar.children;
+    const slots = this.hotbar.querySelectorAll<HTMLElement>('.mc-hslot');
+    this.selEl.style.setProperty('--i', String(inv.selected));
     for (let i = 0; i < 9; i++) {
-      const slot = slots[i] as HTMLElement;
+      const slot = slots[i];
       const st = inv.slots[i];
-      slot.classList.toggle('sel', i === inv.selected);
       slot.innerHTML = '';
       if (!st) continue;
       slot.append(el('img', { src: this.textures.iconURL(st.id), alt: '' }));
-      if (st.count > 1) slot.append(el('span', { class: 'count' }, String(st.count)));
+      if (st.count > 1) slot.append(el('span', { class: 'mc-count' }, String(st.count)));
       const max = ItemRegistry.maxDurability(st.id);
       if (st.durability !== undefined && max > 0 && st.durability < max) {
         const f = st.durability / max;
-        slot.append(el('div', { class: 'dur' }, el('div', { style: `width:${f * 100}%;background:hsl(${f * 120},80%,50%)` })));
+        slot.append(el('div', { class: 'mc-dur' }, el('div', { style: `width:${Math.round(f * 13) / 13 * 100}%;background:hsl(${f * 120},100%,50%)` })));
       }
     }
   }
@@ -241,30 +236,30 @@ export class HUD implements HudApi {
     if (hp !== L.h || p.maxHealth !== L.maxH) {
       L.h = hp;
       L.maxH = p.maxHealth;
-      this.renderIcons(this.hearts, hp, p.maxHealth, 'heart', 'heart_half', 'heart_empty');
+      this.renderIcons(this.hearts, hp, p.maxHealth, 'heart');
     }
     const creative = p.creative;
-    this.hearts.style.visibility = this.food.style.visibility = creative ? 'hidden' : '';
+    this.hearts.style.visibility = this.food.style.visibility = this.xpBg.style.visibility = this.armor.style.visibility = creative ? 'hidden' : '';
+    this.xpLevel.style.visibility = creative ? 'hidden' : '';
     if (p.hunger !== L.f) {
       L.f = p.hunger;
-      this.renderIcons(this.food, p.hunger, 20, 'food', 'food_half', 'food_empty');
+      this.renderIcons(this.food, p.hunger, 20, 'food');
     }
     const def = p.inventory.defense();
     if (def !== L.a) {
       L.a = def;
-      if (def > 0) this.renderIcons(this.armor, def, 20, 'armor', 'armor', 'heart_empty');
+      if (def > 0) this.renderIcons(this.armor, def, 20, 'armor');
       else this.armor.innerHTML = '';
-      this.armor.querySelectorAll('i').forEach((i, k) => (k * 2 >= def ? ((i as HTMLElement).style.visibility = 'hidden') : null));
     }
     const air = p.air < 300 ? Math.ceil(p.air / 30) : -1;
     if (air !== L.air) {
       L.air = air;
-      this.air.innerHTML = air >= 0 ? `${'<i></i>'.repeat(0)}${Array.from({ length: Math.max(0, air) }, () => `<i style="background-image:url(${this.icons.bubble})"></i>`).join('')}` : '';
+      this.air.innerHTML = air >= 0 ? Array.from({ length: Math.max(0, air) }, () => `<i style="background-image:url(${this.icons.air})"></i>`).join('') : '';
     }
     if (p.xp !== L.xp || p.level !== L.lvl) {
       L.xp = p.xp;
       L.lvl = p.level;
-      this.xpFill.style.width = `${(p.xp / p.xpToNext) * 100}%`;
+      this.xpFill.style.width = `${Math.floor((p.xp / p.xpToNext) * 182) / 1.82}%`;
       this.xpLevel.textContent = p.level > 0 ? String(p.level) : '';
     }
     if (this.hotbarDirty) {
@@ -273,6 +268,7 @@ export class HUD implements HudApi {
     }
     const sel = p.inventory.selected;
     if (sel !== this.lastSelected) {
+      this.selEl.style.setProperty('--i', String(sel));
       this.lastSelected = sel;
       const st = p.inventory.slots[sel];
       this.itemName.textContent = st ? ItemRegistry.get(st.id)?.name ?? st.id : '';

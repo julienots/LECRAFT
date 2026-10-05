@@ -16,7 +16,7 @@ export const TICK_DT = 1 / TICKS_PER_SECOND;
 /** Durée d'un cycle jour/nuit complet en secondes réelles. */
 export const DAY_LENGTH_SECONDS = 14 * 60;
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export type QualityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 

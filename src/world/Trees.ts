@@ -24,7 +24,7 @@ export function buildTree(type: TreeType, x: number, y: number, z: number, seed:
     case 'oak':
     case 'swamp_oak': {
       const h = rng.int(4, 6);
-      const leaf = B.LEAVES;
+      const leaf = B.OAK_LEAVES;
       for (let dy = h - 3; dy <= h + 1; dy++) {
         const r = dy >= h ? 1 : 2;
         for (let dz = -r; dz <= r; dz++)
@@ -38,17 +38,17 @@ export function buildTree(type: TreeType, x: number, y: number, z: number, seed:
           const dx = rng.int(-2, 2), dz = rng.int(-2, 2);
           for (let dy = h - 4; dy < h - 2; dy++) set(x + dx, y + dy, z + dz, leaf, true);
         }
-      for (let dy = 0; dy < h; dy++) set(x, y + dy, z, B.LOG);
+      for (let dy = 0; dy < h; dy++) set(x, y + dy, z, B.OAK_LOG);
       break;
     }
     case 'big_oak': {
       const h = rng.int(7, 10);
-      for (let dy = 0; dy < h; dy++) set(x, y + dy, z, B.LOG);
-      blob(set, x, y + h - 1, z, 3.2, B.LEAVES, rng, 0.8);
+      for (let dy = 0; dy < h; dy++) set(x, y + dy, z, B.OAK_LOG);
+      blob(set, x, y + h - 1, z, 3.2, B.OAK_LEAVES, rng, 0.8);
       for (let b = 0; b < 3; b++) {
         const dx = rng.int(-2, 2), dz = rng.int(-2, 2), by = y + h - 3 - b;
-        set(x + Math.sign(dx), by, z + Math.sign(dz), B.LOG);
-        blob(set, x + dx, by + 1, z + dz, 2, B.LEAVES, rng, 0.8);
+        set(x + Math.sign(dx), by, z + Math.sign(dz), B.OAK_LOG);
+        blob(set, x + dx, by + 1, z + dz, 2, B.OAK_LEAVES, rng, 0.8);
       }
       break;
     }
@@ -105,6 +105,21 @@ export function buildTree(type: TreeType, x: number, y: number, z: number, seed:
       for (let ddz = -3; ddz <= 3; ddz++)
         for (let ddx = -3; ddx <= 3; ddx++) if (Math.abs(ddx) + Math.abs(ddz) <= 4) set(tx + ddx, top, tz + ddz, B.ACACIA_LEAVES, true);
       for (let ddz = -1; ddz <= 1; ddz++) for (let ddx = -1; ddx <= 1; ddx++) set(tx + ddx, top + 1, tz + ddz, B.ACACIA_LEAVES, true);
+      break;
+    }
+    case 'dark_oak': {
+      // tronc 2x2 et canopée large et basse
+      const h = rng.int(6, 8);
+      for (let dy = 0; dy < h; dy++) for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) set(x + dx, y + dy, z + dz, B.DARK_OAK_LOG);
+      for (let dy = h - 3; dy <= h + 1; dy++) {
+        const r = dy > h ? 2 : 4 - (dy === h - 3 ? 1 : 0);
+        for (let dz = -r; dz <= r + 1; dz++)
+          for (let dx = -r; dx <= r + 1; dx++) {
+            if ((dx === -r || dx === r + 1) && (dz === -r || dz === r + 1)) continue;
+            if (rng.next() < 0.08) continue;
+            set(x + dx, y + dy, z + dz, B.DARK_OAK_LEAVES, true);
+          }
+      }
       break;
     }
     case 'cactus': {

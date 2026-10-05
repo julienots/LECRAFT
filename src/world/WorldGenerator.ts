@@ -1,5 +1,5 @@
 import { CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT } from '../core/Config';
-import { B } from '../blocks/BlockRegistry';
+import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { clamp, hash2, hash3, lerp, Rng, smoothstep } from '../util/math';
 import { SimplexNoise } from './Noise';
 import { BiomeManager } from './BiomeManager';
@@ -24,13 +24,19 @@ interface OreDef {
   size: number;
 }
 const ORES: OreDef[] = [
-  { block: B.COAL_ORE, minY: 5, maxY: 110, tries: 16, size: 10 },
-  { block: B.COPPER_ORE, minY: 18, maxY: 80, tries: 9, size: 8 },
-  { block: B.IRON_ORE, minY: 5, maxY: 64, tries: 10, size: 7 },
-  { block: B.GOLD_ORE, minY: 5, maxY: 32, tries: 3, size: 6 },
-  { block: B.CRYSTAL_ORE, minY: 4, maxY: 22, tries: 1, size: 4 },
-  { block: B.AURITE_ORE, minY: 4, maxY: 16, tries: 1, size: 3 },
-  { block: B.GRAVEL, minY: 5, maxY: 90, tries: 4, size: 16 },
+  { block: B.GRANITE, minY: 5, maxY: 90, tries: 3, size: 28 },
+  { block: B.DIORITE, minY: 5, maxY: 90, tries: 3, size: 28 },
+  { block: B.ANDESITE, minY: 5, maxY: 90, tries: 3, size: 28 },
+  { block: B.DIRT, minY: 5, maxY: 90, tries: 3, size: 24 },
+  { block: B.GRAVEL, minY: 5, maxY: 90, tries: 3, size: 24 },
+  { block: B.COAL_ORE, minY: 5, maxY: 110, tries: 18, size: 12 },
+  { block: B.COPPER_ORE, minY: 20, maxY: 80, tries: 8, size: 9 },
+  { block: B.IRON_ORE, minY: 5, maxY: 64, tries: 12, size: 7 },
+  { block: B.LAPIS_ORE, minY: 4, maxY: 32, tries: 2, size: 6 },
+  { block: B.GOLD_ORE, minY: 5, maxY: 32, tries: 3, size: 7 },
+  { block: B.REDSTONE_ORE, minY: 4, maxY: 16, tries: 5, size: 7 },
+  { block: B.DIAMOND_ORE, minY: 4, maxY: 16, tries: 1, size: 6 },
+  { block: B.EMERALD_ORE, minY: 30, maxY: 100, tries: 1, size: 2 },
   { block: B.CLAY, minY: 30, maxY: 60, tries: 2, size: 10 },
 ];
 
@@ -169,8 +175,9 @@ export class WorldGenerator implements TerrainQuery {
           surface = B.STONE;
           under = B.STONE;
         }
-        if (h === SEA_LEVEL && (surface === B.GRASS || surface === B.SNOWY_GRASS) && biome.key !== 'swamp') surface = B.SAND;
-        if (surface === B.GRASS && h < SEA_LEVEL) surface = B.DIRT;
+        if (biome.key === 'taiga' && surface === B.GRASS_BLOCK && sn > 0.25) surface = B.PODZOL;
+        if (h === SEA_LEVEL && (surface === B.GRASS_BLOCK || surface === B.SNOWY_GRASS_BLOCK) && biome.key !== 'swamp') surface = B.SAND;
+        if (surface === B.GRASS_BLOCK && h < SEA_LEVEL) surface = B.DIRT;
         const underDepth = biome.underDepth + (sn > 0.3 ? 1 : 0);
         for (let y = 0; y <= h; y++) {
           let b: number;
@@ -188,7 +195,9 @@ export class WorldGenerator implements TerrainQuery {
     this.caves.carve(c, heights);
 
     // 3) Minerais
+    const centerBiome = BiomeManager.get(c.biomes[8 + 8 * CHUNK_SIZE]).key;
     for (const ore of ORES) {
+      if (ore.block === B.EMERALD_ORE && centerBiome !== 'mountain') continue;
       for (let t = 0; t < ore.tries; t++) {
         let x = rng.int(0, 15), y = rng.int(ore.minY, ore.maxY), z = rng.int(0, 15);
         for (let s = 0; s < ore.size; s++) {
@@ -209,7 +218,7 @@ export class WorldGenerator implements TerrainQuery {
       const lx = x - bx, lz = z - bz;
       if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE || y <= 0 || y >= WORLD_HEIGHT) return;
       const i = idx(lx, y, lz);
-      if (onlyIfAir && blocks[i] !== B.AIR && blocks[i] !== B.TALL_GRASS) return;
+      if (onlyIfAir && blocks[i] !== B.AIR && blocks[i] !== B.SHORT_GRASS) return;
       blocks[i] = b;
     };
     const R = TREE_MAX_RADIUS;
@@ -252,15 +261,30 @@ export class WorldGenerator implements TerrainQuery {
         const above = idx(x, h + 1, z);
         if (blocks[above] !== B.AIR) continue;
         const biome = BiomeManager.get(c.biomes[x + z * CHUNK_SIZE]);
+        // couche de neige sur les biomes froids et les sommets
+        const cold = biome.weather === 'snow' && (biome.key !== 'mountain' || h > SEA_LEVEL + 40);
+        if (cold && h >= SEA_LEVEL && BlockRegistry.opaque[ground]) {
+          if (ground === B.GRASS_BLOCK) blocks[idx(x, h, z)] = B.SNOWY_GRASS_BLOCK;
+          blocks[above] = B.SNOW;
+          continue;
+        }
+        // canne à sucre au bord de l'eau
+        if ((ground === B.GRASS_BLOCK || ground === B.SAND || ground === B.DIRT) && h === SEA_LEVEL && rng.next() < 0.12) {
+          const wx = bx + x, wz = bz + z;
+          if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.heightAt(wx + dx, wz + dz) < SEA_LEVEL)) {
+            const hh = 1 + rng.int(0, 2);
+            for (let k = 1; k <= hh && h + k < WORLD_HEIGHT; k++) blocks[idx(x, h + k, z)] = B.SUGAR_CANE;
+            continue;
+          }
+        }
         for (const v of biome.vegetation) {
           if (rng.next() < v.chance) {
             const bid = B[v.block.toUpperCase()];
-            const ok = ground === B.GRASS || ground === B.SNOWY_GRASS || ((v.block === 'dead_bush') && ground === B.SAND);
-            if (ok) blocks[above] = bid;
+            const ok = ground === B.GRASS_BLOCK || ground === B.PODZOL || (v.block === 'dead_bush' && ground === B.SAND);
+            if (ok && bid !== undefined) blocks[above] = bid;
             break;
           }
         }
-        if (biome.key === 'plains' && ground === B.GRASS && rng.next() < 0.0008) blocks[above] = B.PUMPKIN;
       }
 
     // 6) Structures

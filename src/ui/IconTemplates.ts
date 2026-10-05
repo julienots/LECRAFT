@@ -137,4 +137,56 @@ export const ICON_TEMPLATES: Record<string, string[]> = {
     '................', '................', '................', '................', '................', '...kkkk..kkkk...', '...keak..keak...', '...kaak..kaak...',
     '...kaak..kaak...', '..kaaak..kaaak..', '.kaaaak..kaaaak.', '.kddddk..kddddk.', '.kkkkkk..kkkkkk.', '................', '................', '................',
   ],
+  dust: [
+    '................', '................', '................', '................', '........k.......', '.......kak..k...', '....k..kbk.kak..', '...kak..k...k...',
+    '...kbk.kk.k.....', '..k.k.kaakbk..k.', '.kak.kabaak..kak', '.kbkkaaaabak.kbk', '..kkaaaaaaaak.k.', '...kddddddddk...', '....kkkkkkkk....', '................',
+  ],
+  nugget: [
+    '................', '................', '................', '................', '................', '......kkkk......', '.....kebbak.....', '....kebaaadk....',
+    '....kbaaaadk....', '....kaaaaddk....', '.....kdddkk.....', '......kkkk......', '................', '................', '................', '................',
+  ],
+  paper: [
+    '................', '................', '...kkkkkkkkkk...', '...kaaaaaaaabk..', '...kaddddddabk..', '...kaaaaaaaabk..', '..kaadddddaabk..', '..kaaaaaaaaabk..',
+    '..kaddddddaabk..', '..kaaaaaaaabk...', '.kaadddddaabk...', '.kaaaaaaaaabk...', '.kbbbbbbbbbbk...', '.kkkkkkkkkkk....', '................', '................',
+  ],
+  book: [
+    '................', '................', '.....kkkkkkkkk..', '....kaaaaaaaadk.', '...kaaaaaaaadbk.', '..kaaaaaaaadbbk.', '.kaaaaaaaadbbk..', '.kddddddddkbbk..',
+    '.kaaeaaaaakbk...', '.kaeaaaaaakbk...', '.kaaaaaaaakk....', '.kaaaaaaaak.....', '.kddddddddk.....', '.kkkkkkkkkk.....', '................', '................',
+  ],
+  egg: [
+    '................', '................', '................', '......kkkk......', '.....kbbbak.....', '....kbbaaaak....', '....kbaaaaak....', '...kbaaaaaaak...',
+    '...kaaaaaaaak...', '...kaaaaaaadk...', '...kaaaaaaadk...', '....kaaaaadk....', '....kdaaaddk....', '.....kkkkkk.....', '................', '................',
+  ],
+  eye: [
+    '................', '................', '................', '.....kkkkkk.....', '....kaaeeaak....', '...kaebbbbeak...', '..kaebbkkbbeak..', '..kaebkkkkbeak..',
+    '..kaebkkkkbeak..', '..kaebbkkbbeak..', '...kaebbbbeak...', '....kaaddaak....', '.....kkkkkk.....', '................', '................', '................',
+  ],
+  potato: [
+    '................', '................', '................', '................', '......kkkkk.....', '....kkbbaaakk...', '...kbbaadaaaak..', '..kbaaaaaaadak..',
+    '..kaadaaaaaaak..', '..kaaaaaadaadk..', '...kaaaaaaaddk..', '....kkaadddkk...', '......kkkkk.....', '................', '................', '................',
+  ],
+  slice: [
+    '................', '................', '................', '.kk.............', '.kbkk...........', '.kbaakk.........', '.kbaaaakk.......', '.kbaakaaakk.....',
+    '.kbaaaaaaaakk...', '.kbaaakaakaaakk.', '.kbaaaaaaaaaaaak', '.kbbaaaaakaaaabk', '..kbbbaaaaaabbk.', '...kkbbbbbbbkk..', '.....kkkkkkk....', '................',
+  ],
+  shears: [
+    '................', '................', '.........kk.....', '........kaak....', '........kaak....', '.......kaak.....', '..kk...kaak.....', '.kaakkkaak......',
+    '..kkaaaak.......', '....kdak........', '...kbbkbbk......', '..kbkk.kbk......', '..kbk..kbk......', '..kbbkkbbk......', '...kkk.kkk......', '................',
+  ],
+  flint_steel: [
+    '................', '................', '..kkkkkk........', '.kaaaaaak.......', '.kaakkkaak......', '.kak...kak......', '.kak....kak.....', '..kk.....kk.....',
+    '.........kkkk...', '........kbbbbk..', '.......kbbbbbk..', '.......kbbbbk...', '........kbbk....', '.........kk.....', '................', '................',
+  ],
+  bucket: [
+    '................', '................', '................', '...kkkkkkkkkk...', '..kakbbbbbbkak..', '..kaakkkkkkaak..', '..kaaaaaaaaaak..', '...kaaaaaaaak...',
+    '...kaaaaaaadk...', '...kdaaaaaadk...', '....kaaaaadk....', '....kdaaaadk....', '....kddddddk....', '.....kkkkkk.....', '................', '................',
+  ],
+  door: [
+    '................', '.....kkkkkk.....', '.....kbbabk.....', '.....kbbabk.....', '.....kaaaak.....', '.....kbbabk.....', '.....kbbabk.....', '.....kaaaak.....',
+    '.....kadaak.....', '.....kaaakk.....', '.....kadaak.....', '.....kaaaak.....', '.....kadaak.....', '.....kaaaak.....', '.....kkkkkk.....', '................',
+  ],
+  bed: [
+    '................', '................', '................', '................', '................', '................', '.kkkkk..........', '.kbbbkkkkkkkkkk.',
+    '.kbbbkaaaaaaaaak', '.kkkkkaaaaaaaaak', '.kdddddddddddddk', '.kdkkkkkkkkkkkdk', '.kk...........kk', '................', '................', '................',
+  ],
 };

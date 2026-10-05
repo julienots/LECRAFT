@@ -1,3 +1,4 @@
+import { newFurnace, type FurnaceState } from '../crafting/CraftingSystem';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
 import { CHUNK_SIZE, WORLD_HEIGHT } from '../core/Config';
 import { Emitter } from '../core/Events';
@@ -42,6 +43,8 @@ export class World {
   /** Positions à mettre à jour au prochain tick (liquides, gravité, supports). */
   updateQueue: number[] = [];
   readonly chests = new Map<string, Inventory>();
+  /** Fourneaux (entités de bloc) : contenu et progression de cuisson. */
+  readonly furnaces = new Map<string, FurnaceState>();
   readonly specials = new Map<string, SpecialEntry>();
 
   constructor(readonly seed: number) {}
@@ -128,6 +131,7 @@ export class World {
     // mise à jour de l'éclairage local approximatif (sera recalculé au remesh)
     this.markDirty(x, z, lx, lz, prev !== id);
     if (prev === B.CHEST && id !== B.CHEST) this.chests.delete(`${x},${y},${z}`);
+    if ((prev === B.FURNACE || prev === B.LIT_FURNACE) && id !== B.FURNACE && id !== B.LIT_FURNACE) this.furnaces.delete(`${x},${y},${z}`);
     if ((prev === B.SPAWNER || prev === B.BOSS_ALTAR) && id !== prev) this.specials.delete(`${x},${y},${z}`);
     if (scheduleUpdates) {
       this.scheduleUpdate(x, y, z);
@@ -170,6 +174,16 @@ export class World {
           n.urgent = true;
         } else if (lightChange) n.dirty = true;
       }
+  }
+
+  getFurnace(x: number, y: number, z: number, create = true): FurnaceState | null {
+    const k = `${x},${y},${z}`;
+    let f = this.furnaces.get(k);
+    if (!f && create) {
+      f = newFurnace();
+      this.furnaces.set(k, f);
+    }
+    return f ?? null;
   }
 
   getChest(x: number, y: number, z: number, create = true): Inventory | null {

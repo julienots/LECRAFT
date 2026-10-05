@@ -2,8 +2,11 @@ import * as THREE from 'three';
 import { BlockRegistry } from '../blocks/BlockRegistry';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { ICON_TEMPLATES } from '../ui/IconTemplates';
+import type { SkinProvider } from './MobModels';
+import { paintSkin } from './MobSkins';
+import type { LoadedPack } from './ResourcePack';
 import { buildAtlas, hex } from './TextureGenerator';
-import { ATLAS_COLS, TILE_PX, TileRegistry } from './TileRegistry';
+import { ANIMATED_TILES, ATLAS_COLS, TILE_PX, TileRegistry } from './TileRegistry';
 
 const DEFAULT_GRASS = hex('#7cbd4a');
 const DEFAULT_FOLIAGE = hex('#5fa83a');
@@ -13,12 +16,45 @@ const DEFAULT_FOLIAGE = hex('#5fa83a');
  * (canvases mis en cache, utilisés par l'interface DOM). Toutes les ressources sont générées
  * localement : aucun téléchargement.
  */
-export class TextureManager {
+/** Tuiles en niveaux de gris teintées par le biome dans le jeu vanilla. */
+const GRAY_TINTED = /^(grass_block_top|short_grass|fern|sugar_cane|.*_leaves)$/;
+/** Tuiles sans équivalent direct dans un pack (dessinées par le jeu). */
+const PACK_SKIP = new Set(['missing', 'altar_top', 'altar_side', 'chest_top', 'chest_side', 'chest_front', 'bed_foot', 'bed_side', 'bed_head']);
+const PACK_RENAME: Record<string, string> = { water: 'water_still', lava: 'lava_still' };
+const WATER_TINT = hex('#3f76e4');
+
+/** Chemins des skins des créatures dans un pack (plusieurs versions du jeu). */
+const SKIN_PATHS: Record<string, string[]> = {
+  pig: ['entity/pig/pig.png', 'entity/pig/temperate_pig.png'],
+  cow: ['entity/cow/cow.png', 'entity/cow/temperate_cow.png'],
+  sheep: ['entity/sheep/sheep.png'],
+  sheep_fur: ['entity/sheep/sheep_fur.png', 'entity/sheep/sheep_wool.png'],
+  chicken: ['entity/chicken.png', 'entity/chicken/chicken.png', 'entity/chicken/temperate_chicken.png'],
+  zombie: ['entity/zombie/zombie.png'],
+  zombie_chief: ['entity/zombie/husk.png'],
+  skeleton: ['entity/skeleton/skeleton.png'],
+  spider: ['entity/spider/spider.png'],
+  cave_spider: ['entity/spider/cave_spider.png'],
+  slime: ['entity/slime/slime.png'],
+};
+/** Textures d'objets aux noms différents dans le jeu vanilla. */
+const ITEM_PATHS: Record<string, string[]> = {
+  compass: ['item/compass_16.png', 'item/compass_00.png', 'item/compass.png'],
+  compass_golem: ['item/recovery_compass_16.png', 'item/compass_16.png'],
+  compass_lich: ['item/recovery_compass_16.png', 'item/compass_16.png'],
+  bow: ['item/bow.png'],
+};
+
+export class TextureManager implements SkinProvider {
   readonly atlasCanvas: HTMLCanvasElement;
   readonly atlas: THREE.CanvasTexture;
   private tileCache = new Map<number, HTMLCanvasElement>();
   private iconCache = new Map<string, string>();
   private iconCanvasCache = new Map<string, HTMLCanvasElement>();
+  private skinCache = new Map<string, THREE.CanvasTexture>();
+  private pack: LoadedPack | null = null;
+  /** Appelé après le changement de pack (rafraîchissement de l'interface). */
+  onChange: (() => void) | null = null;
 
   constructor() {
     this.atlasCanvas = buildAtlas();
@@ -28,6 +64,110 @@ export class TextureManager {
     this.atlas.generateMipmaps = false;
     this.atlas.colorSpace = THREE.NoColorSpace;
     this.atlas.needsUpdate = true;
+  }
+
+  /** Image brute du pack installé (chemin relatif à textures/). */
+  packImage(...paths: string[]): ImageBitmap | undefined {
+    return this.pack?.first(...paths);
+  }
+
+  get packName(): string | null {
+    return this.pack?.info.name ?? null;
+  }
+
+  /** Applique (ou retire) un pack de ressources : atlas, icônes et skins sont régénérés. */
+  applyPack(pack: LoadedPack | null) {
+    this.pack = pack;
+    const fresh = buildAtlas(pack ? this.packTiles(pack) : undefined);
+    const ctx = this.atlasCanvas.getContext('2d')!;
+    ctx.clearRect(0, 0, this.atlasCanvas.width, this.atlasCanvas.height);
+    ctx.drawImage(fresh, 0, 0);
+    this.atlas.needsUpdate = true;
+    this.tileCache.clear();
+    this.iconCache.clear();
+    this.iconCanvasCache.clear();
+    for (const [key, tex] of this.skinCache) {
+      tex.image = this.skinCanvas(key);
+      tex.needsUpdate = true;
+    }
+    this.onChange?.();
+  }
+
+  /** Tuiles de remplacement issues du pack, converties à la convention de l'atlas. */
+  private packTiles(pack: LoadedPack): Map<string, ImageData> {
+    const out = new Map<string, ImageData>();
+    for (const full of TileRegistry.names) {
+      const [name, fs] = full.split('#');
+      if (PACK_SKIP.has(name)) continue;
+      const img = pack.get(`block/${PACK_RENAME[name] ?? name}.png`);
+      if (!img) continue;
+      const frames = Math.max(1, Math.floor(img.height / img.width));
+      const ours = ANIMATED_TILES[name] ?? 1;
+      const frame = Math.floor(((fs ? Number(fs) : 0) * frames) / ours);
+      const data = pack.imageData(img, TILE_PX, frame);
+      const d = data.data;
+      if (name === 'grass_block_side') {
+        const ov = pack.get('block/grass_block_side_overlay.png');
+        if (ov) {
+          const o = pack.imageData(ov, TILE_PX).data;
+          for (let i = 0; i < d.length; i += 4)
+            if (o[i + 3] > 128) {
+              d[i] = o[i];
+              d[i + 1] = o[i + 1];
+              d[i + 2] = o[i + 2];
+              d[i + 3] = 200;
+            } else d[i + 3] = 255;
+        }
+      } else if (GRAY_TINTED.test(name)) {
+        for (let i = 0; i < d.length; i += 4) d[i + 3] = d[i + 3] > 128 ? 200 : 0;
+      } else if (name === 'water') {
+        for (let i = 0; i < d.length; i += 4) {
+          d[i] = (d[i] * WATER_TINT[0]) / 255;
+          d[i + 1] = (d[i + 1] * WATER_TINT[1]) / 255;
+          d[i + 2] = (d[i + 2] * WATER_TINT[2]) / 255;
+          d[i + 3] = Math.max(d[i + 3], 170);
+        }
+      } else {
+        // alpha binaire (cutout) ; on évite la plage réservée à la teinte
+        for (let i = 0; i < d.length; i += 4) d[i + 3] = d[i + 3] > 128 ? 255 : 0;
+      }
+      out.set(full, data);
+    }
+    return out;
+  }
+
+  /** Texture de skin d'une créature (pack prioritaire, sinon skin générée). */
+  skin(key: string): THREE.Texture {
+    let t = this.skinCache.get(key);
+    if (!t) {
+      t = new THREE.CanvasTexture(this.skinCanvas(key));
+      t.magFilter = THREE.NearestFilter;
+      t.minFilter = THREE.NearestFilter;
+      t.generateMipmaps = false;
+      t.colorSpace = THREE.NoColorSpace;
+      this.skinCache.set(key, t);
+    }
+    return t;
+  }
+
+  private skinCanvas(key: string): HTMLCanvasElement {
+    const img = this.pack?.first(...(SKIN_PATHS[key] ?? []));
+    if (img) {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext('2d')!.drawImage(img, 0, 0);
+      return c;
+    }
+    const painted = paintSkin(key);
+    if (painted) return painted;
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 32;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#f0f';
+    ctx.fillRect(0, 0, 64, 32);
+    return c;
   }
 
   /** Tuile 16x16 isolée (teinte appliquée pour herbe/feuilles). */
@@ -57,6 +197,15 @@ export class TextureManager {
     return c;
   }
 
+  /** Tuile par nom (null si inconnue). */
+  tileByName(name: string): HTMLCanvasElement | null {
+    try {
+      return this.tile(TileRegistry.index(name));
+    } catch {
+      return null;
+    }
+  }
+
   /** Couleur moyenne d'une tuile (particules). */
   tileColor(index: number): [number, number, number] {
     const c = this.tile(index);
@@ -74,7 +223,7 @@ export class TextureManager {
 
   private tintFor(blockKey: string, tileName: string): [number, number, number] | undefined {
     if (blockKey.endsWith('leaves')) return DEFAULT_FOLIAGE;
-    if (tileName.startsWith('grass') || tileName === 'tall_grass') return DEFAULT_GRASS;
+    if (tileName.startsWith('grass') || tileName === 'short_grass' || tileName === 'fern' || tileName === 'sugar_cane') return DEFAULT_GRASS;
     return undefined;
   }
 
@@ -87,7 +236,39 @@ export class TextureManager {
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     const def = ItemRegistry.get(itemId);
-    if (def && 'block' in def.icon) {
+    const packImg = def && this.pack?.first(...(ITEM_PATHS[itemId] ?? []), `item/${def.packTexture ?? itemId}.png`);
+    if (def && packImg) {
+      const data = this.pack!.imageData(packImg, 16);
+      const tint = def.armor?.material === 'leather' || itemId.startsWith('leather_') ? hex('#a06540') : null;
+      if (tint) {
+        const ov = this.pack!.get(`item/${itemId}_overlay.png`);
+        const od = ov ? this.pack!.imageData(ov, 16).data : null;
+        const d = data.data;
+        for (let i = 0; i < d.length; i += 4) {
+          if (od && od[i + 3] > 0) {
+            d.set([od[i], od[i + 1], od[i + 2], od[i + 3]], i);
+            continue;
+          }
+          d[i] = (d[i] * tint[0]) / 255;
+          d[i + 1] = (d[i + 1] * tint[1]) / 255;
+          d[i + 2] = (d[i + 2] * tint[2]) / 255;
+        }
+      }
+      const tmp = document.createElement('canvas');
+      tmp.width = tmp.height = 16;
+      tmp.getContext('2d')!.putImageData(data, 0, 0);
+      ctx.drawImage(tmp, 0, 0, 32, 32);
+    } else if (def && 'tile' in def.icon) {
+      const name = def.icon.tile;
+      let ti = 0;
+      try {
+        ti = TileRegistry.index(name);
+      } catch {
+        const b = def.place ? BlockRegistry.byName(def.place) : null;
+        ti = b ? (b.metaTiles ? b.metaTiles[b.metaTiles.length - 1] : b.faceTiles[0]) : 0;
+      }
+      ctx.drawImage(this.tile(ti, this.tintFor(def.place ?? '', name)), 0, 0, 32, 32);
+    } else if (def && 'block' in def.icon) {
       const block = BlockRegistry.byName(def.icon.block);
       const tn = (i: number) => TileRegistry.names[i] ?? '';
       if (block.render === 'cross') {
@@ -106,9 +287,12 @@ export class TextureManager {
           }
         };
         const s = 14 / 16;
-        draw(left, s, 7 / 16, 0, 1, 2, 8, 0.25);
-        draw(right, s, -7 / 16, 0, 1, 16, 15, 0.42);
-        draw(top, s, -7 / 16, s, 7 / 16, 2, 8, 0);
+        // dalles : demi-hauteur ; escaliers dessinés comme un bloc plein (comme une vue réduite)
+        const h = block.shape === 'slab' ? 0.5 : 1;
+        const dy = (1 - h) * 16;
+        draw(left, s, 7 / 16, 0, h, 2, 8 + dy, 0.25);
+        draw(right, s, -7 / 16, 0, h, 16, 15 + dy, 0.42);
+        draw(top, s, -7 / 16, s, 7 / 16, 2, 8 + dy, 0);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
       }
     } else if (def && 'sprite' in def.icon) {
@@ -160,6 +344,8 @@ export class TextureManager {
 
   dispose() {
     this.atlas.dispose();
+    for (const t of this.skinCache.values()) t.dispose();
+    this.skinCache.clear();
     this.tileCache.clear();
     this.iconCache.clear();
     this.iconCanvasCache.clear();

@@ -138,12 +138,19 @@ export class AIController {
   }
 }
 
-function isHostile(m: Mob) {
-  return m.def.category === 'hostile' || m.def.category === 'boss' || (m.def.category === 'neutral' && m.anger > 0);
+function isHostile(m: Mob, ctx?: GameContext) {
+  if (m.anger > 0) return true;
+  if (m.def.category === 'neutral') return false;
+  // les araignées sont neutres en pleine lumière (comportement vanilla)
+  if (m.has('neutralInDay') && ctx) {
+    const l = ctx.world.getLight(Math.floor(m.x), Math.floor(m.y + 0.5), Math.floor(m.z));
+    if (Math.round(l.sky * ctx.dayCycle.daylight) > 11) return false;
+  }
+  return m.def.category === 'hostile' || m.def.category === 'boss';
 }
 
 function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandlers<Mob>>> {
-  const wantsChase = (m: Mob) => isHostile(m) && ai.canSee && ai.playerDist <= m.def.detectionRange && !ai.ctx.player.dead;
+  const wantsChase = (m: Mob) => isHostile(m, ai.ctx) && ai.canSee && ai.playerDist <= m.def.detectionRange && !ai.ctx.player.dead;
   const wantsFollow = (m: Mob) => {
     if (!m.def.food || m.def.category === 'hostile') return false;
     const held = ai.ctx.player.inventory.selectedStack;
@@ -196,7 +203,7 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
     [AIState.CHASE]: {
       update: (m) => {
         if (ai.ctx.player.dead) return AIState.RETURN;
-        if (!isHostile(m)) return AIState.WANDER;
+        if (!isHostile(m, ai.ctx)) return AIState.WANDER;
         if (!ai.canSee) return AIState.SEARCH;
         const p = ai.ctx.player;
         const range = m.def.ranged ? Math.min(m.def.ranged.range, m.def.attackRange) : m.def.attackRange;
@@ -208,7 +215,7 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
       update: (m) => {
         const p = ai.ctx.player;
         if (p.dead) return AIState.RETURN;
-        if (!isHostile(m)) return AIState.WANDER;
+        if (!isHostile(m, ai.ctx)) return AIState.WANDER;
         ai.facePlayer();
         if (m.def.ranged) {
           if (!ai.canSee) return AIState.SEARCH;

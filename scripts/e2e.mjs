@@ -47,7 +47,7 @@ async function reset(pitch = 0, yaw = 0) {
     if (!window.__arena) window.__arena = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
     const a = window.__arena;
     for (let dx = -7; dx <= 7; dx++) for (let dz = -7; dz <= 7; dz++) {
-      w.setBlock(a.x + dx, a.y - 1, a.z + dz, 4);
+      w.setBlock(a.x + dx, a.y - 1, a.z + dz, window.__lecraft.debug.blockId('stone'));
       for (let dy = 0; dy < 6; dy++) w.setBlock(a.x + dx, a.y + dy, a.z + dz, 0);
     }
     p.body.setPos(a.x + 0.5, a.y, a.z + 0.5);
@@ -71,17 +71,23 @@ try {
   await shot('e2e-01-menu');
 
   // ---------- paramètres depuis le menu ----------
-  await page.getByText('Paramètres').first().click();
-  await page.getByText('Contrôles').click();
+  await page.getByText('Options...').first().click();
+  await page.getByText('Commandes...').click();
   await wait(200);
-  check('Écran paramètres (onglets)', (await page.locator('.setting').count()) > 5);
-  await page.locator('.title-bar .btn').last().click();
+  check('Écran Options → Commandes', (await page.locator('.mc-screen').last().locator('.mc-btn, .mc-slider').count()) > 8);
+  await page.getByText('Terminé').last().click();
+  await wait(100);
+  await page.getByText('Terminé').last().click();
+  await wait(100);
 
   // ---------- nouveau monde ----------
-  await page.getByText('Nouveau monde').first().click();
-  await page.locator('input[type=text]').first().fill(`Test E2E ${Date.now() % 100000}`);
-  await page.locator('input[type=text]').nth(1).fill('839274928');
-  await page.getByText('Créer le monde').click();
+  await page.getByText('Solo').click();
+  await page.getByText('Créer un nouveau monde').first().click();
+  await wait(200);
+  const form = page.locator('.mc-screen').last();
+  await form.locator('input').first().fill(`Test E2E ${Date.now() % 100000}`);
+  await form.locator('input').nth(1).fill('839274928');
+  await page.locator('.mc-footer').last().getByText('Créer un nouveau monde').click();
   await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
   await wait(2500);
   const info0 = await G(() => { const s = window.__lecraft.session; return { seed: s.world.seed, x: s.player.x, y: s.player.y, z: s.player.z, chunks: s.world.chunks.size, ground: s.player.body.onGround }; });
@@ -128,7 +134,7 @@ try {
   const target = await G(() => {
     const s = window.__lecraft.session, p = s.player;
     const x = Math.floor(p.x), y = Math.floor(p.y), z = Math.floor(p.z) - 2;
-    s.world.setBlock(x, y, z, 3); // terre devant le joueur
+    s.world.setBlock(x, y, z, window.__lecraft.debug.blockId('dirt')); // terre devant le joueur
     s.world.setBlock(x, y + 1, z, 0);
     p.yaw = 0; p.pitch = -0.38;
     return { x, y, z };
@@ -164,55 +170,59 @@ try {
   await tapAt(700, 200, 5);
   await wait(300);
   const placed = pv ? await G((v) => window.__lecraft.session.world.getBlock(v.x, v.y, v.z), pv) : -1;
-  check('Pose d’un bloc (toucher)', placed === 3, `bloc posé : ${placed}`);
+  const dirtId = await G(() => window.__lecraft.debug.blockId('dirt'));
+  check('Pose d’un bloc (toucher)', placed === dirtId, `bloc posé : ${placed}`);
   void placeT;
 
   // ---------- hotbar tactile ----------
-  await G(() => { const inv = window.__lecraft.session.player.inventory; inv.add({ id: 'log', count: 4 }); });
-  const [hx, hy] = await center('.hotbar .slot:nth-child(3)');
+  await G(() => { const inv = window.__lecraft.session.player.inventory; inv.add({ id: 'oak_log', count: 4 }); });
+  const [hx, hy] = await center('.mc-hotbar .mc-hslot:nth-child(3)');
   await tapAt(hx, hy, 6);
   await wait(200);
   check('Sélection dans la hotbar (toucher)', (await G(() => window.__lecraft.session.player.inventory.selected)) === 2);
 
-  // ---------- inventaire & crafting ----------
-  const [ix, iy] = await center('.inv-btn');
+  // ---------- inventaire à curseur & fabrication ----------
+  const slot = (n) => page.locator('.gui .gslot').nth(n);
+  const tap = async (loc) => { await loc.dispatchEvent('pointerdown'); await loc.dispatchEvent('pointerup'); await wait(60); };
+  const dbl = async (loc) => { await tap(loc); await tap(loc); await wait(100); };
+  const [ix, iy] = await center('.mc-invbtn');
   await tapAt(ix, iy, 8);
   await wait(400);
-  check('Ouverture de l’inventaire (bouton ••• de la hotbar)', (await page.locator('.inv-grid').count()) >= 2);
+  check('Ouverture de l’inventaire (bouton ••• de la hotbar)', (await page.locator('.gui').count()) === 1 && (await page.locator('.gui .gslot').count()) === 45);
   await shot('e2e-04-inventory');
-  await page.locator('.tab', { hasText: 'Fabrication' }).click();
+  // ordre des cases (mode main) : armure 0-3, grille 4-7, résultat 8, sac 9-35, barre 36-44
+  const logIdx = await G(() => window.__lecraft.session.player.inventory.slots.findIndex((x) => x?.id === 'oak_log'));
+  const guiIdx = (i) => (i < 9 ? 36 + i : i);
+  await tap(slot(guiIdx(logIdx)));
+  await tap(slot(4));
+  const gridOk = await G(() => window.__lecraft.session.player.inventory.count('oak_log'));
+  check('Curseur : prendre puis poser les troncs dans la grille 2x2', gridOk === 0);
+  await dbl(slot(8));
+  const planks = await G(() => window.__lecraft.session.player.inventory.count('oak_planks'));
+  check('Fabrication 2x2 : planches (double toucher = tout fabriquer)', planks === 16, `planches : ${planks}`);
+  // livre de recettes
+  if ((await page.locator('.gui-side').count()) === 0) await page.locator('.gui .gui-btn').dispatchEvent('pointerup');
   await wait(200);
   await shot('e2e-05-crafting');
-  const plankRow = page.locator('.recipe', { hasText: 'Planches' }).first();
-  await plankRow.getByText('×5').click();
-  await wait(200);
-  const planks = await G(() => window.__lecraft.session.player.inventory.count('planks'));
-  check('Fabrication : planches (×4 recettes)', planks === 16, `planches : ${planks}`);
-  await page.locator('.recipe', { hasText: 'Établi' }).first().getByText('Fabriquer').click();
-  await wait(200);
-  const table = await G(() => window.__lecraft.session.player.inventory.count('crafting_table'));
-  check('Fabrication : établi', table === 1);
-  await page.locator('.recipe', { hasText: 'Bâton' }).first().getByText('Fabriquer').click();
-  await page.locator('.recipe', { hasText: 'Pioche en bois' }).first().getByText('Fabriquer').click();
-  await wait(200);
-  check('Fabrication : pioche en bois', (await G(() => window.__lecraft.session.player.inventory.count('wood_pickaxe'))) === 1);
-  // déplacer un objet (toucher prendre / toucher poser)
-  await page.locator('.tab', { hasText: 'Sac' }).click();
-  await wait(150);
+  await tap(page.locator('.brecipe[data-item=crafting_table]'));
+  await dbl(slot(8));
+  check('Livre de recettes : établi', (await G(() => window.__lecraft.session.player.inventory.count('crafting_table'))) === 1);
+  await tap(page.locator('.brecipe[data-item=stick]'));
+  await dbl(slot(8));
+  check('Livre de recettes : bâtons', (await G(() => window.__lecraft.session.player.inventory.count('stick'))) === 4);
+  // déplacer un stack (toucher prendre / toucher poser)
   const before = await G(() => window.__lecraft.session.player.inventory.slots.map((s) => s?.id ?? null));
-  const srcIdx = before.findIndex((x) => x === 'planks');
+  const srcIdx = before.findIndex((x) => x === 'oak_planks');
   const emptyIdx = before.findIndex((x, i) => x === null && i >= 9);
-  const slotSel = (i) => (i < 9 ? `.inv-grid >> nth=1 >> .slot >> nth=${i}` : `.inv-grid >> nth=0 >> .slot >> nth=${i - 9}`);
-  await page.locator(slotSel(srcIdx)).dispatchEvent('pointerdown');
-  await page.locator(slotSel(srcIdx)).dispatchEvent('pointerup');
-  await page.locator(slotSel(emptyIdx)).dispatchEvent('pointerdown');
-  await page.locator(slotSel(emptyIdx)).dispatchEvent('pointerup');
+  await tap(slot(guiIdx(srcIdx)));
+  await wait(400);
+  await tap(slot(guiIdx(emptyIdx)));
   await wait(150);
   const after = await G(() => window.__lecraft.session.player.inventory.slots.map((s) => s?.id ?? null));
-  check('Déplacer un objet dans l’inventaire', after[emptyIdx] === 'planks' && after[srcIdx] !== 'planks', `slot ${srcIdx} → ${emptyIdx}`);
+  check('Déplacer un objet dans l’inventaire', after[emptyIdx] === 'oak_planks' && after[srcIdx] !== 'oak_planks', `slot ${srcIdx} → ${emptyIdx}`);
   await page.keyboard.press('Escape');
   await wait(300);
-  check('Fermeture de l’inventaire (retour)', (await page.locator('.inv-grid').count()) === 0 && (await state()) === 'playing');
+  check('Fermeture de l’inventaire (retour)', (await page.locator('.gui').count()) === 0 && (await state()) === 'playing');
 
   // ---------- établi posé & ouvert ----------
   await reset(-0.6, Math.PI);
@@ -226,7 +236,11 @@ try {
   await wait(300);
   await tapAt(700, 200, 10);
   await wait(400);
-  check('Établi posé puis ouvert', (await page.locator('.title-bar h2', { hasText: 'Établi' }).count()) === 1);
+  check('Établi posé puis ouvert (grille 3x3)', (await page.locator('.gui .gslot').count()) === 46);
+  await tap(page.locator('.brecipe[data-item=wooden_pickaxe]'));
+  await dbl(slot(9));
+  check('Fabrication 3x3 : pioche en bois', (await G(() => window.__lecraft.session.player.inventory.count('wooden_pickaxe'))) === 1);
+  await shot('e2e-05b-table');
   await page.keyboard.press('Escape');
   await wait(200);
 
@@ -234,7 +248,7 @@ try {
   await reset(-0.45);
   const mob = await G(() => {
     const s = window.__lecraft.session, p = s.player;
-    const m = s.entities.spawnMob('porcelet', p.x, p.y, p.z - 2.2);
+    const m = s.entities.spawnMob('pig', p.x, p.y, p.z - 2.2);
     m.ai.fsm.set('IDLE'); m.idleTime = 100;
     return m.id;
   });
@@ -248,7 +262,7 @@ try {
   check('IA : fuite après dégâts (animal passif)', fsm === 'FLEE', `état ${fsm}`);
   const hostile = await G(() => {
     const s = window.__lecraft.session, p = s.player;
-    const m = s.entities.spawnMob('rodeur', p.x + 6, p.y, p.z);
+    const m = s.entities.spawnMob('zombie', p.x + 6, p.y, p.z);
     return m.id;
   });
   await G(() => { window.__lecraft.session.dayCycle.time = 0.75; });
@@ -270,7 +284,7 @@ try {
   // ---------- pause / retour Android ----------
   await page.keyboard.press('Escape');
   await wait(300);
-  check('Pause (retour)', (await state()) === 'paused' && (await page.getByText('Reprendre').count()) === 1);
+  check('Pause (retour)', (await state()) === 'paused' && (await page.getByText('Retour au jeu').count()) === 1);
   await shot('e2e-07-pause');
   const simT = await G(() => window.__lecraft.session.dayCycle.time);
   await wait(700);
@@ -280,33 +294,35 @@ try {
   check('Reprise (retour depuis la pause)', (await state()) === 'playing');
 
   // ---------- sauvegarde & rechargement ----------
-  const snap = await G(() => { const s = window.__lecraft.session, p = s.player; return { x: p.x, y: p.y, z: p.z, planks: p.inventory.count('planks'), placed: s.world.getBlock(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) }; });
+  const snap = await G(() => { const s = window.__lecraft.session, p = s.player; return { x: p.x, y: p.y, z: p.z, planks: p.inventory.count('oak_planks'), placed: s.world.getBlock(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) }; });
   await page.keyboard.press('Escape');
   await wait(200);
-  await page.getByText('Sauvegarder').click();
+  await page.getByText('Sauvegarder', { exact: true }).click();
   await page.waitForFunction(() => document.body.innerText.includes('Sauvegardé à'), null, { timeout: 15000 });
   check('Sauvegarde manuelle', true);
-  await page.getByText('Quitter vers le menu').click();
+  await page.getByText('Sauvegarder et quitter').click();
   await page.waitForFunction(() => window.__lecraft.state === 'menu');
   await page.reload();
   await page.waitForFunction(() => window.__lecraft?.state === 'menu', null, { timeout: 30000 });
-  await page.getByText('Mondes').first().click();
+  await page.getByText('Solo').click();
   await wait(600);
-  check('Liste des mondes (miniature, nom)', (await page.locator('.world-card', { hasText: 'Test E2E' }).count()) >= 1 && (await page.locator('.world-card img').count()) >= 1);
+  check('Liste des mondes (miniature, nom)', (await page.locator('.world-entry', { hasText: 'Test E2E' }).count()) >= 1 && (await page.locator('.world-entry img').count()) >= 1);
   await shot('e2e-08-worlds');
-  await page.locator('.world-card').first().getByText('Jouer').click();
+  await page.locator('.world-entry').first().click();
+  await page.getByText('Jouer au monde sélectionné').click();
   await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
   await wait(1500);
-  const re = await G(() => { const p = window.__lecraft.session.player; return { x: p.x, y: p.y, z: p.z, planks: p.inventory.count('planks') }; });
+  const re = await G(() => { const p = window.__lecraft.session.player; return { x: p.x, y: p.y, z: p.z, planks: p.inventory.count('oak_planks') }; });
   check('Chargement : position restaurée', Math.abs(re.x - snap.x) < 0.5 && Math.abs(re.z - snap.z) < 0.5, `${JSON.stringify(re)}`);
   check('Chargement : inventaire restauré', re.planks === snap.planks, `planches ${re.planks}`);
   const minedAfter = await G((t) => window.__lecraft.session.world.getBlock(t.x, t.y, t.z), target);
-  check('Chargement : blocs modifiés restaurés', minedAfter === 0 || minedAfter === 3, `bloc ${minedAfter}`);
+  check('Chargement : blocs modifiés restaurés', minedAfter === 0 || minedAfter === dirtId, `bloc ${minedAfter}`);
 
   // ---------- mort & réapparition ----------
   await G(() => window.__lecraft.session.player.damage(100, 'void'));
   await wait(500);
   check('Mort du joueur → écran de mort', (await page.getByText('Vous êtes mort').count()) === 1);
+  await wait(1100);
   await page.getByText('Réapparaître').click();
   await wait(500);
   check('Réapparition', (await G(() => window.__lecraft.session.player.health)) > 0 && (await state()) === 'playing');

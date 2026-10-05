@@ -17,7 +17,7 @@ export class BlockHighlight {
     const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55 });
     this.outline = new THREE.LineSegments(edges, lineMat);
     for (let i = 0; i < 10; i++) {
-      const t = new THREE.CanvasTexture(textures.tile(TileRegistry.index(`destroy_${i}`)));
+      const t = new THREE.CanvasTexture(textures.tile(TileRegistry.index(`destroy_stage_${i}`)));
       t.magFilter = t.minFilter = THREE.NearestFilter;
       t.generateMipmaps = false;
       t.colorSpace = THREE.NoColorSpace;
@@ -38,13 +38,15 @@ export class BlockHighlight {
     this.outline.visible = this.crack.visible = this.preview.visible = false;
   }
 
-  update(target: { x: number; y: number; z: number } | null, progress: number, preview: { x: number; y: number; z: number; valid: boolean } | null, showPreview: boolean) {
+  update(target: { x: number; y: number; z: number; box?: [number, number, number, number, number, number] } | null, progress: number, preview: { x: number; y: number; z: number; valid: boolean } | null, showPreview: boolean) {
     if (target) {
       this.outline.visible = true;
-      this.outline.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5);
+      const b = target.box ?? [0, 0, 0, 16, 16, 16];
+      this.outline.position.set(target.x + (b[0] + b[3]) / 32, target.y + (b[1] + b[4]) / 32, target.z + (b[2] + b[5]) / 32);
+      this.outline.scale.set(Math.max(0.01, (b[3] - b[0]) / 16), Math.max(0.01, (b[4] - b[1]) / 16), Math.max(0.01, (b[5] - b[2]) / 16));
       if (progress > 0) {
         this.crack.visible = true;
-        this.crack.position.copy(this.outline.position);
+        this.crack.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5);
         (this.crack.material as THREE.MeshBasicMaterial).map = this.crackTex[Math.min(9, Math.floor(progress * 10))];
       } else this.crack.visible = false;
     } else {

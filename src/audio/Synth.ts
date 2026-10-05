@@ -166,6 +166,16 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.swim = s.noise(0.3, { lp: 1200, hp: 200, decay: 8, gain: 0.3, attack: 0.05 });
   out.fizz = s.noise(0.5, { hp: 3000, decay: 6, gain: 0.4 });
   out.jump = s.noise(0.06, { lp: 900, decay: 40, gain: 0.25 });
+  out.xp = s.mix({ buf: s.tone(0.12, 1400, 1700, { decay: 18, gain: 0.18 }) }, { buf: s.tone(0.1, 2100, 2300, { decay: 20, gain: 0.1 }), at: 0.03 });
+  out.door_open = s.mix({ buf: s.noise(0.25, { lp: 900, hp: 120, decay: 9, gain: 0.5, crackle: 0.3 }) }, { buf: s.tone(0.22, 180, 260, { wave: 'saw', decay: 9, gain: 0.08 }) });
+  out.door_close = s.mix({ buf: s.noise(0.18, { lp: 700, decay: 16, gain: 0.7 }) }, { buf: s.tone(0.12, 120, 80, { decay: 20, gain: 0.3 }) });
+  out.explode = s.mix({ buf: s.noise(1.6, { lp: 500, decay: 2.2, gain: 1.4, crackle: 0.4 }) }, { buf: s.tone(1.2, 70, 25, { decay: 3, gain: 0.9 }) });
+  out.fuse = s.noise(1.2, { hp: 3000, decay: 0.5, gain: 0.25, attack: 0.05, crackle: 0.6 });
+  out.bucket_fill = s.mix({ buf: s.noise(0.35, { lp: 1800, hp: 300, decay: 6, gain: 0.5 }) }, { buf: s.tone(0.3, 300, 600, { decay: 8, gain: 0.12 }) });
+  out.bucket_empty = s.mix({ buf: s.noise(0.4, { lp: 1600, hp: 200, decay: 5, gain: 0.5 }) }, { buf: s.tone(0.35, 600, 250, { decay: 7, gain: 0.12 }) });
+  out.shear = s.mix({ buf: s.noise(0.08, { hp: 3500, decay: 40, gain: 0.5 }) }, { buf: s.noise(0.08, { hp: 3500, decay: 40, gain: 0.5 }), at: 0.1 });
+  out.ignite = s.noise(0.3, { hp: 2500, lp: 7000, decay: 12, gain: 0.4, crackle: 0.8 });
+  out.burp = s.tone(0.3, 160, 110, { wave: 'saw', decay: 6, gain: 0.25, vibrato: 0.1, vibRate: 30 });
   return out;
 }
 

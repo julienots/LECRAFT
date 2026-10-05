@@ -52,7 +52,7 @@ export class GolemBoss extends Boss {
       this.ai.speedMul = 1.3;
       if (!this.summoned) {
         this.summoned = true;
-        for (let i = 0; i < 2; i++) this.spawner.spawnMob('rodeur', this.x + (i ? 3 : -3), this.y + 0.5, this.z + 2);
+        for (let i = 0; i < 2; i++) this.spawner.spawnMob('zombie', this.x + (i ? 3 : -3), this.y + 0.5, this.z + 2);
         ctx.particles.burst('smoke', this.x, this.y + 1, this.z, 20);
       }
     }
@@ -127,7 +127,7 @@ export class LichBoss extends Boss {
   protected onPhase(ctx: GameContext, phase: number) {
     if (phase === 3 && !this.summoned) {
       this.summoned = true;
-      for (let i = 0; i < 2; i++) this.spawner.spawnMob('spectre', this.x + (i ? 4 : -4), this.y + 1, this.z);
+      for (let i = 0; i < 2; i++) this.spawner.spawnMob('skeleton', this.x + (i ? 4 : -4), this.y + 1, this.z);
       ctx.particles.burst('magic', this.x, this.y + 2, this.z, 30);
     }
   }

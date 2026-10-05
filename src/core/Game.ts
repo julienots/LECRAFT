@@ -3,6 +3,11 @@ import { applyQuality, loadSettings, saveSettings, type Settings } from './Setti
 import { GameLoop } from './GameLoop';
 import { Session, type WorldState } from './Session';
 import { TextureManager } from '../render/TextureManager';
+import { loadInstalledPack, type LoadedPack } from '../render/ResourcePack';
+import { installPixelFont } from '../ui/FontBuilder';
+import { applyTheme } from '../ui/Theme';
+import { setWidgetClick } from '../ui/Mc';
+import { SAVE_VERSION } from './Config';
 import { Renderer } from '../render/Renderer';
 import { AudioManager } from '../audio/AudioManager';
 import { SaveManager, type WorldMeta } from '../save/SaveManager';
@@ -12,7 +17,7 @@ import { KeyboardMouse } from '../input/KeyboardMouse';
 import { UIManager } from '../ui/UIManager';
 import { HUD } from '../ui/HUD';
 import { Platform } from '../platform/Platform';
-import { mainMenu, worldsScreen, newWorldScreen, pauseScreen, deathScreen, loadingScreen, helpScreen, creditsScreen, progressScreen } from '../ui/Screens';
+import { mainMenu, worldsScreen, newWorldScreen, pauseScreen, deathScreen, loadingScreen, helpScreen, creditsScreen, progressScreen, statsScreen, resetMenuArt } from '../ui/Screens';
 import { settingsScreen } from '../ui/SettingsUI';
 import { InventoryUI, type InventoryMode } from '../ui/InventoryUI';
 import type { Difficulty, GameMode } from './Config';
@@ -90,6 +95,12 @@ export class Game {
     } catch (e) {
       console.error('IndexedDB indisponible', e);
     }
+    await installPixelFont();
+    setWidgetClick(() => this.audio.play('click', { volume: 0.5 }));
+    // pack de ressources importé par l'utilisateur (stocké localement)
+    const pack = await loadInstalledPack();
+    if (pack) this.textures.applyPack(pack);
+    applyTheme(this.textures);
     this.showMainMenu();
     this.loop.start();
     await this.platform.hideSplash();
@@ -118,6 +129,20 @@ export class Game {
   showCredits() {
     this.ui.push(creditsScreen(this));
   }
+  showStats() {
+    if (this.session) this.ui.push(statsScreen(this, this.session));
+  }
+
+  /** Change de pack de ressources à chaud (textures, icônes, skins, thème des menus). */
+  applyPack(pack: LoadedPack | null) {
+    this.textures.applyPack(pack);
+    applyTheme(this.textures);
+    resetMenuArt();
+    this.session?.clearIconCache();
+    this.hud.markHotbarDirty();
+    this.hud.refreshTheme?.();
+  }
+
   showProgress() {
     if (this.session) this.ui.push(progressScreen(this, this.session));
   }
@@ -149,13 +174,18 @@ export class Game {
   }
 
   // ---------- mondes ----------
-  async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty) {
+  async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty, bonusChest = false) {
     const seed = seedText.trim() ? seedFromString(seedText) : (Math.random() * 2 ** 31) | 0;
     const meta = await this.saves.createWorld(name.trim() || 'Nouveau monde', seed, mode, difficulty);
-    await this.startWorld(meta, null);
+    await this.startWorld(meta, null, bonusChest);
   }
 
   async playWorld(meta: WorldMeta) {
+    if ((meta.version ?? 1) < SAVE_VERSION) {
+      const ok = await this.ui.confirm('Monde incompatible', `« ${meta.name} » a été créé avec une ancienne version (blocs différents). Recréer un monde avec la même graine ?`, 'Recréer', false);
+      if (ok) await this.recreateWorld(meta);
+      return;
+    }
     let state: WorldState | null = null;
     try {
       state = await this.saves.load<WorldState>(meta.id);
@@ -166,13 +196,19 @@ export class Game {
     await this.startWorld(meta, state);
   }
 
+  /** Nouveau monde avec la même graine et les mêmes options (bouton « Recréer »). */
+  async recreateWorld(meta: WorldMeta) {
+    const copy = await this.saves.createWorld(`${meta.name} (recréé)`, meta.seed, meta.gameMode, meta.difficulty);
+    await this.startWorld(copy, null);
+  }
+
   async continueLast() {
     const list = await this.saves.listWorlds().catch(() => []);
     if (list.length) await this.playWorld(list[0]);
     else this.showNewWorld();
   }
 
-  private async startWorld(meta: WorldMeta, state: WorldState | null) {
+  private async startWorld(meta: WorldMeta, state: WorldState | null, bonusChest = false) {
     this.audio.unlock();
     this.state = 'loading';
     this.settings.difficulty = state ? meta.difficulty : meta.difficulty;
@@ -180,6 +216,7 @@ export class Game {
     this.ui.set(loading.screen);
     this.session?.dispose();
     this.session = new Session(this, meta, state);
+    this.session.bonusChest = bonusChest;
     this.hud.markHotbarDirty();
     this.session.player.inventory.onChange(() => this.hud.markHotbarDirty());
     await this.session.waitForSpawn((f) => loading.progress(f));
@@ -235,6 +272,19 @@ export class Game {
     }
     this.closeInventory();
     this.showMainMenu();
+  }
+
+  /** Fondu au noir pendant le sommeil, puis réveil. */
+  sleepTransition(onSleep: () => void) {
+    const fade = document.createElement('div');
+    fade.className = 'sleep-fade';
+    this.root.append(fade);
+    requestAnimationFrame(() => fade.classList.add('on'));
+    setTimeout(() => {
+      onSleep();
+      fade.classList.remove('on');
+      setTimeout(() => fade.remove(), 900);
+    }, 1800);
   }
 
   showDeath() {

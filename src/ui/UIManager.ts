@@ -1,4 +1,5 @@
-import { button, el } from './dom';
+import { el } from './dom';
+import { mcButton, mcLabel, mcRow, mcScreen } from './Mc';
 
 export interface Screen {
   el: HTMLElement;
@@ -77,14 +78,16 @@ export class UIManager {
         this.remove(screen);
         resolve(v);
       };
-      const panel = el(
-        'div',
-        { class: 'panel dialog' },
-        el('h2', {}, title),
-        el('p', {}, message),
-        el('div', { class: 'row', style: 'justify-content:center' }, button('Annuler', () => finish(false), '', this.onClick), button(okLabel, () => finish(true), danger ? 'danger' : 'primary', this.onClick)),
-      );
-      const screen: Screen = { el: el('div', { class: 'screen dim' }, panel), onBack: () => (finish(false), true) };
+      void danger;
+      const screen: Screen = {
+        ...mcScreen({
+          title,
+          bg: 'dim',
+          body: [el('div', { style: 'flex:1' }), mcLabel(message, 'white'), el('div', { style: 'flex:1' })],
+          footer: [mcRow(mcButton(okLabel, () => finish(true), { w: 150 }), mcButton('Annuler', () => finish(false), { w: 150 }))],
+        }),
+        onBack: () => (finish(false), true),
+      };
       this.push(screen);
     });
   }

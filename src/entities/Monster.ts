@@ -2,20 +2,19 @@ import type { GameContext } from '../core/GameContext';
 import type { MobDef } from '../data/mobs';
 import { Mob, type EntitySpawner } from './Mob';
 
-/** Créature hostile (rôdeur, arachne, gelée, archer, chef, spectre). */
+/** Créature hostile (zombie, squelette, araignées, slime, chef zombie). */
 export class Monster extends Mob {
   /** Temps passé loin du joueur (disparition). */
   farTime = 0;
   constructor(def: MobDef, index: number, x: number, y: number, z: number, spawner: EntitySpawner) {
     super(def, index, x, y, z, spawner);
-    if (def.key === 'spectre') this.hoverHeight = 1.2;
   }
 
   protected customUpdate(ctx: GameContext, dt: number) {
     if (this.distToPlayer > 40) this.farTime += dt;
     else this.farTime = 0;
     // le chef charge quand il est à moyenne distance
-    if (this.def.key === 'chef' && this.ai.canSee && this.distToPlayer > 4 && this.distToPlayer < 12 && this.attackTimer < -2) {
+    if (this.def.key === 'zombie_chief' && this.ai.canSee && this.distToPlayer > 4 && this.distToPlayer < 12 && this.attackTimer < -2) {
       this.attackTimer = 0;
       const p = ctx.player;
       const dx = p.x - this.x, dz = p.z - this.z, d = Math.hypot(dx, dz) || 1;

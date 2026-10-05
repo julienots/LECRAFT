@@ -26,7 +26,7 @@ const out = await page.evaluate(() => {
   const tm = window.__lecraft.textures;
   const logoImg = document.querySelector('.logo');
   const iso = tm.iconCanvas('grass'); // bloc d'herbe isométrique 32x32
-  const pick = tm.iconCanvas('aurite_pickaxe');
+  const pick = tm.iconCanvas('diamond_pickaxe');
   const mk = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.imageSmoothingEnabled = false; draw(x, w, h); return c.toDataURL('image/png'); };
   const bg = (x, w, h, round) => {
     const g = x.createLinearGradient(0, 0, 0, h);

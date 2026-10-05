@@ -1,108 +1,145 @@
 import type { Inventory } from '../inventory/Inventory';
-import { makeStack } from '../inventory/Inventory';
+import { canMerge, makeStack } from '../inventory/Inventory';
 import { ItemRegistry } from '../inventory/ItemRegistry';
-import type { Recipe, Station } from './Recipe';
+import type { ItemStack } from '../inventory/Item';
+import type { CraftingRecipe } from './Recipe';
 import { RecipeRegistry } from './RecipeRegistry';
 
+/** Grille de fabrication (2x2 dans l'inventaire, 3x3 sur l'établi). */
+export class CraftingGrid {
+  readonly slots: (ItemStack | null)[];
+  constructor(readonly size: 2 | 3) {
+    this.slots = new Array(size * size).fill(null);
+  }
+  get recipe(): CraftingRecipe | null {
+    return RecipeRegistry.match(this.slots, this.size);
+  }
+  get result(): ItemStack | null {
+    const r = this.recipe;
+    return r ? makeStack(r.result.item, r.result.count) : null;
+  }
+  /** Consomme un exemplaire de chaque case (prise du résultat). */
+  consume() {
+    for (let i = 0; i < this.slots.length; i++) {
+      const s = this.slots[i];
+      if (!s) continue;
+      s.count--;
+      if (s.count <= 0) this.slots[i] = null;
+    }
+  }
+  /** Rend le contenu à l'inventaire ; retourne ce qui n'a pas pu être rangé. */
+  clearInto(inv: Inventory): ItemStack[] {
+    const left: ItemStack[] = [];
+    for (let i = 0; i < this.slots.length; i++) {
+      const s = this.slots[i];
+      if (!s) continue;
+      const rest = inv.add(s);
+      if (rest > 0) left.push({ ...s, count: rest });
+      this.slots[i] = null;
+    }
+    return left;
+  }
+}
+
 /**
- * Système de fabrication « livre de recettes » adapté au tactile :
- * l'interface liste les recettes, le joueur touche celle qu'il veut fabriquer.
- * Le four consomme des unités de combustible (charbon = 8, bois = 2...).
+ * Outils du « livre de recettes » : savoir si une recette est réalisable à partir de
+ * l'inventaire et remplir automatiquement la grille selon le motif.
  */
 export class CraftingSystem {
-  /** Réserve de combustible du joueur (unités). */
-  fuel = 0;
-
   countFor(inv: Inventory, ingredient: string): number {
     let n = 0;
     for (const s of inv.slots) if (s && RecipeRegistry.matches(s.id, ingredient)) n += s.count;
     return n;
   }
 
-  fuelAvailable(inv: Inventory): number {
-    let n = this.fuel;
-    for (const s of inv.slots) if (s) n += (ItemRegistry.get(s.id)?.fuel ?? 0) * s.count;
-    return n;
+  /** Ingrédients nécessaires (par case) d'une recette. */
+  cells(r: CraftingRecipe): { ingredient: string; x: number; y: number }[] {
+    if (r.type === 'shapeless') return r.ingredients!.map((ing, i) => ({ ingredient: ing, x: i % r.width, y: Math.floor(i / r.width) }));
+    const out: { ingredient: string; x: number; y: number }[] = [];
+    r.pattern!.forEach((row, y) => [...row].forEach((ch, x) => ch !== ' ' && out.push({ ingredient: r.key![ch], x, y })));
+    return out;
   }
 
-  canCraft(inv: Inventory, r: Recipe, times = 1): boolean {
-    for (const i of r.ingredients) if (this.countFor(inv, i.item) < i.count * times) return false;
-    if (r.fuel) {
-      // le combustible ne doit pas être un ingrédient consommé deux fois : approximation conservatrice
-      const needFuel = r.fuel * times;
-      if (this.fuel < needFuel && this.fuelAvailable(inv) - this.ingredientFuel(inv, r, times) < needFuel) return false;
+  /** Nombre de fois que la recette peut être faite avec l'inventaire + la grille. */
+  canCraft(inv: Inventory, r: CraftingRecipe, gridSize: number, grid?: CraftingGrid): boolean {
+    if (r.width > gridSize || r.height > gridSize) return false;
+    const need = new Map<string, number>();
+    for (const c of this.cells(r)) need.set(c.ingredient, (need.get(c.ingredient) ?? 0) + 1);
+    for (const [ing, n] of need) {
+      let have = this.countFor(inv, ing);
+      if (grid) for (const s of grid.slots) if (s && RecipeRegistry.matches(s.id, ing)) have += s.count;
+      if (have < n) return false;
     }
     return true;
   }
 
-  private ingredientFuel(_inv: Inventory, r: Recipe, times: number): number {
-    let n = 0;
-    for (const i of r.ingredients) {
-      const id = i.item.startsWith('tag:') ? RecipeRegistry.tags[i.item.slice(4)][0] : i.item;
-      n += (ItemRegistry.get(id)?.fuel ?? 0) * i.count * times;
-    }
-    return n;
-  }
-
-  available(inv: Inventory, station: Station): { recipe: Recipe; craftable: boolean }[] {
-    return RecipeRegistry.forStation(station).map((recipe) => ({ recipe, craftable: this.canCraft(inv, recipe) }));
-  }
-
-  private consume(inv: Inventory, ingredient: string, n: number) {
-    for (let i = inv.slots.length - 1; i >= 0 && n > 0; i--) {
-      const s = inv.slots[i];
-      if (s && RecipeRegistry.matches(s.id, ingredient)) {
-        const k = Math.min(n, s.count);
-        s.count -= k;
-        n -= k;
-        if (s.count <= 0) inv.slots[i] = null;
-      }
-    }
-  }
-
-  private consumeFuel(inv: Inventory, units: number, exclude: Set<string>) {
-    while (this.fuel < units) {
-      // brûle l'objet combustible le moins précieux (plus petite valeur)
-      let best = -1, bestVal = Infinity;
-      inv.slots.forEach((s, i) => {
-        if (!s || exclude.has(s.id)) return;
-        const f = ItemRegistry.get(s.id)?.fuel ?? 0;
-        if (f > 0 && f < bestVal) {
-          bestVal = f;
-          best = i;
-        }
-      });
-      if (best < 0) return false;
-      inv.slots[best]!.count--;
-      if (inv.slots[best]!.count <= 0) inv.slots[best] = null;
-      this.fuel += bestVal;
-    }
-    this.fuel -= units;
-    return true;
-  }
-
-  /** Fabrique ; retourne le nombre de fabrications réussies. */
-  craft(inv: Inventory, r: Recipe, times = 1): number {
-    let done = 0;
+  /** Remplit la grille avec les ingrédients de la recette (depuis l'inventaire). */
+  fillGrid(inv: Inventory, grid: CraftingGrid, r: CraftingRecipe, times = 1): boolean {
+    for (const left of grid.clearInto(inv)) inv.add(left);
+    if (!this.canCraft(inv, r, grid.size)) return false;
     for (let t = 0; t < times; t++) {
-      if (!this.canCraft(inv, r)) break;
-      for (const i of r.ingredients) this.consume(inv, i.item, i.count);
-      if (r.fuel) {
-        const exclude = new Set(r.ingredients.map((i) => i.item));
-        if (!this.consumeFuel(inv, r.fuel, exclude)) break;
-      }
-      const rest = inv.add({ ...makeStack(r.result.item, r.result.count) });
-      done++;
-      if (rest > 0) {
-        // inventaire plein : l'appelant récupère via onOverflow
-        this.overflow.push({ ...makeStack(r.result.item, rest) });
-        break;
+      if (t > 0 && !this.canCraft(inv, r, grid.size)) break;
+      for (const c of this.cells(r)) {
+        const idx = c.y * grid.size + c.x;
+        const slot = inv.slots.findIndex((s) => s && RecipeRegistry.matches(s.id, c.ingredient) && (!grid.slots[idx] || canMerge(grid.slots[idx]!, s)));
+        if (slot < 0) return t > 0;
+        const taken = inv.takeFromSlot(slot, 1)!;
+        const cur = grid.slots[idx];
+        if (cur) cur.count++;
+        else grid.slots[idx] = taken;
       }
     }
     inv.changed();
-    return done;
+    return true;
   }
+}
 
-  /** Objets qui n'ont pas pu entrer dans l'inventaire (à jeter au sol). */
-  overflow: { id: string; count: number }[] = [];
+/** État d'un fourneau (entité de bloc), simulé comme dans le jeu vanilla. */
+export interface FurnaceState {
+  input: ItemStack | null;
+  fuel: ItemStack | null;
+  output: ItemStack | null;
+  /** Combustion restante (s) et durée totale du combustible en cours. */
+  burn: number;
+  burnMax: number;
+  /** Progression de la cuisson (s, 10 s par objet). */
+  cook: number;
+  xp: number;
+}
+
+export function newFurnace(): FurnaceState {
+  return { input: null, fuel: null, output: null, burn: 0, burnMax: 0, cook: 0, xp: 0 };
+}
+
+/** Avance la simulation d'un fourneau ; retourne vrai si l'état « allumé » a changé. */
+export function tickFurnace(f: FurnaceState, dt: number): boolean {
+  const wasLit = f.burn > 0;
+  const recipe = f.input ? RecipeRegistry.smeltingFor(f.input.id) : undefined;
+  const canSmelt = !!recipe && (!f.output || (f.output.id === recipe.result && f.output.count < ItemRegistry.maxStack(recipe.result)));
+  if (f.burn <= 0 && canSmelt && f.fuel) {
+    const bt = ItemRegistry.get(f.fuel.id)?.burnTime ?? 0;
+    if (bt > 0) {
+      f.burn = f.burnMax = bt;
+      if (f.fuel.id === 'lava_bucket') f.fuel = makeStack('bucket');
+      else {
+        f.fuel.count--;
+        if (f.fuel.count <= 0) f.fuel = null;
+      }
+    }
+  }
+  if (f.burn > 0) {
+    f.burn = Math.max(0, f.burn - dt);
+    if (canSmelt) {
+      f.cook += dt;
+      if (f.cook >= recipe!.time) {
+        f.cook = 0;
+        if (f.output) f.output.count++;
+        else f.output = makeStack(recipe!.result, 1);
+        f.input!.count--;
+        if (f.input!.count <= 0) f.input = null;
+        f.xp += recipe!.xp;
+      }
+    } else f.cook = 0;
+  } else if (f.cook > 0) f.cook = Math.max(0, f.cook - dt * 2);
+  return wasLit !== f.burn > 0;
 }

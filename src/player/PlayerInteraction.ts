@@ -9,6 +9,7 @@ import type { Mob } from '../entities/Mob';
 import { raycastBlocks, type RayHit } from '../util/Raycast';
 import { hash3 } from '../util/math';
 import { WORLD_HEIGHT } from '../core/Config';
+import { FACING_DIR, facingFromYaw, opposite } from '../blocks/Shapes';
 
 export interface PlacementPreview {
   x: number;
@@ -16,13 +17,27 @@ export interface PlacementPreview {
   z: number;
   valid: boolean;
   block: number;
+  meta: number;
+  /** Blocs supplémentaires posés en même temps (moitié haute d'une porte, tête d'un lit). */
+  extra: [number, number, number, number, number][];
 }
 
 export interface InteractionHost {
-  openStation(kind: 'crafting' | 'furnace'): void;
+  openStation(kind: 'crafting' | 'furnace', x: number, y: number, z: number): void;
   openChest(x: number, y: number, z: number): void;
   useCompass(target: string): void;
+  primeTnt(x: number, y: number, z: number): void;
+  sleep(x: number, y: number, z: number): void;
+  growSapling(x: number, y: number, z: number, id: number): boolean;
+  spawnCompass(): void;
 }
+
+/** Index d'orientation correspondant à une direction horizontale (dx, dz). */
+function facingOf(dx: number, dz: number): number {
+  return FACING_DIR.findIndex(([x, z]) => x === dx && z === dz);
+}
+
+const CROP_MAX: Record<string, number> = { wheat: 7, carrots: 3, potatoes: 3 };
 
 /**
  * Interactions du joueur via la caméra : rayon → bloc/créature visé →
@@ -76,15 +91,7 @@ export class PlayerInteraction {
 
     // prévisualisation de pose
     this.preview = null;
-    if (!this.targetMob && this.target && heldDef?.place) {
-      const tb = BlockRegistry.get(this.target.block);
-      const replace = tb.replaceable && tb.id !== B.AIR;
-      const x = replace ? this.target.x : this.target.x + this.target.nx;
-      const y = replace ? this.target.y : this.target.y + this.target.ny;
-      const z = replace ? this.target.z : this.target.z + this.target.nz;
-      const block = BlockRegistry.byName(heldDef.place).id;
-      this.preview = { x, y, z, block, valid: this.canPlace(x, y, z, block) };
-    }
+    if (!this.targetMob && this.target && heldDef?.place) this.preview = this.computePlacement(this.target, BlockRegistry.byName(heldDef.place).id);
     // indice
     const tb = this.target ? BlockRegistry.get(this.target.block) : null;
     if (this.targetMob) this.hint = this.targetMob instanceof Animal && heldDef && this.targetMob.def.food?.includes(held!.id) ? 'feed' : 'attack';
@@ -205,26 +212,22 @@ export class PlayerInteraction {
     }
   }
 
-  canPlace(x: number, y: number, z: number, block: number): boolean {
+  /** `meta` = -1 : pas de vérification de support (partie secondaire d'un bloc double). */
+  canPlace(x: number, y: number, z: number, block: number, meta = 0): boolean {
     const w = this.ctx.world;
     if (y < 1 || y >= WORLD_HEIGHT) return false;
     const cur = w.getBlock(x, y, z);
     if (cur < 0 || !BlockRegistry.replaceable[cur]) return false;
-    if (BlockRegistry.solid[block]) {
-      // ne pas se poser dans le joueur ou une créature
-      const pb = this.ctx.player.body;
-      const hw = pb.halfWidth;
-      if (pb.x + hw > x && pb.x - hw < x + 1 && pb.y + pb.height > y && pb.y < y + 1 && pb.z + hw > z && pb.z - hw < z + 1) return false;
-      if (this.entities.occupies(x, y, z)) return false;
+    if (!this.free(x, y, z, block)) return false;
+    if (meta < 0) return true;
+    const b = BlockRegistry.get(block);
+    if (b.shape === 'torch' || b.shape === 'ladder') {
+      if (b.shape === 'torch' && meta === 0) return w.isSolid(x, y - 1, z);
+      const [dx, dz] = FACING_DIR[(b.shape === 'torch' ? meta - 1 : meta) & 3];
+      return w.isSolid(x + dx, y, z + dz);
     }
+    if (b.shape === 'door' || b.shape === 'bed') return w.isSolid(x, y - 1, z);
     return hasSupport(w, x, y, z, block);
-  }
-
-  private orientationMeta(): number {
-    // face avant tournée vers le joueur
-    const yaw = this.ctx.player.yaw;
-    const a = ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4; // 0 regarde -Z
-    return [0, 1, 2, 3][a];
   }
 
   use(repeat = false) {
@@ -245,8 +248,16 @@ export class PlayerInteraction {
     // 2) blocs interactifs
     if (!repeat && t && !p.sneaking) {
       const b = BlockRegistry.get(t.block);
-      if (b.interact === 'crafting') return this.host.openStation('crafting');
-      if (b.interact === 'furnace') return this.host.openStation('furnace');
+      if (b.interact === 'crafting') return this.host.openStation('crafting', t.x, t.y, t.z);
+      if (b.interact === 'furnace') return this.host.openStation('furnace', t.x, t.y, t.z);
+      if (b.interact === 'door') return this.toggleDoor(t.x, t.y, t.z);
+      if (b.interact === 'bed') return this.host.sleep(t.x, t.y, t.z);
+      if (b.interact === 'tnt' && held && (held.id === 'flint_and_steel' || held.id === 'fire_charge')) {
+        this.host.primeTnt(t.x, t.y, t.z);
+        ctx.audio.play('ignite', { x: t.x, y: t.y, z: t.z });
+        if (!p.creative) inv.damageSelected(1);
+        return;
+      }
       if (b.interact === 'chest') {
         this.ensureChestLoot(t.x, t.y, t.z);
         ctx.audio.play('chest_open', { x: t.x, y: t.y, z: t.z });
@@ -255,7 +266,7 @@ export class PlayerInteraction {
     }
     if (!def || !held) return;
     // 3) utilisations spéciales
-    if (!repeat && def.use === 'till' && t && t.ny === 1 && (t.block === B.DIRT || t.block === B.GRASS || t.block === B.DIRT_PATH)) {
+    if (!repeat && def.use === 'till' && t && t.ny === 1 && (t.block === B.DIRT || t.block === B.GRASS_BLOCK || t.block === B.DIRT_PATH)) {
       if (ctx.world.getBlock(t.x, t.y + 1, t.z) === B.AIR || BlockRegistry.replaceable[ctx.world.getBlock(t.x, t.y + 1, t.z)]) {
         ctx.world.setBlock(t.x, t.y + 1, t.z, B.AIR);
         ctx.world.setBlock(t.x, t.y, t.z, B.FARMLAND, 0);
@@ -276,6 +287,8 @@ export class PlayerInteraction {
       return;
     }
     if (!repeat && def.use === 'compass' && def.target) return this.host.useCompass(def.target);
+    if (!repeat && def.use === 'spawn_compass') return this.host.spawnCompass();
+    if (!repeat && this.useSpecial(def.use, held.id)) return;
     if (!repeat && def.use === 'cast') return this.castScepter();
     if (def.use === 'shoot') return; // géré par la charge de l'arc
     // 4) pose de bloc
@@ -286,7 +299,8 @@ export class PlayerInteraction {
         return;
       }
       const blk = BlockRegistry.get(pv.block);
-      ctx.world.setBlock(pv.x, pv.y, pv.z, pv.block, blk.orientable ? this.orientationMeta() : 0);
+      ctx.world.setBlock(pv.x, pv.y, pv.z, pv.block, pv.meta);
+      for (const [ex, ey, ez, eid, em] of pv.extra) ctx.world.setBlock(ex, ey, ez, eid, em);
       ctx.audio.blockSound('place', blk.sound, pv.x + 0.5, pv.y + 0.5, pv.z + 0.5);
       if (!p.creative) inv.takeFromSlot(inv.selected, 1);
       ctx.stats.inc('blocksPlaced');
@@ -302,6 +316,190 @@ export class PlayerInteraction {
         ctx.particles.burst('dust', p.x, p.y + 1.4, p.z, 4);
         ctx.stats.inc('eaten');
       }
+    }
+  }
+
+  /** Bloc posé, orientation et blocs associés selon la face visée (comme dans le jeu de référence). */
+  private computePlacement(t: RayHit, block: number): PlacementPreview {
+    const w = this.ctx.world;
+    const b = BlockRegistry.get(block);
+    const tb = BlockRegistry.get(t.block);
+    const look = facingFromYaw(this.ctx.player.yaw);
+    const fy = t.py - Math.floor(t.py);
+    const mk = (x: number, y: number, z: number, meta: number, extra: PlacementPreview['extra'] = []): PlacementPreview => ({ x, y, z, block, meta, extra, valid: true });
+    // dalle sur une dalle identique : dalle double
+    if (b.shape === 'slab' && t.block === block) {
+      const m = w.getMeta(t.x, t.y, t.z) & 3;
+      if ((m === 0 && t.ny === 1) || (m === 1 && t.ny === -1)) return this.validate(mk(t.x, t.y, t.z, 2), true);
+    }
+    const replace = tb.replaceable && tb.id !== B.AIR;
+    const x = replace ? t.x : t.x + t.nx;
+    const y = replace ? t.y : t.y + t.ny;
+    const z = replace ? t.z : t.z + t.nz;
+    if (b.shape === 'slab') {
+      if (w.getBlock(x, y, z) === block && (w.getMeta(x, y, z) & 3) !== 2) return this.validate(mk(x, y, z, 2), true);
+      const top = t.ny === -1 || (t.ny === 0 && fy > 0.5);
+      return this.validate(mk(x, y, z, top ? 1 : 0));
+    }
+    if (b.shape === 'stairs') {
+      const upside = t.ny === -1 || (t.ny === 0 && fy > 0.5);
+      return this.validate(mk(x, y, z, look | (upside ? 4 : 0)));
+    }
+    if (b.shape === 'torch') {
+      if (t.ny === 1 || replace) return this.validate(mk(x, y, z, 0));
+      if (t.ny === -1) return { ...mk(x, y, z, 0), valid: false };
+      return this.validate(mk(x, y, z, facingOf(-t.nx, -t.nz) + 1));
+    }
+    if (b.shape === 'ladder') {
+      const f = t.ny === 0 && !replace ? facingOf(-t.nx, -t.nz) : look;
+      return this.validate(mk(x, y, z, f));
+    }
+    if (b.shape === 'door') return this.validate(mk(x, y, z, look, [[x, y + 1, z, block, look | 8]]));
+    if (b.shape === 'bed') {
+      const [dx, dz] = FACING_DIR[look];
+      return this.validate(mk(x, y, z, look, [[x + dx, y, z + dz, block, look | 4]]));
+    }
+    return this.validate(mk(x, y, z, b.orientable ? opposite(look) : 0));
+  }
+
+  private validate(pv: PlacementPreview, merging = false): PlacementPreview {
+    pv.valid = merging ? this.free(pv.x, pv.y, pv.z, pv.block) : this.canPlace(pv.x, pv.y, pv.z, pv.block, pv.meta);
+    for (const [x, y, z] of pv.extra) if (pv.valid && !this.canPlace(x, y, z, pv.block, -1)) pv.valid = false;
+    if (pv.valid && pv.extra.length && BlockRegistry.get(pv.block).shape === 'bed') {
+      const [x, y, z] = pv.extra[0];
+      if (!this.ctx.world.isSolid(x, y - 1, z)) pv.valid = false;
+    }
+    return pv;
+  }
+
+  /** Personne (joueur, créature) ne gêne la pose d'un bloc solide. */
+  private free(x: number, y: number, z: number, block: number): boolean {
+    if (!BlockRegistry.solid[block] && !BlockRegistry.shape[block]) return true;
+    const pb = this.ctx.player.body;
+    const hw = pb.halfWidth;
+    if (pb.x + hw > x && pb.x - hw < x + 1 && pb.y + pb.height > y && pb.y < y + 1 && pb.z + hw > z && pb.z - hw < z + 1) {
+      const sh = BlockRegistry.get(block).shape;
+      if (!(sh === 'torch' || sh === 'ladder' || sh === 'plate')) return false;
+    }
+    return !this.entities.occupies(x, y, z);
+  }
+
+  private toggleDoor(x: number, y: number, z: number) {
+    const w = this.ctx.world;
+    const id = w.getBlock(x, y, z);
+    const meta = w.getMeta(x, y, z);
+    const by = meta & 8 ? y - 1 : y;
+    const open = !(w.getMeta(x, by, z) & 4);
+    for (const yy of [by, by + 1]) {
+      if (w.getBlock(x, yy, z) !== id) continue;
+      const m = w.getMeta(x, yy, z);
+      w.setBlock(x, yy, z, id, open ? m | 4 : m & ~4, false);
+    }
+    this.ctx.audio.play(open ? 'door_open' : 'door_close', { x: x + 0.5, y: by + 1, z: z + 0.5 });
+    this.entities.combat.swing = 0.7;
+  }
+
+  /** Seaux, lait, poudre d'os, cisailles, briquet. Retourne vrai si l'action a eu lieu. */
+  private useSpecial(use: string | undefined, itemId: string): boolean {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const inv = p.inventory;
+    const w = ctx.world;
+    const t = this.target;
+    const replaceHeld = (id: string) => {
+      if (p.creative) return;
+      const s = inv.selectedStack!;
+      if (s.count <= 1) inv.slots[inv.selected] = { id, count: 1 };
+      else {
+        s.count--;
+        const rest = inv.add({ id, count: 1 });
+        if (rest > 0) this.entities.spawnItem(id, 1, p.x, p.y + 1, p.z);
+      }
+      inv.changed();
+    };
+    switch (use) {
+      case 'bucket': {
+        const [ox, oy, oz, dx, dy, dz] = this.eye();
+        const hit = raycastBlocks(w, ox, oy, oz, dx, dy, dz, this.reach, true);
+        if (!hit || !BlockRegistry.liquid[hit.block] || w.getMeta(hit.x, hit.y, hit.z) !== 0) return false;
+        const lava = hit.block === B.LAVA;
+        w.setBlock(hit.x, hit.y, hit.z, B.AIR);
+        ctx.audio.play('bucket_fill', { x: hit.x, y: hit.y, z: hit.z });
+        replaceHeld(lava ? 'lava_bucket' : 'water_bucket');
+        return true;
+      }
+      case 'water_bucket':
+      case 'lava_bucket': {
+        if (!t) return false;
+        const tb = BlockRegistry.get(t.block);
+        const [x, y, z] = tb.replaceable ? [t.x, t.y, t.z] : [t.x + t.nx, t.y + t.ny, t.z + t.nz];
+        const cur = w.getBlock(x, y, z);
+        if (cur < 0 || !BlockRegistry.replaceable[cur]) return false;
+        w.setBlock(x, y, z, use === 'water_bucket' ? B.WATER : B.LAVA, 0);
+        ctx.audio.play('bucket_empty', { x, y, z });
+        if (!p.creative) {
+          inv.slots[inv.selected] = { id: 'bucket', count: 1 };
+          inv.changed();
+        }
+        return true;
+      }
+      case 'milk':
+        p.poisonTimer = 0;
+        p.regenEffect = 0;
+        ctx.audio.play('eat');
+        if (!p.creative) {
+          inv.slots[inv.selected] = { id: 'bucket', count: 1 };
+          inv.changed();
+        }
+        return true;
+      case 'bone_meal': {
+        if (!t) return false;
+        const b = BlockRegistry.get(t.block);
+        let ok = false;
+        if (CROP_MAX[b.key] !== undefined) {
+          const m = w.getMeta(t.x, t.y, t.z);
+          if (m < CROP_MAX[b.key]) {
+            w.setMeta(t.x, t.y, t.z, Math.min(CROP_MAX[b.key], m + 2 + Math.floor(Math.random() * 3)));
+            ok = true;
+          }
+        } else if (b.key.endsWith('_sapling')) {
+          ok = true;
+          if (Math.random() < 0.45) this.host.growSapling(t.x, t.y, t.z, t.block);
+        } else if (t.block === B.GRASS_BLOCK && t.ny === 1) {
+          ok = true;
+          const plants = [B.SHORT_GRASS, B.SHORT_GRASS, B.SHORT_GRASS, B.SHORT_GRASS, B.DANDELION, B.POPPY];
+          for (let i = 0; i < 24; i++) {
+            const x = t.x + Math.round((Math.random() - 0.5) * 6), z = t.z + Math.round((Math.random() - 0.5) * 6);
+            for (let dy = 1; dy >= -1; dy--) {
+              const y = t.y + dy;
+              if (w.getBlock(x, y, z) === B.GRASS_BLOCK && w.getBlock(x, y + 1, z) === B.AIR) {
+                w.setBlock(x, y + 1, z, plants[Math.floor(Math.random() * plants.length)]);
+                break;
+              }
+            }
+          }
+        }
+        if (!ok) return false;
+        ctx.particles.burst('magic', t.x + 0.5, t.y + 1, t.z + 0.5, 10);
+        if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+        return true;
+      }
+      case 'shear': {
+        const m = this.targetMob;
+        if (m instanceof Animal && m.def.traits?.includes('shearable') && !m.sheared && !m.baby) {
+          m.shear(ctx);
+          ctx.audio.play('shear', { x: m.x, y: m.y, z: m.z });
+          if (!p.creative) inv.damageSelected(1);
+          return true;
+        }
+        return false;
+      }
+      case 'ignite':
+        // le briquet n'a d'effet que sur la TNT (pas de feu dans cette version)
+        return false;
+      default:
+        void itemId;
+        return false;
     }
   }
 

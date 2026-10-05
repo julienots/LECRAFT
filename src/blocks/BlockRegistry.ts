@@ -1,6 +1,9 @@
-import type { Block, BlockDef } from './Block';
+import type { Block, BlockDef, ShapeKind } from './Block';
 import { BLOCK_DEFS } from '../data/blocks';
 import { TileRegistry } from '../render/TileRegistry';
+
+const RENDER_TYPES = ['none', 'cube', 'cutout', 'cross', 'liquid', 'translucent', 'model'] as const;
+export const SHAPES: ShapeKind[] = ['slab', 'stairs', 'door', 'ladder', 'fence', 'pane', 'bed', 'torch', 'chest', 'farmland', 'snow_layer', 'cactus', 'plate', 'lantern'];
 
 /**
  * Registre des blocs : convertit les définitions data-driven en objets compacts
@@ -14,9 +17,15 @@ class BlockRegistryImpl {
   opaque = new Uint8Array(256);
   lightEmit = new Uint8Array(256);
   lightFilter = new Uint8Array(256);
-  renderType = new Uint8Array(256); // 0 none,1 cube,2 cutout,3 cross,4 liquid,5 translucent
+  renderType = new Uint8Array(256); // 0 none,1 cube,2 cutout,3 cross,4 liquid,5 translucent,6 model
   liquid = new Uint8Array(256); // 0 none, 1 water, 2 lava
   replaceable = new Uint8Array(256);
+  /** Forme : 0 = aucune, sinon index+1 dans SHAPES. */
+  shape = new Uint8Array(256);
+  /** Teinte : 0 aucune, 1 herbe, 2 feuillage, 3 couleur fixe (tintColor). */
+  tintType = new Uint8Array(256);
+  tintColor = new Uint32Array(256);
+  climbable = new Uint8Array(256);
 
   constructor(defs: BlockDef[]) {
     defs.forEach((d) => this.register(d));
@@ -26,7 +35,7 @@ class BlockRegistryImpl {
     if (this.byKey.has(def.key)) throw new Error(`Bloc dupliqué: ${def.key}`);
     const id = this.blocks.length;
     if (id > 255) throw new Error('Maximum 256 blocs (stockage Uint8)');
-    const render = def.render ?? 'cube';
+    const render = def.render ?? (def.shape ? 'model' : 'cube');
     const solid = def.solid ?? !(render === 'none' || render === 'cross' || render === 'liquid');
     const opaque = render === 'cube';
     const t = def.textures ?? {};
@@ -42,6 +51,7 @@ class BlockRegistryImpl {
       hardness: def.hardness,
       def,
       render,
+      shape: def.shape ?? null,
       solid,
       opaque,
       transparent: !opaque,
@@ -62,7 +72,8 @@ class BlockRegistryImpl {
       interact: def.interact ?? null,
       needsSupport: def.needsSupport ?? false,
       supportBlocks: def.supportBlocks ?? null,
-      orientable: def.orientable ?? !!t.front,
+      orientable: def.orientable ?? false,
+      climbable: def.climbable ?? false,
       drops: def.drops ?? [{ item: def.key }],
       color: def.color ?? '#888888',
     };
@@ -72,9 +83,17 @@ class BlockRegistryImpl {
     this.opaque[id] = opaque ? 1 : 0;
     this.lightEmit[id] = block.light;
     this.lightFilter[id] = block.lightFilter;
-    this.renderType[id] = ['none', 'cube', 'cutout', 'cross', 'liquid', 'translucent'].indexOf(render);
+    this.renderType[id] = RENDER_TYPES.indexOf(render);
     this.liquid[id] = block.liquid === 'water' ? 1 : block.liquid === 'lava' ? 2 : 0;
     this.replaceable[id] = block.replaceable ? 1 : 0;
+    this.shape[id] = def.shape ? SHAPES.indexOf(def.shape) + 1 : 0;
+    this.climbable[id] = block.climbable ? 1 : 0;
+    if (def.tint === 'grass') this.tintType[id] = 1;
+    else if (def.tint === 'foliage') this.tintType[id] = 2;
+    else if (def.tint) {
+      this.tintType[id] = 3;
+      this.tintColor[id] = parseInt(def.tint.slice(1), 16);
+    }
     return block;
   }
 
@@ -92,11 +111,12 @@ class BlockRegistryImpl {
   id(key: string): number {
     return this.byName(key).id;
   }
+  isShape(id: number, kind: ShapeKind) {
+    return this.shape[id] === SHAPES.indexOf(kind) + 1;
+  }
 }
 
 export const BlockRegistry = new BlockRegistryImpl(BLOCK_DEFS);
 
-/** Identifiants fréquemment utilisés (résolus une fois). */
-export const B = Object.freeze(
-  Object.fromEntries(BLOCK_DEFS.map((d, i) => [d.key.toUpperCase(), i])) as Record<string, number>,
-);
+/** Identifiants des blocs par clé en majuscules (B.STONE, B.OAK_LOG...). */
+export const B = Object.freeze(Object.fromEntries(BLOCK_DEFS.map((d, i) => [d.key.toUpperCase(), i])) as Record<string, number>);

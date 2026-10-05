@@ -86,6 +86,7 @@ export class Mob extends Entity {
     const dy = p.y - this.y;
     if (d > this.def.attackRange * 1.2 || dy > 2.5 || dy < -2) return;
     const dealt = p.damage(this.def.damage, 'mob', (dx / d) * 5, (dz / d) * 5);
+    if (dealt > 0 && this.has('poison') && p.difficulty !== 'easy') p.poisonTimer = Math.max(p.poisonTimer, p.difficulty === 'hard' ? 15 : 7);
     if (dealt > 0) {
       ctx.audio.play('hurt', { volume: 0.9 });
       ctx.haptic('medium');

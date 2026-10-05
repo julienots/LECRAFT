@@ -4,7 +4,7 @@ import { ItemRegistry } from '../inventory/ItemRegistry';
 import { clamp } from '../util/math';
 import { PlayerPhysics, EYE_HEIGHT, SNEAK_EYE_HEIGHT } from './PlayerPhysics';
 
-export type DamageSource = 'mob' | 'fall' | 'lava' | 'drown' | 'starve' | 'contact' | 'void' | 'projectile' | 'boss' | 'fire';
+export type DamageSource = 'mob' | 'fall' | 'lava' | 'drown' | 'starve' | 'contact' | 'void' | 'projectile' | 'boss' | 'fire' | 'explosion';
 
 export interface PlayerSnapshot {
   x: number; y: number; z: number; yaw: number; pitch: number;
@@ -36,6 +36,10 @@ export class Player {
   hurtFlash = 0;
   /** Ralentissement (givre) restant en secondes. */
   slowTimer = 0;
+  /** Poison (araignée venimeuse) et régénération (pomme dorée), en secondes. */
+  poisonTimer = 0;
+  regenEffect = 0;
+  private effectTick = 0;
   regenTimer = 0;
   starveTimer = 0;
   sneaking = false;
@@ -119,8 +123,9 @@ export class Player {
   eat(itemId: string): boolean {
     const food = ItemRegistry.get(itemId)?.food;
     if (!food) return false;
-    if (this.hunger >= 20 && !this.creative) return false;
+    if (this.hunger >= 20 && !this.creative && itemId !== 'golden_apple') return false;
     this.hunger = Math.min(20, this.hunger + food.hunger);
+    if (food.effect === 'regen') this.regenEffect = 5;
     this.saturation = Math.min(this.hunger, this.saturation + food.saturation);
     return true;
   }
@@ -143,6 +148,17 @@ export class Player {
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt);
     this.slowTimer = Math.max(0, this.slowTimer - dt);
+    this.effectTick += dt;
+    if (this.effectTick >= 1.25) {
+      this.effectTick = 0;
+      if (this.poisonTimer > 0 && this.health > 1 && !this.creative) {
+        this.health = Math.max(1, this.health - 1);
+        this.hurtFlash = 0.2;
+      }
+      if (this.regenEffect > 0) this.heal(1);
+    }
+    this.poisonTimer = Math.max(0, this.poisonTimer - dt);
+    this.regenEffect = Math.max(0, this.regenEffect - dt);
     if (this.creative) {
       this.health = this.maxHealth;
       this.hunger = 20;

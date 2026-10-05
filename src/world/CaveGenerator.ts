@@ -120,18 +120,23 @@ export class CaveGenerator {
           const below = blocks[idx(x, y - 1, z)];
           if (below === B.STONE) {
             if (lush) {
-              blocks[idx(x, y - 1, z)] = B.MOSS;
-              if (rng.next() < 0.05) blocks[i] = B.GLOW_MUSHROOM;
-              else if (rng.next() < 0.1) blocks[i] = B.TALL_GRASS;
-            } else if (rng.next() < 0.006) blocks[i] = B.GLOW_MUSHROOM;
+              blocks[idx(x, y - 1, z)] = B.MOSS_BLOCK;
+              if (rng.next() < 0.05) blocks[i] = B.GLOW_LICHEN;
+              else if (rng.next() < 0.03) blocks[i] = B.SHORT_GRASS;
+            } else if (rng.next() < 0.004) blocks[i] = B.GLOW_LICHEN;
+            else if (rng.next() < 0.003) blocks[i] = rng.next() < 0.5 ? B.BROWN_MUSHROOM : B.RED_MUSHROOM;
           }
           if (y < 28 && rng.next() < 0.0015) {
-            // Petite géode de cristal (structure rare)
+            // Petite géode d'améthyste (structure rare)
             for (let k = 0; k < 4; k++) {
               const ox = x + rng.int(-1, 1), oy = y + rng.int(-1, 1), oz = z + rng.int(-1, 1);
               if (ox >= 0 && ox < 16 && oz >= 0 && oz < 16 && oy > 2) {
                 const j = idx(ox, oy, oz);
-                if (blocks[j] === B.STONE) blocks[j] = B.CRYSTAL_BLOCK;
+                if (blocks[j] === B.STONE) {
+                  blocks[j] = B.AMETHYST_BLOCK;
+                  const up = idx(ox, oy + 1, oz);
+                  if (oy + 1 < WORLD_HEIGHT && blocks[up] === B.AIR && rng.next() < 0.5) blocks[up] = B.AMETHYST_CLUSTER;
+                }
               }
             }
           }

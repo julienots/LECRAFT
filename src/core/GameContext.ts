@@ -4,6 +4,7 @@ import type { Player } from '../player/Player';
 import type { Settings } from './Settings';
 import type { DayCycle } from '../world/DayCycle';
 import type { QualityProfile } from './Config';
+import type { SkinProvider } from '../render/MobModels';
 import type { Mob } from '../entities/Mob';
 
 export interface DamageInfo {
@@ -54,6 +55,8 @@ export interface GameContext {
   /** Vrai si un boss a déjà été vaincu (clé position autel). */
   defeatedBosses: Set<string>;
   shadowTexture: THREE.Texture | null;
+  /** Textures des skins de créatures (générées ou pack de ressources). */
+  skins: SkinProvider;
   iconTexture(itemId: string): THREE.Texture;
   /** Pluie active (pour l'IA/brûlure solaire). */
   raining(): boolean;

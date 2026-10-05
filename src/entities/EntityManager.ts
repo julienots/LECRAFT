@@ -26,6 +26,8 @@ export interface SavedMob {
   z: number;
   health: number;
   baby: boolean;
+  wool?: string;
+  sheared?: boolean;
 }
 
 /**
@@ -59,7 +61,7 @@ export class EntityManager implements EntitySpawner {
   // ---------- EntitySpawner ----------
   modelFor(key: string, scale: number): MobModel {
     const list = this.pool.get(key);
-    const m = list?.pop() ?? new MobModel(key, scale, this.ctx?.shadowTexture ?? null);
+    const m = list?.pop() ?? new MobModel(key, scale, this.ctx?.shadowTexture ?? null, this.ctx.skins);
     m.group.scale.setScalar(scale);
     m.group.rotation.set(0, 0, 0);
     m.group.visible = true;
@@ -262,7 +264,7 @@ export class EntityManager implements EntitySpawner {
       if (w.isLoaded(x, z)) {
         const y = w.heightAt(x, z);
         const ground = w.getBlock(x, y, z);
-        if ((ground === B.GRASS || ground === B.SNOWY_GRASS) && w.getBlock(x, y + 1, z) === B.AIR && w.getBlock(x, y + 2, z) === B.AIR) {
+        if ((ground === B.GRASS_BLOCK || ground === B.SNOWY_GRASS_BLOCK || ground === B.PODZOL) && w.getBlock(x, y + 1, z) === B.AIR && w.getBlock(x, y + 2, z) === B.AIR) {
           const biome = w.biomeAt(x, z);
           const list = biome.animals.map((k) => MOB_BY_KEY.get(k)!.def).filter(Boolean);
           const def = weighted(list);
@@ -329,7 +331,7 @@ export class EntityManager implements EntitySpawner {
         s.timer = 6 + Math.floor(Math.random() * 6);
         const def = MOB_DEFS[s.meta] ?? MOB_DEFS[4];
         const linked = this.mobs.filter((m) => m.origin === key && !m.dead).length;
-        if (def.key === 'chef') {
+        if (def.key === 'zombie_chief') {
           if (s.spawned > 0 || linked > 0) continue;
         } else if (linked >= 3) continue;
         // position libre autour de la cage
@@ -383,13 +385,14 @@ export class EntityManager implements EntitySpawner {
   }
 
   serialize(): SavedMob[] {
-    return this.mobs.filter((m) => !m.dead && (m.def.category === 'passive' || m.def.category === 'neutral')).map((m) => ({ key: m.def.key, x: m.x, y: m.y, z: m.z, health: m.health, baby: m.baby }));
+    return this.mobs.filter((m) => !m.dead && (m.def.category === 'passive' || m.def.category === 'neutral')).map((m) => ({ key: m.def.key, x: m.x, y: m.y, z: m.z, health: m.health, baby: m.baby, wool: m instanceof Animal ? m.woolColor : undefined, sheared: m instanceof Animal ? m.sheared : undefined }));
   }
 
   load(list: SavedMob[]) {
     for (const s of list) {
       const m = this.spawnMob(s.key, s.x, s.y + 0.1, s.z, { baby: s.baby, persistent: true });
       if (m) m.health = s.health;
+      if (m instanceof Animal && s.wool) m.setWool(s.wool, !!s.sheared);
     }
   }
 

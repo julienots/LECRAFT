@@ -1,7 +1,23 @@
 /** Définition data-driven d'un bloc. Voir src/data/blocks.ts et README « Ajouter un bloc ». */
-export type ToolType = 'pickaxe' | 'axe' | 'shovel' | 'hoe' | 'sword';
-export type RenderType = 'none' | 'cube' | 'cutout' | 'cross' | 'liquid' | 'translucent';
+export type ToolType = 'pickaxe' | 'axe' | 'shovel' | 'hoe' | 'sword' | 'shears';
+export type RenderType = 'none' | 'cube' | 'cutout' | 'cross' | 'liquid' | 'translucent' | 'model';
 export type SoundType = 'stone' | 'dirt' | 'grass' | 'wood' | 'sand' | 'gravel' | 'glass' | 'leaves' | 'snow' | 'metal' | 'wool';
+/** Formes non cubiques (rendu par boîtes + collisions dédiées). */
+export type ShapeKind =
+  | 'slab'
+  | 'stairs'
+  | 'door'
+  | 'ladder'
+  | 'fence'
+  | 'pane'
+  | 'bed'
+  | 'torch'
+  | 'chest'
+  | 'farmland'
+  | 'snow_layer'
+  | 'cactus'
+  | 'plate'
+  | 'lantern';
 
 export interface DropDef {
   item: string;
@@ -16,7 +32,7 @@ export interface BlockTextures {
   top?: string;
   bottom?: string;
   side?: string;
-  /** Face avant (établi, four, citrouille...). */
+  /** Face avant (établi, fourneau, citrouille...). */
   front?: string;
   /** Texture choisie selon la métadonnée (stades de culture). */
   byMeta?: string[];
@@ -30,8 +46,9 @@ export interface BlockDef {
   tool?: ToolType;
   /** Tier minimal de l'outil pour obtenir les drops (0 = aucun). */
   minTier?: number;
-  render?: RenderType; // défaut 'cube'
-  solid?: boolean; // défaut true sauf none/cross/liquid
+  render?: RenderType; // défaut 'cube' (ou 'model' si shape)
+  shape?: ShapeKind;
+  solid?: boolean;
   liquid?: 'water' | 'lava';
   /** Niveau de lumière émis 0..15. */
   light?: number;
@@ -46,18 +63,24 @@ export interface BlockDef {
   replaceable?: boolean;
   /** Animation de végétation (balancement). */
   sway?: boolean;
-  /** Dégâts infligés au contact (cactus, pièges, lave). */
+  /** Dégâts infligés au contact (cactus, lave). */
   contactDamage?: number;
   /** Ralentissement à la traversée (0..1). */
   friction?: number;
-  /** Interaction (clic « utiliser ») : ouvre une interface. */
-  interact?: 'crafting' | 'furnace' | 'chest';
+  /** Glissant (glace). */
+  slippery?: boolean;
+  /** Interaction (« utiliser ») : interface ou action. */
+  interact?: 'crafting' | 'furnace' | 'chest' | 'door' | 'bed' | 'tnt';
   /** Doit reposer sur un bloc solide (plantes, torches). */
   needsSupport?: boolean;
   /** Blocs autorisés sous une plante. */
   supportBlocks?: string[];
   /** Le bloc s'oriente vers le joueur lors du placement (face avant). */
   orientable?: boolean;
+  /** Teinte de biome : herbe ou feuillage ; ou couleur fixe (#rrggbb). */
+  tint?: 'grass' | 'foliage' | string;
+  /** Escalade (échelles). */
+  climbable?: boolean;
   /** Couleur de teinte pour les particules (fallback). */
   color?: string;
 }
@@ -66,6 +89,7 @@ export interface Block extends Required<Pick<BlockDef, 'key' | 'name' | 'hardnes
   id: number;
   def: BlockDef;
   render: RenderType;
+  shape: ShapeKind | null;
   solid: boolean;
   opaque: boolean; // bloque totalement la vue et la lumière
   transparent: boolean;
@@ -78,7 +102,7 @@ export interface Block extends Required<Pick<BlockDef, 'key' | 'name' | 'hardnes
   tool: ToolType | null;
   minTier: number;
   sound: SoundType;
-  /** Index de tuile par face : 0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z. */
+  /** Index de tuile par face : 0 +X, 1 -X, 2 +Y, 3 -Y, 4 avant(+Z), 5 -Z. */
   faceTiles: number[];
   metaTiles: number[] | null;
   sway: boolean;
@@ -88,6 +112,7 @@ export interface Block extends Required<Pick<BlockDef, 'key' | 'name' | 'hardnes
   needsSupport: boolean;
   supportBlocks: string[] | null;
   orientable: boolean;
+  climbable: boolean;
   drops: DropDef[];
   color: string;
 }

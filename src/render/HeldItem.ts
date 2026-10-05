@@ -23,7 +23,7 @@ export class HeldItem {
   private tileTex(i: number): THREE.Texture {
     let t = this.textures.get(i);
     if (!t) {
-      t = new THREE.CanvasTexture(this.tm.tile(i, BlockRegistry.blocks.find((b) => b.faceTiles.includes(i) && (b.key.endsWith('leaves') || b.key === 'grass')) ? [124, 189, 74] : undefined));
+      t = new THREE.CanvasTexture(this.tm.tile(i, BlockRegistry.blocks.find((b) => b.faceTiles.includes(i) && (b.key.endsWith('leaves') || b.key === 'grass_block' || b.key === 'short_grass')) ? [124, 189, 74] : undefined));
       t.magFilter = t.minFilter = THREE.NearestFilter;
       t.generateMipmaps = false;
       t.colorSpace = THREE.NoColorSpace;
