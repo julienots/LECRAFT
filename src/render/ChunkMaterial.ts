@@ -7,6 +7,7 @@ attribute vec4 aInfo;
 attribute vec4 aTint;
 uniform float uTime;
 uniform float uSway;
+uniform float uWaterAnim;
 varying vec2 vUv;
 varying float vTile;
 varying vec2 vLight;
@@ -24,11 +25,12 @@ void main() {
     wp.x += sin(t) * 0.045;
     wp.z += cos(t * 0.8) * 0.035;
   }
-  if (flag(f, 8.0) > 0.5) {
+  bool liquid = flag(f, 16.0) > 0.5;
+  if (flag(f, 8.0) > 0.5 && uWaterAnim > 0.5) {
     wp.y += sin(uTime * 1.6 + wp.x * 0.9 + wp.z * 0.6) * 0.035 - 0.04;
   }
   float tile = aInfo.x;
-  if (flag(f, 4.0) > 0.5) tile += mod(floor(uTime * 3.0), 4.0);
+  if (flag(f, 4.0) > 0.5 && (!liquid || uWaterAnim > 0.5)) tile += mod(floor(uTime * 3.0), 4.0);
   vTile = tile;
   vFlags = f;
   vUv = aUv;
@@ -92,6 +94,7 @@ export interface ChunkUniforms {
   uFogNear: THREE.IUniform<number>;
   uFogFar: THREE.IUniform<number>;
   uSway: THREE.IUniform<number>;
+  uWaterAnim: THREE.IUniform<number>;
   uAmbient: THREE.IUniform<number>;
   uAO: THREE.IUniform<number>;
 }
@@ -107,6 +110,7 @@ export function createChunkMaterials(atlas: THREE.Texture) {
     uFogNear: { value: 40 },
     uFogFar: { value: 80 },
     uSway: { value: 1 },
+    uWaterAnim: { value: 1 },
     uAmbient: { value: 0.035 },
     uAO: { value: 1 },
   };

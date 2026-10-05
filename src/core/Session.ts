@@ -106,7 +106,8 @@ export class Session implements GameContext {
       console.error('[worker]', m);
       game.hud.toast('Erreur du générateur (voir console)', 'warn');
     };
-    this.particles = new ParticleSystem(this.particleLimit(), game.textures);
+    this.particles = new ParticleSystem(QUALITY_PROFILES.HIGH.maxParticles, game.textures);
+    this.particles.limit = this.particleLimit();
     this.highlight = new BlockHighlight(game.textures);
     this.held = new HeldItem(game.textures);
     this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group);
@@ -457,6 +458,7 @@ export class Session implements GameContext {
     u.uDaylight.value = Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
     u.uSkyColor.value.copy(r.sky.skyLightColor);
     u.uSway.value = this.profile.foliageAnimation ? 1 : 0;
+    u.uWaterAnim.value = s.waterQuality === 'animated' ? 1 : 0;
     u.uAO.value = s.shadows === 'off' ? 0.65 : 1;
     const headBlock = this.world.getBlock(Math.floor(cam.position.x), Math.floor(cam.position.y), Math.floor(cam.position.z));
     const underwater = headBlock === B.WATER;
