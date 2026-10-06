@@ -140,10 +140,22 @@ export class Mob extends Entity {
     }
     if (this.dead) {
       this.deathTimer += dt;
+      if (this.def.key === 'ender_dragon') {
+        // mort du dragon : il s'élève lentement au milieu des explosions puis disparaît
+        this.body.vx = this.body.vz = 0;
+        this.body.y += dt * 1.5;
+        if (Math.random() < dt * 14) ctx.particles.burst('explosion', this.x + (Math.random() - 0.5) * 8, this.y + 1 + Math.random() * 4, this.z + (Math.random() - 0.5) * 8, 6);
+        if (this.deathTimer > 5) this.removed = true;
+        return;
+      }
       this.body.vx *= 0.8;
       this.body.vz *= 0.8;
       this.body.step(ctx.world, dt);
-      if (this.deathTimer > 0.8) this.removed = true;
+      // comme le jeu original : bascule sur le côté pendant 1 s puis disparaît dans un nuage de fumée
+      if (this.deathTimer > 1) {
+        this.removed = true;
+        ctx.particles.burst('poof', this.x, this.y + this.body.height / 2, this.z, Math.round(10 + this.def.width * 10));
+      }
       return;
     }
     if (this.effects.map.size) {
@@ -238,9 +250,10 @@ export class Mob extends Entity {
   render(ctx: GameContext, alpha: number, t: number) {
     const g = this.model.group;
     g.visible = !this.effects.level('invisibility');
-    g.position.set(this.x, this.y + (this.dead ? -this.deathTimer * 0.3 : 0), this.z);
+    g.position.set(this.x, this.y, this.z);
     g.rotation.y = this.yaw;
-    g.rotation.z = this.dead ? Math.min(Math.PI / 2, this.deathTimer * 4) : 0;
+    // angle de chute vanilla : √(1,6 × (ticks − 1) / 20), plafonné à 90°
+    g.rotation.z = this.dead && this.def.key !== 'ender_dragon' ? (Math.PI / 2) * Math.min(1, Math.sqrt(Math.max(0, this.deathTimer * 20 - 1) / 20 * 1.6)) : 0;
     const sp = Math.hypot(this.body.vx, this.body.vz);
     let headYaw = 0, headPitch = 0;
     const p = ctx.player;

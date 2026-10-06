@@ -5,16 +5,17 @@ import { Entity } from './Entity';
 /** Objet tombé au sol : flotte, tourne, est attiré puis ramassé par le joueur. */
 export class ItemEntity extends Entity {
   readonly kind = 'item' as const;
-  object3d: THREE.Sprite;
+  object3d: THREE.Mesh;
   pickupDelay = 0.6;
-  constructor(public itemId: string, public count: number, x: number, y: number, z: number, material: THREE.SpriteMaterial, public durability?: number) {
+  /** Décalage de rotation et de flottement propre à chaque objet (comme bobOffs en Java). */
+  private bobOffs = Math.random() * Math.PI * 2;
+  constructor(public itemId: string, public count: number, x: number, y: number, z: number, mesh: THREE.Mesh, public durability?: number) {
     super(0.125, 0.25);
     this.body.setPos(x, y, z);
     this.body.vx = (Math.random() - 0.5) * 3;
     this.body.vz = (Math.random() - 0.5) * 3;
     this.body.vy = 4;
-    this.object3d = new THREE.Sprite(material);
-    this.object3d.scale.setScalar(0.42);
+    this.object3d = mesh;
   }
 
   update(ctx: GameContext, dt: number) {
@@ -43,7 +44,10 @@ export class ItemEntity extends Entity {
 
   syncObject(t: number) {
     const b = this.body;
-    this.object3d.position.set(b.x, b.y + 0.25 + Math.sin(t * 3 + this.id) * 0.06, b.z);
+    // flotte (sin(âge/10 ticks) × 0,1 + 0,1) et tourne d'un radian par seconde, comme l'édition Java
+    const half = (this.object3d.userData.half as number | undefined) ?? 0.2;
+    this.object3d.position.set(b.x, b.y + half + 0.1 + Math.sin(t * 2 + this.bobOffs) * 0.1, b.z);
+    this.object3d.rotation.y = t + this.bobOffs;
   }
 
   dispose() {

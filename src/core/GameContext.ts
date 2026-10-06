@@ -30,7 +30,7 @@ export interface CombatApi {
 export interface ParticleFx {
   blockBreak(x: number, y: number, z: number, block: number): void;
   blockHit(x: number, y: number, z: number, block: number, nx: number, ny: number, nz: number): void;
-  burst(kind: 'smoke' | 'fire' | 'lava' | 'water' | 'damage' | 'explosion' | 'magic' | 'hearts' | 'dust' | 'ice' | 'crystal', x: number, y: number, z: number, count?: number): void;
+  burst(kind: 'smoke' | 'fire' | 'lava' | 'water' | 'damage' | 'explosion' | 'magic' | 'hearts' | 'dust' | 'ice' | 'crystal' | 'poof', x: number, y: number, z: number, count?: number): void;
 }
 /** Sons (implémentés par AudioManager). */
 export interface SoundFx {
@@ -68,6 +68,8 @@ export interface GameContext {
   /** Dimension de la partie en cours. */
   dimension: 'overworld' | 'nether' | 'end';
   iconTexture(itemId: string): THREE.Texture;
+  /** Modèle 3D d'un objet tombé au sol. */
+  droppedItem(itemId: string): THREE.Mesh;
   /** Pluie active (pour l'IA/brûlure solaire). */
   raining(): boolean;
   /** Vibration courte (Android). */

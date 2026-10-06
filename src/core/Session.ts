@@ -51,6 +51,7 @@ import type { Boss } from '../entities/Boss';
 import { Scoreboard, type ScoreboardSnapshot } from '../scripting/Scoreboard';
 import { Mob } from '../entities/Mob';
 import { ScriptHost } from '../scripting/ScriptHost';
+import { DroppedItemModels } from '../render/DroppedItems';
 
 export interface WorldState {
   version: number;
@@ -106,6 +107,7 @@ export class Session implements GameContext {
   readonly scene: THREE.Scene;
   readonly shadowTexture: THREE.Texture;
   private iconTex = new Map<string, THREE.Texture>();
+  private dropped: DroppedItemModels;
   /** Dimension de cette partie (un changement de dimension recrée la session). */
   readonly dimension: Dimension;
   private dims: Partial<Record<Dimension, DimState>> = {};
@@ -191,6 +193,7 @@ export class Session implements GameContext {
     this.explosions = new Explosions(game.textures);
     this.falling = new FallingBlocks(game.textures);
     this.ticker.onFall = (x, y, z, id) => this.falling.spawn(this, x, y, z, id);
+    this.dropped = new DroppedItemModels(game.textures, (id) => this.iconTexture(id));
     this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group);
     this.controller = new PlayerController(this.player, game.input, game.settings);
     this.controller.onStep = (below) => {
@@ -322,6 +325,10 @@ export class Session implements GameContext {
   get combat() {
     return this.entities.combat;
   }
+  droppedItem(itemId: string): THREE.Mesh {
+    return this.dropped.create(itemId);
+  }
+
   iconTexture(itemId: string): THREE.Texture {
     let t = this.iconTex.get(itemId);
     if (!t) {
@@ -415,6 +422,8 @@ export class Session implements GameContext {
   clearIconCache() {
     this.iconTex.forEach((t) => t.dispose());
     this.iconTex.clear();
+    // les objets déjà au sol gardent leurs matériaux ; les nouveaux utilisent les textures du pack
+    this.dropped = new DroppedItemModels(this.game.textures, (id) => this.iconTexture(id));
     this.held.setItem('');
   }
 
@@ -1098,6 +1107,7 @@ export class Session implements GameContext {
 
   dispose() {
     this.scripts?.dispose();
+    this.dropped.dispose();
     document.documentElement.classList.remove('view-front');
     if (this.avatar) {
       this.scene.remove(this.avatar.group);

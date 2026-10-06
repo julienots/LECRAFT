@@ -116,6 +116,7 @@ export class ParticleSystem implements ParticleFx {
         case 'hearts': this.emit(x + rx * 0.8, y + ry * 0.5, z + rz * 0.8, rx * 0.5, 1.5, rz * 0.5, 1, 0.3, 0.45, 0.14, 1.2, 0); break;
         case 'dust': { const v = 0.55 + Math.random() * 0.2; this.emit(x + rx, y + ry * 0.3, z + rz, rx * 3, 0.5 + ry * 1.5, rz * 3, v + 0.1, v, v * 0.8, 0.11, 0.7, 2); break; }
         case 'ice': this.emit(x + rx * 0.8, y + ry * 0.6, z + rz * 0.8, rx * 3, 1 + ry * 3, rz * 3, 0.75, 0.92, 1, 0.09, 0.7, 8); break;
+        case 'poof': { const v = 0.82 + Math.random() * 0.18; this.emit(x + rx * 1.2, y + (ry - 0.5) * 1.2, z + rz * 1.2, rx * 1.2, 0.4 + ry * 0.8, rz * 1.2, v, v, v, 0.13 + Math.random() * 0.06, 0.5 + Math.random() * 0.5, -0.4); break; }
         case 'crystal': this.emit(x + rx * 0.8, y + ry * 0.6, z + rz * 0.8, rx * 3, 1 + ry * 3, rz * 3, 0.4, 0.95, 0.98, 0.09, 0.7, 6); break;
       }
     }

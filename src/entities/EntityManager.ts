@@ -50,7 +50,6 @@ export class EntityManager implements EntitySpawner {
   readonly entities: Entity[] = [];
   readonly group = new THREE.Group();
   private pool = new Map<string, MobModel[]>();
-  private itemMats = new Map<string, THREE.SpriteMaterial>();
   private spawnTimer = 0;
   private lodTick = 0;
   readonly damage: DamageSystem;
@@ -111,12 +110,7 @@ export class EntityManager implements EntitySpawner {
 
   spawnItem(id: string, count: number, x: number, y: number, z: number, durability?: number) {
     if (!ItemRegistry.has(id) || count <= 0) return;
-    let mat = this.itemMats.get(id);
-    if (!mat) {
-      mat = new THREE.SpriteMaterial({ map: this.ctx.iconTexture(id), transparent: true, alphaTest: 0.3 });
-      this.itemMats.set(id, mat);
-    }
-    const e = new ItemEntity(id, count, x, y, z, mat, durability);
+    const e = new ItemEntity(id, count, x, y, z, this.ctx.droppedItem(id), durability);
     this.entities.push(e);
     this.group.add(e.object3d);
   }
@@ -549,8 +543,6 @@ export class EntityManager implements EntitySpawner {
     this.clear();
     this.pool.forEach((l) => l.forEach((m) => m.dispose()));
     this.pool.clear();
-    this.itemMats.forEach((m) => m.dispose());
-    this.itemMats.clear();
   }
 }
 

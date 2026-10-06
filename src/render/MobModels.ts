@@ -35,6 +35,8 @@ export interface VanillaModel {
   furSkin?: string;
   /** Entité sans rendu (entités techniques des add-ons). */
   invisible?: boolean;
+  /** Couche lumineuse (yeux des araignées, endermen, dragon) : toujours éclairée. */
+  glow?: string;
 }
 
 const P = (uv: [number, number], box: CubePart['box'], pivot: CubePart['pivot'], extra: Partial<CubePart> = {}): CubePart => ({ uv, box, pivot, ...extra });
@@ -43,6 +45,72 @@ const HALF_PI = Math.PI / 2;
 function quadLegs(uv: [number, number], w: number, h: number, pivots: [number, number, number][], layer?: 'fur', inflate = 0): CubePart[] {
   const names = ['legBR', 'legBL', 'legFR', 'legFL'];
   return pivots.map((p, i) => P(uv, [-w / 2, 0, -w / 2, w, h, w], p, { anim: names[i], mirror: i % 2 === 1, layer, inflate }));
+}
+
+/**
+ * Dragon de l'Ender : géométrie du modèle Java (texture 256×256 « enderdragon/dragon.png »).
+ * Cou (5 segments) et queue (12 segments) chaînés pour onduler ; ailes en deux parties.
+ * Le modèle est remonté de 24 px (OY) pour que le corps soit au centre de la boîte de collision.
+ */
+function dragonModel(): VanillaModel {
+  const OY = -24;
+  const f = -16;
+  const seg = (anim: string, dz: number, child?: CubePart, top?: [number, number, number]): CubePart =>
+    P([192, 104], [-5, -5, -5, 10, 10, 10], top ?? [0, 0, dz], { anim, children: [P([48, 0], [-1, -9, -3, 2, 4, 6], [0, 0, 0]), ...(child ? [child] : [])] });
+  const head = P([112, 30], [-8, -8, 6 + f, 16, 16, 16], [0, 0, -10], {
+    anim: 'dragonHead',
+    children: [
+      P([176, 44], [-6, -1, -8 + f, 12, 5, 16], [0, 0, 0]),
+      P([0, 0], [-5, -12, 12 + f, 2, 4, 6], [0, 0, 0], { mirror: true }),
+      P([112, 0], [-5, -3, -6 + f, 2, 2, 4], [0, 0, 0], { mirror: true }),
+      P([0, 0], [3, -12, 12 + f, 2, 4, 6], [0, 0, 0]),
+      P([112, 0], [3, -3, -6 + f, 2, 2, 4], [0, 0, 0]),
+      P([176, 65], [-6, 0, -16, 12, 4, 16], [0, 4, 8 + f], { anim: 'dragonJaw' }),
+    ],
+  });
+  let neck: CubePart = head;
+  for (let i = 4; i >= 0; i--) neck = seg('dragonNeck', -10, neck, i === 0 ? [0, 14 + OY, -12] : undefined);
+  let tail: CubePart | undefined;
+  for (let i = 11; i >= 0; i--) tail = seg('dragonTail', 10, tail, i === 0 ? [0, 12 + OY, 60] : undefined);
+  const wing = (side: 1 | -1): CubePart => {
+    const x0 = side > 0 ? 0 : -56;
+    return P([112, 88], [x0, -4, -4, 56, 8, 8], [12 * side, 5 + OY, 2], {
+      anim: side > 0 ? 'dragonWingL' : 'dragonWingR', mirror: side > 0,
+      children: [
+        P([-56, 88], [x0, 0, 2, 56, 0, 56], [0, 0, 0], { mirror: side > 0 }),
+        P([112, 136], [x0, -2, -2, 56, 4, 4], [56 * side, 0, 0], {
+          anim: side > 0 ? 'dragonTipL' : 'dragonTipR', mirror: side > 0,
+          children: [P([-56, 144], [x0, 0, 2, 56, 0, 56], [0, 0, 0], { mirror: side > 0 })],
+        }),
+      ],
+    });
+  };
+  const leg = (side: 1 | -1, front: boolean): CubePart =>
+    front
+      ? P([112, 104], [-4, -4, -4, 8, 24, 8], [12 * side, 20 + OY, 2], {
+          rot: [1.3, 0, 0], anim: 'dragonLeg',
+          children: [P([226, 138], [-3, -1, -3, 6, 24, 6], [0, 20, -1], { rot: [-0.5, 0, 0], children: [P([144, 104], [-4, 0, -12, 8, 4, 16], [0, 23, 0], { rot: [0.75, 0, 0] })] })],
+        })
+      : P([0, 0], [-8, -4, -8, 16, 32, 16], [16 * side, 16 + OY, 42], {
+          rot: [1.0, 0, 0], anim: 'dragonLeg',
+          children: [P([196, 0], [-6, -2, 0, 12, 32, 12], [0, 32, -4], { rot: [0.5, 0, 0], children: [P([112, 0], [-9, 0, -20, 18, 6, 24], [0, 31, 4], { rot: [0.75, 0, 0] })] })],
+        });
+  return {
+    skin: 'ender_dragon', texW: 256, texH: 256, glow: 'ender_dragon_eyes',
+    parts: [
+      P([0, 0], [-12, 0, -16, 24, 24, 64], [0, 4 + OY, 8], {
+        children: [-10, 10, 30].map((z) => P([220, 53], [-1, -6, z, 2, 6, 12], [0, 0, 0])),
+      }),
+      neck,
+      tail!,
+      wing(1),
+      wing(-1),
+      leg(1, true),
+      leg(-1, true),
+      leg(1, false),
+      leg(-1, false),
+    ],
+  };
 }
 
 const VANILLA: Record<string, VanillaModel> = {
@@ -89,6 +157,7 @@ const VANILLA: Record<string, VanillaModel> = {
   player: playerModel(),
   zombified_piglin: piglinModel('zombified_piglin'),
   wither_skeleton: humanoid('wither_skeleton', 64, 32, 2),
+  ender_dragon: dragonModel(),
   wither: {
     skin: 'wither', texW: 64, texH: 64,
     parts: [
@@ -128,7 +197,7 @@ const VANILLA: Record<string, VanillaModel> = {
   drowned: humanoid('drowned', 64, 64, 4),
   stray: humanoid('stray', 64, 32, 2),
   enderman: {
-    skin: 'enderman', texW: 64, texH: 32,
+    skin: 'enderman', texW: 64, texH: 32, glow: 'enderman_eyes',
     parts: [
       P([0, 0], [-4, -8, -4, 8, 8, 8], [0, -14, 0], { anim: 'head', inflate: -0.5, children: [P([0, 16], [-4, -8, -4, 8, 8, 8], [0, 0, 0], { inflate: -0.5 })] }),
       P([32, 16], [-4, 0, -2, 8, 12, 4], [0, -14, 0]),
@@ -208,8 +277,8 @@ const VANILLA: Record<string, VanillaModel> = {
       ...quadLegs([0, 16], 4, 6, [[-2, 18, 4], [2, 18, 4], [-2, 18, -4], [2, 18, -4]]),
     ],
   },
-  spider: spider('spider'),
-  cave_spider: spider('cave_spider'),
+  spider: { ...spider('spider'), glow: 'spider_eyes' },
+  cave_spider: { ...spider('cave_spider'), glow: 'cave_spider_eyes' },
   slime: {
     skin: 'slime', texW: 64, texH: 32,
     parts: [
@@ -408,6 +477,8 @@ export class MobModel {
   readonly material: THREE.MeshBasicMaterial;
   /** Matériau de la laine (moutons), teinté selon la couleur. */
   readonly furMaterial: THREE.MeshBasicMaterial | null = null;
+  /** Yeux lumineux (non teintés par la lumière). */
+  readonly glowMaterial: THREE.MeshBasicMaterial | null = null;
   readonly parts = new Map<string, THREE.Object3D[]>();
   readonly furParts: THREE.Object3D[] = [];
   private shadow: THREE.Mesh | null = null;
@@ -422,6 +493,11 @@ export class MobModel {
     if (def) {
       this.material = new THREE.MeshBasicMaterial({ map: skins.skin(def.skin), transparent: type === 'slime', alphaTest: type === 'slime' ? 0.05 : 0.5, side: type === 'slime' ? THREE.DoubleSide : THREE.FrontSide, depthWrite: type !== 'slime' });
       if (def.furSkin) this.furMaterial = new THREE.MeshBasicMaterial({ map: skins.skin(def.furSkin), alphaTest: 0.5 });
+      if (def.glow)
+        this.glowMaterial = new THREE.MeshBasicMaterial({
+          map: skins.skin(def.glow), transparent: true, alphaTest: 0.05, depthWrite: false,
+          blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+        });
       const root = new THREE.Group();
       for (const p of def.parts) root.add(this.buildPart(p, def));
       this.group.add(root);
@@ -453,6 +529,11 @@ export class MobModel {
       const mesh = new THREE.Mesh(cachedCube(p, def.texW, def.texH), mat);
       pivot.add(mesh);
       if (fur) this.furParts.push(mesh);
+      else if (this.glowMaterial) {
+        const g = new THREE.Mesh(mesh.geometry, this.glowMaterial);
+        g.renderOrder = 2;
+        pivot.add(g);
+      }
     }
     if (p.bone) this.bones.set(p.bone, { o: pivot, rot: pivot.rotation.clone(), pos: pivot.position.clone() });
     if (p.anim) {
@@ -507,6 +588,26 @@ export class MobModel {
     this.rot('witherHeadR', (b, o) => (o.rotation.y = b.y + Math.sin(t * 1.3) * 0.4));
     this.rot('witherHeadL', (b, o) => (o.rotation.y = b.y + Math.sin(t * 1.1 + 2) * 0.4));
     this.rot('witherRibs', (b, o) => (o.rotation.x = b.x + (0.065 + 0.05 * Math.cos(t * 2)) * Math.PI));
+    // dragon de l'Ender : battement d'ailes (comme le modèle Java), cou et queue qui ondulent
+    if (this.type === 'ender_dragon') {
+      const a = t * 4.2;
+      // rotations vanilla (x, y, z) → repère du jeu (x, -y, -z)
+      this.rot('dragonWingL', (_b, o) => o.rotation.set(0.125 - Math.cos(a) * 0.2, -0.25, (Math.sin(a) + 0.125) * 0.8));
+      this.rot('dragonWingR', (_b, o) => o.rotation.set(0.125 - Math.cos(a) * 0.2, 0.25, -(Math.sin(a) + 0.125) * 0.8));
+      this.rot('dragonTipL', (_b, o) => (o.rotation.z = -(Math.sin(a + 2) + 0.5) * 0.75));
+      this.rot('dragonTipR', (_b, o) => (o.rotation.z = (Math.sin(a + 2) + 0.5) * 0.75));
+      this.rot('dragonNeck', (b, o) => {
+        o.rotation.x = b.x + Math.sin(a - 1) * 0.03;
+        o.rotation.y = b.y + Math.sin(t * 0.9) * 0.04;
+      });
+      this.rot('dragonTail', (b, o) => {
+        o.rotation.x = b.x + Math.sin(a + 1) * 0.025;
+        o.rotation.y = b.y + Math.sin(t * 1.2) * 0.05;
+      });
+      this.rot('dragonJaw', (b, o) => (o.rotation.x = b.x + (Math.sin(a) + 1) * 0.1 + attack * 0.6));
+      this.rot('dragonHead', (b, o) => (o.rotation.x = b.x - headPitch * 0.5));
+      this.rot('dragonLeg', (b, o) => (o.rotation.x = b.x + (Math.sin(a) + 1) * 0.05));
+    }
     this.rot('tail', (b, o) => (o.rotation.z = b.z + Math.sin(t * 3) * 0.1 * (1 + amp)));
     this.rot('tentacle', (b, o) => (o.rotation.x = b.x + 0.15 + Math.sin(t * 2.2 + o.position.x * 3 + o.position.z * 5) * 0.25));
     for (let r = 0; r < 3; r++) this.rot(`spin${r}`, (b, o) => (o.rotation.y = b.y + t * (r === 1 ? -1.4 : 1.1 + r * 0.3)));
@@ -568,6 +669,7 @@ export class MobModel {
   dispose() {
     this.material.dispose();
     this.furMaterial?.dispose();
+    this.glowMaterial?.dispose();
     if (this.shadow) (this.shadow.material as THREE.Material).dispose();
   }
 }

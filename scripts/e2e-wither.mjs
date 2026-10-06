@@ -172,6 +172,38 @@ try {
     const log = [...document.querySelectorAll('.chat-line, .chat-msg, .chat div')].map((e) => e.textContent).join(' | ');
     return { last: s.lastDeath, at, compass: s.hud.compassTarget?.name, msg: /Vous êtes mort en/.test(log) || /Vous êtes mort en/.test(document.body.textContent) };
   });
+  const dragon = await G(async () => {
+    const s = window.__lecraft.session, a = window.__a;
+    const d = s.entities.spawnMob('ender_dragon', a.x + 0.5, a.y + 20, a.z + 0.5, { persistent: true });
+    const r = { vanilla: d.model.vanilla, wings: !!d.model.parts.get('dragonWingL') && !!d.model.parts.get('dragonTipR'), neck: d.model.parts.get('dragonNeck')?.length, tail: d.model.parts.get('dragonTail')?.length };
+    r.glow = !!d.model.glowMaterial;
+    d.removed = true;
+    const sp = s.entities.spawnMob('spider', a.x + 0.5, a.y, a.z - 3, { persistent: true });
+    r.spiderGlow = !!sp.model.glowMaterial && sp.model.glowMaterial.map?.image?.width > 0;
+    sp.removed = true;
+    const z = s.entities.spawnMob('zombie', s.player.x + 3, s.player.y, s.player.z, { persistent: true });
+    s.combat.damageMob(z, 999, { kind: 'player', fromPlayer: true });
+    for (let i = 0; i < 60 && z.deathTimer < 0.5; i++) await new Promise((res) => setTimeout(res, 50));
+    await new Promise((res) => requestAnimationFrame(res));
+    r.midAngle = z.model.group.rotation.z;
+    r.midPresent = !z.removed;
+    for (let i = 0; i < 80 && !z.removed; i++) await new Promise((res) => setTimeout(res, 50));
+    r.gone = z.removed;
+    return r;
+  });
+  check('Dragon de l’Ender : modèle Java (ailes en 2 parties, 5 segments de cou, 12 de queue)', dragon.vanilla && dragon.wings && dragon.neck === 5 && dragon.tail === 12, JSON.stringify(dragon));
+  const drops = await G(() => {
+    const s = window.__lecraft.session, p = s.player;
+    s.entities.spawnItem('stone', 1, p.x + 2, p.y + 1, p.z);
+    s.entities.spawnItem('diamond', 1, p.x - 2, p.y + 1, p.z);
+    const items = s.entities.entities.filter((e) => e.kind === 'item').slice(-2);
+    const r = items.map((e) => e.object3d.geometry.type);
+    items.forEach((e) => (e.removed = true));
+    return r;
+  });
+  check('Objets au sol en 3D : cube pour un bloc, icône plate pour un objet', drops[0] === 'BoxGeometry' && drops[1] === 'PlaneGeometry', JSON.stringify(drops));
+  check('Yeux lumineux (araignée, dragon)', dragon.glow && dragon.spiderGlow, JSON.stringify(dragon));
+  check('Mort d’un mob : bascule sur le côté pendant 1 s puis disparaît', dragon.midPresent && dragon.midAngle > 0.8 && dragon.midAngle <= Math.PI / 2 + 1e-6 && dragon.gone, JSON.stringify(dragon));
   check('Mort : position mémorisée, message et boussole vers le lieu de la mort', death.last && death.last.x === death.at.x && death.compass === 'Lieu de votre mort' && death.msg, JSON.stringify(death));
 } catch (e) {
   check('Exception', false, String(e?.stack ?? e));

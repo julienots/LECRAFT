@@ -50,6 +50,11 @@ export const SKIN_PATHS: Record<string, string[]> = {
   snow_golem: ['entity/snow_golem.png'],
   wither_skeleton: ['entity/skeleton/wither_skeleton.png'],
   wither: ['entity/wither/wither.png'],
+  ender_dragon: ['entity/enderdragon/dragon.png'],
+  ender_dragon_eyes: ['entity/enderdragon/dragon_eyes.png'],
+  enderman_eyes: ['entity/enderman/enderman_eyes.png'],
+  spider_eyes: ['entity/spider_eyes.png', 'entity/spider/spider_eyes.png'],
+  cave_spider_eyes: ['entity/spider_eyes.png', 'entity/spider/spider_eyes.png'],
   minecart: ['entity/minecart.png'],
   husk: ['entity/zombie/husk.png'],
   drowned: ['entity/zombie/drowned.png'],
@@ -67,6 +72,14 @@ export const SKIN_PATHS: Record<string, string[]> = {
   slime: ['entity/slime/slime.png'],
 };
 /** Skin générée de remplacement pour une clé sans peintre (entités d'add-ons sur un modèle vanilla). */
+/** Couches d'yeux lumineux : skin de base et couleur des yeux (si le pack ne fournit pas la texture). */
+const GLOW_FROM: Record<string, [string, 'red' | 'purple']> = {
+  spider_eyes: ['spider', 'red'],
+  cave_spider_eyes: ['cave_spider', 'red'],
+  enderman_eyes: ['enderman', 'purple'],
+  ender_dragon_eyes: ['ender_dragon', 'purple'],
+};
+
 export const SKIN_FALLBACK: Record<string, string> = {};
 /** Textures d'objets aux noms différents dans le jeu vanilla. */
 const ITEM_PATHS: Record<string, string[]> = {
@@ -237,6 +250,9 @@ export class TextureManager implements SkinProvider {
       c.getContext('2d')!.drawImage(img, 0, 0);
       return c;
     }
+    // yeux lumineux absents du pack : extraits de la skin de base (pixels de la couleur des yeux)
+    const eyes = GLOW_FROM[key];
+    if (eyes) return this.eyesFrom(this.skinCanvas(eyes[0]), eyes[1]);
     const painted = paintSkin(SKIN_FALLBACK[key] ?? key);
     if (painted) return painted;
     const c = document.createElement('canvas');
@@ -245,6 +261,23 @@ export class TextureManager implements SkinProvider {
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#f0f';
     ctx.fillRect(0, 0, 64, 32);
+    return c;
+  }
+
+  private eyesFrom(base: HTMLCanvasElement, kind: 'red' | 'purple'): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = base.width;
+    c.height = base.height;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(base, 0, 0);
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const eye = kind === 'red' ? r > 140 && g < 90 && b < 90 : b > 140 && r > 110 && g < 120 && b - g > 60;
+      if (!eye) d[i + 3] = 0;
+    }
+    ctx.putImageData(img, 0, 0);
     return c;
   }
 

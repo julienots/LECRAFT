@@ -123,7 +123,8 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
 - **L'End** (`EndGenerator`) : île de pierre de l'End au-dessus du **vide** (4 dégâts / 0,5 s en
   tombant), dix **piliers d'obsidienne** (deux en cage de barreaux de fer) surmontés de **cristaux**,
   fontaine de bedrock au centre, grand vide puis îles extérieures au-delà de 400 blocs ; endermen.
-- **Dragon de l'Ender** (200 PV, barre de boss) : vol circulaire, charges, boules de feu, se pose sur
+- **Dragon de l'Ender** (200 PV, barre de boss), **modèle de l'édition Java** (texture `enderdragon/dragon.png`
+  du pack, ailes articulées qui battent, cou et queue segmentés qui ondulent, yeux lumineux) : vol circulaire, charges, boules de feu, se pose sur
   la fontaine et souffle ; soigné par le cristal le plus proche (rayon visible) — détruire ce cristal
   le blesse. Vaincu : 500 XP, **portail de sortie** et **œuf de dragon** ; la sortie ramène au point
   d'apparition. `/execute in minecraft:the_end run tp @s x y z` y mène directement.
@@ -143,6 +144,10 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
 - **Bras du joueur** en 1re personne (skin du pack), **pose accroupie** du modèle vanilla en vue 3e personne.
 - **Entités d'add-ons** : les géométries vanilla référencées (golem de neige, minecart, villageois…)
   et les textures de blocs du jeu sont reconnues ; les entités « techniques » sans rendu sont invisibles.
+- **Comme l'édition Java** : objets au sol en 3D (petit cube pour un bloc, icône plate sinon) qui
+  tournent et flottent ; mobs qui basculent sur le côté en mourant puis disparaissent dans un nuage
+  de fumée ; le dragon s'élève dans les explosions ; yeux lumineux des araignées, endermen et du
+  dragon dans le noir (`*_eyes.png` du pack, sinon extraits de la skin).
 - **Petites touches LeCraft** : des **feuilles tombent** des arbres ; à la mort, la **position** est
   affichée et, après la réapparition, une **boussole** guide 5 minutes vers le lieu de la mort.
 
@@ -661,9 +666,10 @@ npm run e2e:movement             # 8 vérifications : sprint au double appui, sa
 npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 12 cadres, ouverture,
                                  # arrivée, cristaux et dragon, soin et cristal détruit, vide, victoire
                                  # (portail de sortie, œuf), retour à la surface
-npm run e2e:wither               # 14 vérifications : pas de bloc fantôme, icônes plates, squelette
+npm run e2e:wither               # 18 vérifications : pas de bloc fantôme, icônes plates, squelette
                                  # wither, invocation, charge, crânes, armure, étoile du Nether, bras
-                                 # en 1re personne, pose accroupie, feuilles qui tombent, lieu de mort
+                                 # en 1re personne, pose accroupie, feuilles qui tombent, objets au sol
+                                 # en 3D, modèle du dragon, yeux lumineux, chute à la mort, lieu de mort
 npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
                                  # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,
                                  # lâcher), vues 1re/3e personne (F5, croix ↑), caméra contre un mur

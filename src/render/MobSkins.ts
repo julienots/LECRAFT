@@ -151,6 +151,35 @@ export const SKINS: Record<string, SkinSpec> = {
       box(ctx, 12, 22, 3, 6, 3, () => pick(rng, d));
     },
   },
+  ender_dragon: {
+    w: 256,
+    h: 256,
+    paint(ctx, rng) {
+      const d = ['#141414', '#1c1c1c', '#181818', '#222222'];
+      const scale = ['#2a2a2a', '#333333', '#262626'];
+      const fill = () => pick(rng, d);
+      box(ctx, 0, 0, 24, 24, 64, fill); // corps
+      box(ctx, 192, 104, 10, 10, 10, fill); // segments du cou et de la queue
+      box(ctx, 48, 0, 2, 4, 6, () => pick(rng, scale));
+      box(ctx, 220, 53, 2, 6, 12, () => pick(rng, scale));
+      // tête : yeux violets sur les côtés
+      box(ctx, 112, 30, 16, 16, 16, (f, x, y) => ((f === 'left' || f === 'right') && y >= 6 && y <= 7 && x >= 2 && x <= 5 ? '#cc66ff' : fill()));
+      box(ctx, 176, 44, 12, 5, 16, fill);
+      box(ctx, 176, 65, 12, 4, 16, fill);
+      box(ctx, 0, 0, 2, 4, 6, () => pick(rng, scale));
+      box(ctx, 112, 0, 2, 2, 4, () => '#0a0a0a');
+      // ailes : os et membranes
+      box(ctx, 112, 88, 56, 8, 8, fill);
+      box(ctx, 112, 136, 56, 4, 4, fill);
+      for (const v of [88, 144]) for (let y = 0; y < 56; y++) for (let x = 0; x < 112; x++) px(ctx, x, v + y, (x + y) % 9 === 0 ? '#3a2e44' : pick(rng, ['#2a2430', '#302836', '#262028']));
+      // pattes
+      box(ctx, 112, 104, 8, 24, 8, fill);
+      box(ctx, 226, 138, 6, 24, 6, fill);
+      box(ctx, 144, 104, 8, 4, 16, fill);
+      box(ctx, 196, 0, 12, 32, 12, fill);
+      box(ctx, 112, 0, 18, 6, 24, fill);
+    },
+  },
   snow_golem: {
     w: 64,
     h: 64,
