@@ -41,7 +41,7 @@ export interface MobDef {
 
 const VANILLA_FAMILIES: Record<string, string[]> = {
   zombie: ['zombie', 'undead', 'monster'], skeleton: ['skeleton', 'undead', 'monster'], spider: ['spider', 'arthropod', 'monster'],
-  cave_spider: ['cave_spider', 'arthropod', 'monster'], slime: ['slime', 'monster'], zombie_chief: ['zombie', 'undead', 'monster'],
+  cave_spider: ['cave_spider', 'arthropod', 'monster'], creeper: ['creeper', 'monster'], slime: ['slime', 'monster'], zombie_chief: ['zombie', 'undead', 'monster'],
   cow: ['cow'], sheep: ['sheep'], pig: ['pig'], chicken: ['chicken'], golem: ['irongolem'], liche: ['undead', 'monster'],
 };
 
@@ -65,6 +65,7 @@ export const MOB_DEFS: MobDef[] = [
   { key: 'cave_spider', name: 'Araignée venimeuse', category: 'hostile', health: 12, damage: 2, speed: 3.2, detectionRange: 16, attackRange: 1.2, attackCooldown: 1, width: 0.7, height: 0.5, scale: 0.7, drops: [{ item: 'string', min: 0, max: 2 }, { item: 'spider_eye', min: 1, max: 1, chance: 0.33 }], xp: 5, traits: ['climbs', 'poison'], sounds: { idle: 'hiss', hurt: 'hiss_hurt', death: 'hiss_hurt' } },
   { key: 'golem', name: 'Golem des profondeurs', category: 'boss', health: 320, damage: 9, speed: 2.2, detectionRange: 32, attackRange: 3, attackCooldown: 1.8, width: 1.6, height: 3.2, drops: [{ item: 'golem_core', min: 1, max: 1 }, { item: 'diamond', min: 2, max: 4 }, { item: 'iron_block', min: 1, max: 2 }], xp: 120, traits: ['knockbackResist'], weakness: { pickaxe: 2, sword: 0.7 }, sounds: { idle: 'golem_idle', hurt: 'stone_hit', death: 'golem_death' } },
   { key: 'liche', name: 'Liche de givre', category: 'boss', health: 240, damage: 7, speed: 2.4, detectionRange: 32, attackRange: 16, attackCooldown: 1.6, width: 0.9, height: 2.6, drops: [{ item: 'frost_heart', min: 1, max: 1 }, { item: 'frost_scepter', min: 1, max: 1 }, { item: 'emerald', min: 4, max: 8 }], xp: 150, ranged: { projectile: 'ice', range: 18, damage: 5, speed: 16 }, traits: ['flies', 'knockbackResist'], weakness: { gold: 2, fire: 2 }, sounds: { idle: 'lich_idle', hurt: 'glass_hit', death: 'lich_death' } },
+  { key: 'creeper', name: 'Creeper', category: 'hostile', health: 20, damage: 0, speed: 2.1, detectionRange: 16, attackRange: 3, attackCooldown: 1, width: 0.6, height: 1.7, drops: [{ item: 'gunpowder', min: 0, max: 2 }], xp: 5, spawn: { where: 'surface', light: 'dark', group: [1, 1], weight: 100 }, sounds: { idle: '', hurt: 'hurt', death: 'hurt' } },
 ];
 
 export const MOB_BY_KEY = new Map(MOB_DEFS.map((m, i) => [m.key, { def: m, index: i }]));

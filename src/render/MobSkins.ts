@@ -126,6 +126,17 @@ export const SKINS: Record<string, SkinSpec> = {
       ctx.drawImage(ctx.canvas, 0, 16, 16, 16, 16, 48, 16, 16);
     },
   },
+  creeper: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const g = ['#4db33d', '#5ec74a', '#3e9a31', '#6fd35a', '#8fdc7a', '#2f7d26'];
+      const face = (x: number, y: number) => ((y === 2 || y === 3) && (x === 1 || x === 2 || x === 5 || x === 6)) || (y === 4 && (x === 3 || x === 4)) || ((y === 5 || y === 6) && x >= 2 && x <= 5) || (y === 7 && (x === 2 || x === 5));
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && face(x, y) ? (y >= 4 ? '#0d1a0b' : '#000000') : pick(rng, g)));
+      box(ctx, 16, 16, 8, 12, 4, () => pick(rng, g));
+      box(ctx, 0, 16, 4, 6, 4, () => pick(rng, g));
+    },
+  },
   skeleton: {
     w: 64,
     h: 32,

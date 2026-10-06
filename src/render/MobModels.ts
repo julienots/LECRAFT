@@ -85,6 +85,14 @@ const VANILLA: Record<string, VanillaModel> = {
   zombie_chief: humanoid('zombie_chief', 64, 64, 4),
   skeleton: humanoid('skeleton', 64, 32, 2),
   player: playerModel(),
+  creeper: {
+    skin: 'creeper', texW: 64, texH: 32,
+    parts: [
+      P([0, 0], [-4, -8, -4, 8, 8, 8], [0, 6, 0], { anim: 'head' }),
+      P([16, 16], [-4, 0, -2, 8, 12, 4], [0, 6, 0]),
+      ...quadLegs([0, 16], 4, 6, [[-2, 18, 4], [2, 18, 4], [-2, 18, -4], [2, 18, -4]]),
+    ],
+  },
   spider: spider('spider'),
   cave_spider: spider('cave_spider'),
   slime: {

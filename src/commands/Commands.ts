@@ -38,6 +38,7 @@ export interface GameRules {
   fallDamage: boolean;
   doImmediateRespawn: boolean;
   commandBlockOutput: boolean;
+  mobGriefing: boolean;
 }
 
 export const DEFAULT_RULES: GameRules = {
@@ -50,6 +51,7 @@ export const DEFAULT_RULES: GameRules = {
   naturalRegeneration: true,
   fallDamage: true,
   doImmediateRespawn: false,
+  mobGriefing: true,
   commandBlockOutput: true,
 };
 
@@ -513,7 +515,7 @@ const GAMEMODES: Record<string, 'survival' | 'creative'> = { survival: 'survival
 const DIFFS: Record<string, 'peaceful' | 'easy' | 'normal' | 'hard'> = { peaceful: 'peaceful', p: 'peaceful', '0': 'peaceful', easy: 'easy', e: 'easy', '1': 'easy', normal: 'normal', n: 'normal', '2': 'normal', hard: 'hard', h: 'hard', '3': 'hard' };
 
 /** Règles du jeu de référence → règles locales. */
-export const RULE_ALIASES: Record<string, keyof GameRules> = { dodaylightcycle: 'doDaylightCycle', doweathercycle: 'doWeatherCycle', domobspawning: 'doMobSpawning', keepinventory: 'keepInventory', tntexplodes: 'tntExplodes', showcoordinates: 'showCoordinates', naturalregeneration: 'naturalRegeneration', falldamage: 'fallDamage', doimmediaterespawn: 'doImmediateRespawn', commandblockoutput: 'commandBlockOutput' };
+export const RULE_ALIASES: Record<string, keyof GameRules> = { dodaylightcycle: 'doDaylightCycle', doweathercycle: 'doWeatherCycle', domobspawning: 'doMobSpawning', keepinventory: 'keepInventory', tntexplodes: 'tntExplodes', showcoordinates: 'showCoordinates', naturalregeneration: 'naturalRegeneration', falldamage: 'fallDamage', doimmediaterespawn: 'doImmediateRespawn', commandblockoutput: 'commandBlockOutput', mobgriefing: 'mobGriefing' };
 
 /** Dégâts appliqués à une cible (commande /damage, scripts). */
 export function damageTarget(s: Session, t: Target, amount: number, cause = 'entityAttack'): boolean {

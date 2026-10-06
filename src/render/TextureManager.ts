@@ -42,6 +42,7 @@ export const SKIN_PATHS: Record<string, string[]> = {
   zombie_chief: ['entity/zombie/husk.png'],
   skeleton: ['entity/skeleton/skeleton.png'],
   player: ['entity/player/wide/steve.png', 'entity/steve.png'],
+  creeper: ['entity/creeper/creeper.png'],
   spider: ['entity/spider/spider.png'],
   cave_spider: ['entity/spider/cave_spider.png'],
   slime: ['entity/slime/slime.png'],

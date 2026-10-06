@@ -80,7 +80,7 @@ export class Explosions {
   }
 
   /** Explosion : rayons depuis le centre, intensité diminuée par la résistance des blocs traversés. */
-  explode(ctx: GameContext, entities: EntityManager, cx: number, cy: number, cz: number, power: number) {
+  explode(ctx: GameContext, entities: EntityManager, cx: number, cy: number, cz: number, power: number, breakBlocks = true) {
     const w = ctx.world;
     const destroyed = new Set<string>();
     const chain: [number, number, number][] = [];
@@ -112,6 +112,7 @@ export class Explosions {
             intensity -= 0.225;
           }
         }
+    if (!breakBlocks) destroyed.clear();
     for (const key of destroyed) {
       const [x, y, z] = key.split(',').map(Number);
       const id = w.getBlock(x, y, z);

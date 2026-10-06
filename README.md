@@ -56,7 +56,7 @@ complet piloté par de vrais événements tactiles dans Chromium (même moteur q
 | Inventaire | Interfaces classiques au pixel près (176×166, cases de 18 px) : objet tenu au **curseur**, toucher = prendre/poser/échanger, appui long = moitié/un seul, double toucher = transfert rapide, toucher hors de la fenêtre = jeter ; armure, coffre 27 cases, info-bulles ; **inventaire créatif** par onglets |
 | Fabrication | **Grille 2×2** (inventaire) et **3×3** (table de fabrication) avec motifs vanilla (position libre, miroir, recettes sans forme, tags de bois), **livre de recettes** qui remplit la grille ; **fourneau** à cases (entrée/combustible/résultat, flamme et flèche de progression, 10 s par objet, durées de combustion vanilla, XP) — 116 recettes + 21 cuissons, 228 objets ; outils bois/pierre/cuivre/fer/or/diamant et armures cuir/fer/or/diamant aux valeurs vanilla |
 | Combat | Cadence d'attaque, dégâts par arme, critiques en chute, recul, invincibilité temporaire, armure, faiblesses des boss, projectiles |
-| Créatures (12) | vache (lait), mouton (laine colorée, tonte, repousse), cochon, poule (œufs), zombie, squelette (arc), araignée (neutre le jour), araignée venimeuse, slime (se divise), chef zombie (mini-boss), 2 boss — modèles aux proportions et disposition UV vanilla (compatibles avec les skins d'un pack) |
+| Créatures (13) | vache (lait), mouton (laine colorée, tonte, repousse), cochon, poule (œufs), zombie, squelette (arc), creeper (mèche de 1,5 s, explosion qui creuse le terrain, poudre à canon), araignée (neutre le jour), araignée venimeuse, slime (se divise), chef zombie (mini-boss), 2 boss — modèles aux proportions et disposition UV vanilla (compatibles avec les skins d'un pack) |
 | IA | Entity → AIController → StateMachine (IDLE, WANDER, FOLLOW, CHASE, ATTACK, FLEE, SEARCH, RETURN, DEAD), ligne de vue, évitement des falaises et de la lave, LOD de simulation |
 | Boss | **Golem des profondeurs** (3 phases : coups, bond + onde de choc, rochers, invocations ; faible aux pioches) ; **Liche de givre** (3 phases : éclats de glace ralentissants, téléportation, anneau de projectiles, pics de glace, spectres ; faible à l'or) — arènes dédiées, barre de vie, butin unique |
 | Structures | villages, maisons abandonnées, ruines, tours (escalier), temples (piège + salle cachée), sanctuaire de givre, camps, mines, donjons (salles, couloirs, pièges, cages, coffres, chef), repaire du golem |
@@ -90,8 +90,8 @@ Acceptées sans effet visible : `/playanimation`, `/camera`, `/ride`, `/inputper
 `/fog`, `/hud`, `/dialogue`, `/stopsound`, `/music`.
 
 Règles (`/gamerule`) : `keepInventory`, `doDaylightCycle`, `doWeatherCycle`, `doMobSpawning`,
-`tntExplodes`, `showCoordinates`, `naturalRegeneration`, `fallDamage`, `doImmediateRespawn`
-(les autres règles sont mémorisées pour les scripts). Les commandes de triche suivent l'option
+`tntExplodes`, `showCoordinates`, `naturalRegeneration`, `fallDamage`, `doImmediateRespawn`,
+`mobGriefing` (explosions de creeper sans destruction de blocs si désactivée) (les autres règles sont mémorisées pour les scripts). Les commandes de triche suivent l'option
 **Activer les triches** du monde (création ou « Modifier »).
 
 ### Add-ons de l'édition mobile (.mcaddon / .mcpack)
@@ -562,9 +562,9 @@ npm run build && npm run preview &   # puis, dans un autre terminal :
 npm run e2e                      # 39 vérifications pilotées par de vrais événements tactiles (CDP)
 npm run e2e:gameplay             # 23 vérifications : agriculture, élevage, fourneau à cases, structures,
                                  # coffres, liquides, lave, météo, apparitions nocturnes, boss, mémoire
-npm run e2e:vanilla              # 26 vérifications : dalles, porte, lit et sommeil, seaux, poudre d'os,
+npm run e2e:vanilla              # 29 vérifications : dalles, porte, lit et sommeil, seaux, poudre d'os,
                                  # cisailles, échelle, TNT et explosion, sable qui tombe, décomposition des
-                                 # feuilles, flèches récupérées, glisser pour répartir, double porte,
+                                 # feuilles, flèches récupérées, glisser pour répartir, double porte, creeper,
                                  # import/retrait d'un pack de ressources
 npm run e2e:addons               # 33 vérifications : import d'un .mcaddon généré (packs imbriqués,
                                  # JSON commenté), blocs/objets/recettes/créature/fonctions d'add-on,
