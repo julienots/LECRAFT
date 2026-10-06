@@ -55,7 +55,7 @@ export async function extract(buf: ArrayBuffer, e: ZipEntry): Promise<Uint8Array
 }
 
 /** Dossiers de textures utiles du pack. */
-const WANTED = /^assets\/minecraft\/textures\/(block|item|entity|gui\/sprites\/hud|gui\/sprites\/container|gui\/container|gui\/sprites\/widget|gui\/widgets|gui\/icons)\/.+\.png$/;
+const WANTED = /^assets\/minecraft\/textures\/(block|item|entity|environment|gui\/sprites\/hud|gui\/sprites\/container|gui\/container|gui\/sprites\/widget|gui\/widgets|gui\/icons)\/.+\.png$/;
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {

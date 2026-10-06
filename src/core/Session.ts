@@ -934,7 +934,9 @@ export class Session implements GameContext {
     // caméra
     const bob = s.viewBobbing && p.body.onGround ? Math.sin(this.controller.bobPhase * 2) * 0.04 * Math.min(1, Math.hypot(p.body.vx, p.body.vz) / 4) : 0;
     cam.position.set(p.x, p.y + p.eyeHeight + bob - (p.dead ? 1.2 : 0), p.z);
-    cam.rotation.set(p.pitch, p.yaw, p.dead ? 0.6 : 0);
+    // inclinaison quand on est blessé (comme le jeu original : sin(f⁴·π) × 14°, f = temps restant)
+    const hf = !p.dead && p.invulnerable > 0 ? Math.min(1, p.invulnerable / 0.5) : 0;
+    cam.rotation.set(p.pitch, p.yaw, p.dead ? 0.6 : Math.sin(hf ** 4 * Math.PI) * 0.244);
     if (this.perspective && !p.dead) this.placeThirdPersonCamera(cam);
     const targetFov = s.fov + (p.sprinting ? 8 : 0) - (this.interaction.bowCharge > 0 ? this.interaction.bowCharge * 10 : 0);
     this.fovCurrent += (targetFov - this.fovCurrent) * Math.min(1, dt * 8);
@@ -948,7 +950,8 @@ export class Session implements GameContext {
     const nether = this.dimension !== 'overworld';
     const rain = nether || this.biomeWeather() === 'none' ? 0 : this.weather.intensity;
     const netherFog = this.dimension === 'end' ? new THREE.Color(0x120a18) : nether ? new THREE.Color(NETHER_FOG[this.world.biomeAt(Math.floor(p.x), Math.floor(p.z)).key] ?? 0x330808) : null;
-    if (netherFog) r.sky.updateNether(cam.position, netherFog);
+    r.sky.moonPhase = this.dayCycle.day % 8;
+    if (netherFog) r.sky.updateNether(cam.position, netherFog, this.dimension === 'end');
     else r.sky.update(this.dayCycle.time, cam.position, rain, this.weather.flash, this.elapsed, s.clouds);
     const u = r.materials.uniforms;
     u.uTime.value = this.elapsed;

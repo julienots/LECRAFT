@@ -38,6 +38,18 @@ export class Sky {
   readonly skyLightColor = new THREE.Color(1, 1, 1);
   private disposables: { dispose(): void }[] = [];
   private tmp = new THREE.Vector3();
+  private defaultSun!: THREE.Texture;
+  private defaultMoon!: THREE.Texture;
+  private packTex: THREE.Texture[] = [];
+  private packMoon = false;
+  private defaultClouds!: HTMLCanvasElement;
+  /** Ciel de l'End : cube texturé (end_sky.png répété 16 fois par face, assombri comme le jeu original). */
+  private endBox: THREE.Mesh;
+  private defaultEnd: THREE.Texture;
+  /** Largeur (en blocs) d'une répétition de la texture des nuages. */
+  private cloudSpan = 1536 / 6;
+  /** Phase de la lune (0 = pleine lune), comme le jeu original : jour % 8. */
+  moonPhase = 0;
 
   constructor() {
     this.domeMat = new THREE.ShaderMaterial({
@@ -80,6 +92,8 @@ export class Sky {
     };
     this.sun = mk(sunTex, 50);
     this.moon = mk(moonTex, 34);
+    this.defaultSun = sunTex;
+    this.defaultMoon = moonTex;
     this.group.add(this.sun, this.moon);
 
     const starPos = new Float32Array(600 * 3);
@@ -105,6 +119,26 @@ export class Sky {
         for (const [ox, oy] of [[0, 0], [-64, 0], [0, -64], [-64, -64]]) c.fillRect(x + ox, y + oy, w, h);
       }
     });
+    this.defaultClouds = this.cloudTex.image as HTMLCanvasElement;
+    this.defaultEnd = pixelTexture(128, (c) => {
+      let seed = 987654321;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      for (let y = 0; y < 128; y++)
+        for (let x = 0; x < 128; x++) {
+          const v = 40 + Math.floor(rnd() * 60);
+          c.fillStyle = `rgb(${v + 10},${v},${v + 25})`;
+          c.fillRect(x, y, 1, 1);
+        }
+    });
+    this.defaultEnd.wrapS = this.defaultEnd.wrapT = THREE.RepeatWrapping;
+    this.defaultEnd.repeat.set(16, 16);
+    const em = new THREE.MeshBasicMaterial({ map: this.defaultEnd, color: 0x505050, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false });
+    this.endBox = new THREE.Mesh(new THREE.BoxGeometry(600, 600, 600), em);
+    this.endBox.renderOrder = -9.5;
+    this.endBox.frustumCulled = false;
+    this.endBox.visible = false;
+    this.group.add(this.endBox);
+    this.disposables.push(this.defaultEnd, this.endBox.geometry, em);
     this.cloudTex.wrapS = this.cloudTex.wrapT = THREE.RepeatWrapping;
     this.cloudTex.repeat.set(6, 6);
     const cm = new THREE.MeshBasicMaterial({ map: this.cloudTex, transparent: true, opacity: 0.82, depthWrite: false, side: THREE.DoubleSide, fog: false });
@@ -122,7 +156,8 @@ export class Sky {
    * Met à jour couleurs et positions. time ∈ [0,1), rain ∈ [0,1], flash ∈ [0,1] (éclair).
    */
   /** Nether : ni soleil, ni lune, ni étoiles, ni nuages ; dôme de la couleur du brouillard. */
-  updateNether(camPos: THREE.Vector3, fog: THREE.Color) {
+  updateNether(camPos: THREE.Vector3, fog: THREE.Color, end = false) {
+    this.endBox.visible = end;
     this.zenith.copy(fog);
     this.horizon.copy(fog);
     this.skyLightColor.setRGB(1, 1, 1);
@@ -133,7 +168,88 @@ export class Sky {
     this.sun.visible = this.moon.visible = this.stars.visible = this.clouds.visible = false;
   }
 
+  /**
+   * Soleil et lune du pack de ressources (environment/sun.png, environment/moon_phases.png) :
+   * rendus en mélange additif (le fond noir disparaît) à la taille du jeu original.
+   */
+  usePack(sun?: ImageBitmap | HTMLCanvasElement, moon?: ImageBitmap | HTMLCanvasElement, clouds?: ImageBitmap | HTMLCanvasElement, endSky?: ImageBitmap | HTMLCanvasElement) {
+    // nuages : clouds.png du jeu original, 1 pixel = 12 blocs (nouvelle texture : la taille change)
+    let img: HTMLCanvasElement = this.defaultClouds;
+    if (clouds) {
+      img = document.createElement('canvas');
+      img.width = clouds.width;
+      img.height = clouds.height;
+      img.getContext('2d')!.drawImage(clouds, 0, 0);
+    }
+    if (this.cloudTex.image !== img) {
+      if (this.cloudTex.image !== this.defaultClouds || clouds) {
+        const t = new THREE.CanvasTexture(img);
+        t.magFilter = t.minFilter = THREE.NearestFilter;
+        t.generateMipmaps = false;
+        t.colorSpace = THREE.NoColorSpace;
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        if (!this.disposables.includes(this.cloudTex)) this.cloudTex.dispose();
+        this.cloudTex = t;
+        (this.clouds.material as THREE.MeshBasicMaterial).map = t;
+        (this.clouds.material as THREE.MeshBasicMaterial).needsUpdate = true;
+      }
+    }
+    this.cloudSpan = clouds ? clouds.width * 12 : 1536 / 6;
+    this.cloudTex.repeat.set(1536 / this.cloudSpan, 1536 / this.cloudSpan);
+    this.packTex.forEach((t) => t.dispose());
+    this.packTex = [];
+    const tex = (img: ImageBitmap | HTMLCanvasElement) => {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext('2d')!.drawImage(img, 0, 0);
+      const t = new THREE.CanvasTexture(c);
+      t.magFilter = t.minFilter = THREE.NearestFilter;
+      t.generateMipmaps = false;
+      t.colorSpace = THREE.NoColorSpace;
+      this.packTex.push(t);
+      return t;
+    };
+    const set = (mesh: THREE.Mesh, img: ImageBitmap | HTMLCanvasElement | undefined, fallback: THREE.Texture, scale: number) => {
+      const m = mesh.material as THREE.MeshBasicMaterial;
+      m.map = img ? tex(img) : fallback;
+      m.blending = img ? THREE.AdditiveBlending : THREE.NormalBlending;
+      m.needsUpdate = true;
+      mesh.scale.setScalar(img ? scale : 1);
+    };
+    // jeu original : soleil ±30 et lune ±20 à 100 unités de distance (dôme de 380 ici)
+    set(this.sun, sun, this.defaultSun, (60 * 3.8) / 50);
+    set(this.moon, moon, this.defaultMoon, (40 * 3.8) / 34);
+    this.packMoon = !!moon;
+    const em = this.endBox.material as THREE.MeshBasicMaterial;
+    if (endSky) {
+      const t = tex(endSky);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(16, 16);
+      em.map = t;
+      em.color.setHex(0x282828); // le jeu original multiplie end_sky.png par 40/255
+    } else {
+      em.map = this.defaultEnd;
+      em.color.setHex(0x505050);
+    }
+    em.needsUpdate = true;
+    const mt = (this.moon.material as THREE.MeshBasicMaterial).map!;
+    if (moon) mt.repeat.set(0.25, 0.5);
+  }
+
+  private basis = new THREE.Matrix4();
+  private ax = new THREE.Vector3();
+  private ay = new THREE.Vector3();
+  /** Oriente un astre face au centre, ses bords alignés sur sa course (comme le jeu original). */
+  private face(mesh: THREE.Mesh, normal: THREE.Vector3) {
+    this.ax.crossVectors(Z_AXIS, normal).normalize();
+    this.ay.crossVectors(normal, this.ax).normalize();
+    this.basis.makeBasis(this.ax, this.ay, normal);
+    mesh.quaternion.setFromRotationMatrix(this.basis);
+  }
+
   update(time: number, camPos: THREE.Vector3, rain: number, flash: number, elapsed: number, cloudsVisible: boolean) {
+    this.endBox.visible = false;
     this.sun.visible = this.moon.visible = this.stars.visible = true;
     const ang = time * Math.PI * 2;
     const h = Math.sin(ang);
@@ -162,18 +278,23 @@ export class Sky {
     this.domeMat.uniforms.uSunGlow.value.setRGB(1, 0.6, 0.3).multiplyScalar(sunset * (1 - rain));
     this.group.position.copy(camPos);
     this.sun.position.copy(sunDir).multiplyScalar(380);
-    this.sun.quaternion.setFromUnitVectors(Z_AXIS, this.tmp.copy(sunDir).negate());
+    this.face(this.sun, this.tmp.copy(sunDir).negate());
     (this.sun.material as THREE.MeshBasicMaterial).opacity = 1 - rain * 0.9;
     this.moon.position.copy(sunDir).multiplyScalar(-380);
-    this.moon.quaternion.setFromUnitVectors(Z_AXIS, sunDir);
+    this.face(this.moon, sunDir);
     (this.moon.material as THREE.MeshBasicMaterial).opacity = 1 - rain * 0.9;
+    if (this.packMoon) {
+      // moon_phases.png : 4 colonnes × 2 lignes, phase 0 (pleine lune) en haut à gauche
+      const ph = ((this.moonPhase % 8) + 8) % 8;
+      (this.moon.material as THREE.MeshBasicMaterial).map!.offset.set((ph % 4) * 0.25, ph < 4 ? 0.5 : 0);
+    }
     (this.stars.material as THREE.PointsMaterial).opacity = clamp((1 - day) * 1.2 - rain, 0, 1);
     this.stars.rotation.z = ang * 0.2;
     // nuages : suivent la caméra, défilent lentement
     this.clouds.visible = cloudsVisible;
     if (cloudsVisible) {
       this.clouds.position.set(camPos.x, 118, camPos.z);
-      const span = 1536 / 6;
+      const span = this.cloudSpan;
       this.cloudTex.offset.set((camPos.x + elapsed * 1.2) / span, -camPos.z / span);
       const cm = this.clouds.material as THREE.MeshBasicMaterial;
       cm.color.setRGB(1, 1, 1).multiplyScalar(lerp(0.25, 1, day) * lerp(1, 0.6, rain));

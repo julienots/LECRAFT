@@ -44,7 +44,8 @@ export class CombatSystem {
     hooks.hitEntity?.(m, stack ?? null);
     if (dealt > 0) {
       ctx.audio.play(crit ? 'crit' : 'hit', { x: m.x, y: m.y, z: m.z });
-      if (crit) ctx.particles.burst('magic', m.x, m.y + m.body.height, m.z, 6);
+      // étincelles beiges du coup critique (comme le jeu original)
+      if (crit) ctx.particles.burst('crit', m.x, m.y + m.body.height * 0.6, m.z, 16);
       ctx.haptic('light');
       if (def?.tool) p.inventory.damageSelected(def.tool.type === 'sword' ? 1 : 2);
       p.addExhaustion(0.1);

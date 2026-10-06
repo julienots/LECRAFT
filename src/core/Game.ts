@@ -134,6 +134,7 @@ export class Game {
       if (pack) this.textures.applyPack(pack);
     }
     applyTheme(this.textures);
+    this.syncSky();
     this.showMainMenu();
     this.loop.start();
     await this.platform.hideSplash();
@@ -186,8 +187,29 @@ export class Game {
   }
 
   /** Change de pack de ressources à chaud (textures, icônes, skins, thème des menus). */
+  /** Soleil et lune du pack actif (ou ceux du jeu). */
+  private syncSky() {
+    const img = (...p: string[]) => this.textures.packImage(...p);
+    let moon: ImageBitmap | HTMLCanvasElement | undefined = img('environment/moon_phases.png');
+    if (!moon) {
+      // packs récents (1.21.9+) : une image par phase, assemblées en grille 4 × 2 dans l'ordre du jeu
+      const phases = ['full_moon', 'waning_gibbous', 'third_quarter', 'waning_crescent', 'new_moon', 'waxing_crescent', 'first_quarter', 'waxing_gibbous'].map((n) => img(`environment/celestial/moon/${n}.png`));
+      if (phases.every(Boolean)) {
+        const w = phases[0]!.width, h = phases[0]!.height;
+        const c = document.createElement('canvas');
+        c.width = w * 4;
+        c.height = h * 2;
+        const ctx = c.getContext('2d')!;
+        phases.forEach((p, i) => ctx.drawImage(p!, (i % 4) * w, Math.floor(i / 4) * h, w, h));
+        moon = c;
+      }
+    }
+    this.renderer.sky.usePack(img('environment/sun.png', 'environment/celestial/sun.png'), moon, img('environment/clouds.png'), img('environment/end_sky.png'));
+  }
+
   applyPack(pack: LoadedPack | null) {
     this.textures.applyPack(pack);
+    this.syncSky();
     applyTheme(this.textures);
     resetMenuArt();
     this.session?.clearIconCache();

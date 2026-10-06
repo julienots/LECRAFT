@@ -145,7 +145,11 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
 - **Entités d'add-ons** : les géométries vanilla référencées (golem de neige, minecart, villageois…)
   et les textures de blocs du jeu sont reconnues ; les entités « techniques » sans rendu sont invisibles.
 - **Comme l'édition Java** : objets au sol en 3D (petit cube pour un bloc, icône plate sinon) qui
-  tournent et flottent ; mobs qui basculent sur le côté en mourant puis disparaissent dans un nuage
+  tournent et flottent, éclairés par le monde, 1 à 5 modèles selon la pile, fusion des piles voisines,
+  ramassés à ~1 bloc (sans aimant) avec l'animation de vol vers le joueur ; ciel du pack (soleil,
+  8 phases de la lune — `moon_phases.png` ou `celestial/moon/*.png` —, nuages `clouds.png` à 12 blocs
+  par pixel, ciel de l'End `end_sky.png`) ; caméra qui s'incline quand on est blessé ; étincelles
+  beiges des coups critiques ; mobs qui basculent sur le côté en mourant puis disparaissent dans un nuage
   de fumée ; le dragon s'élève dans les explosions ; yeux lumineux des araignées, endermen et du
   dragon dans le noir (`*_eyes.png` du pack, sinon extraits de la skin).
 - **Petites touches LeCraft** : des **feuilles tombent** des arbres ; à la mort, la **position** est
@@ -666,10 +670,11 @@ npm run e2e:movement             # 8 vérifications : sprint au double appui, sa
 npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 12 cadres, ouverture,
                                  # arrivée, cristaux et dragon, soin et cristal détruit, vide, victoire
                                  # (portail de sortie, œuf), retour à la surface
-npm run e2e:wither               # 18 vérifications : pas de bloc fantôme, icônes plates, squelette
+npm run e2e:wither               # 23 vérifications : pas de bloc fantôme, icônes plates, squelette
                                  # wither, invocation, charge, crânes, armure, étoile du Nether, bras
                                  # en 1re personne, pose accroupie, feuilles qui tombent, objets au sol
-                                 # en 3D, modèle du dragon, yeux lumineux, chute à la mort, lieu de mort
+                                 # en 3D (fusion, ramassage, éclairage), ciel du pack, caméra blessée,
+                                 # modèle du dragon, yeux lumineux, chute à la mort, lieu de mort
 npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
                                  # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,
                                  # lâcher), vues 1re/3e personne (F5, croix ↑), caméra contre un mur

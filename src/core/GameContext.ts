@@ -30,7 +30,7 @@ export interface CombatApi {
 export interface ParticleFx {
   blockBreak(x: number, y: number, z: number, block: number): void;
   blockHit(x: number, y: number, z: number, block: number, nx: number, ny: number, nz: number): void;
-  burst(kind: 'smoke' | 'fire' | 'lava' | 'water' | 'damage' | 'explosion' | 'magic' | 'hearts' | 'dust' | 'ice' | 'crystal' | 'poof', x: number, y: number, z: number, count?: number): void;
+  burst(kind: 'smoke' | 'fire' | 'lava' | 'water' | 'damage' | 'explosion' | 'magic' | 'hearts' | 'dust' | 'ice' | 'crystal' | 'poof' | 'crit', x: number, y: number, z: number, count?: number): void;
 }
 /** Sons (implémentés par AudioManager). */
 export interface SoundFx {

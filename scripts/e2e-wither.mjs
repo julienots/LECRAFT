@@ -197,11 +197,65 @@ try {
     s.entities.spawnItem('stone', 1, p.x + 2, p.y + 1, p.z);
     s.entities.spawnItem('diamond', 1, p.x - 2, p.y + 1, p.z);
     const items = s.entities.entities.filter((e) => e.kind === 'item').slice(-2);
-    const r = items.map((e) => e.object3d.geometry.type);
+    const r = items.map((e) => e.object3d.children[0].geometry.type);
     items.forEach((e) => (e.removed = true));
     return r;
   });
   check('Objets au sol en 3D : cube pour un bloc, icône plate pour un objet', drops[0] === 'BoxGeometry' && drops[1] === 'PlaneGeometry', JSON.stringify(drops));
+  const pick = await G(async () => {
+    const s = window.__lecraft.session, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    p.gameMode = 'survival';
+    p.inventory.clear();
+    const x = Math.floor(p.x), y = Math.floor(p.y), z = Math.floor(p.z);
+    s.runCommand(`/fill ${x - 6} ${y - 1} ${z - 6} ${x + 6} ${y - 1} ${z + 6} stone`);
+    s.runCommand(`/fill ${x - 6} ${y} ${z - 6} ${x + 6} ${y + 3} ${z + 6} air`);
+    p.body.setPos(x + 0.5, y, z + 0.5);
+    const before = s.entities.entities.length;
+    // deux tas identiques côte à côte → une seule pile, 2 modèles affichés
+    s.entities.spawnItem('cobblestone', 10, x + 4.5, y + 0.2, z + 0.5);
+    s.entities.spawnItem('cobblestone', 12, x + 4.6, y + 0.2, z + 0.6);
+    const heaps = s.entities.entities.slice(before);
+    heaps.forEach((e) => { e.body.vx = e.body.vz = 0; e.pickupDelay = 0; });
+    for (let i = 0; i < 40 && heaps.filter((e) => !e.removed).length > 1; i++) await sleep(50);
+    const alive = heaps.filter((e) => !e.removed);
+    const merged = alive.length === 1 && alive[0].count === 22 && alive[0].object3d.children.length === 3;
+    // à 4 blocs : pas d'aimantation, pas ramassé
+    await sleep(600);
+    const notPicked = !alive[0].removed && alive[0].collecting <= 0 && Math.abs(alive[0].body.x - (x + 4.5)) < 0.5;
+    // le joueur s'approche : ramassé avec l'animation de vol
+    p.body.setPos(x + 3.6, y, z + 0.5);
+    let flew = false;
+    for (let i = 0; i < 40 && !alive[0].removed; i++) { if (alive[0].collecting > 0) flew = true; await sleep(25); }
+    const got = p.inventory.count?.('cobblestone') ?? p.inventory.slots.reduce((n, st) => n + (st?.id === 'cobblestone' ? st.count : 0), 0);
+    // éclairage : un objet dans le noir est plus sombre qu'au soleil
+    s.runCommand('/time set midnight');
+    s.entities.spawnItem('diamond', 1, x + 0.5, y + 2, z - 4.5);
+    const d = s.entities.entities[s.entities.entities.length - 1];
+    d.pickupDelay = 99;
+    await sleep(500);
+    const dark = d.object3d.children[0].material.color.r;
+    s.runCommand('/time set day');
+    await sleep(500);
+    const light = d.object3d.children[0].material.color.r;
+    d.removed = true;
+    return { merged, notPicked, flew, got, dark, light };
+  });
+  check('Objets au sol : piles identiques fusionnées (3 modèles pour 22, comme Java)', pick.merged, JSON.stringify(pick));
+  check('Ramassage comme en Java : pas d’aimant à 4 blocs, ramassé de près avec animation', pick.notPicked && pick.flew && pick.got === 22, JSON.stringify(pick));
+  check('Objets au sol éclairés par le monde (plus sombres la nuit)', pick.dark < pick.light, JSON.stringify(pick));
+  const sky = await G(async () => {
+    const g = window.__lecraft, s = g.session, sk = g.renderer.sky, p = s.player;
+    const hasPack = !!g.textures.packImage('environment/clouds.png');
+    p.gameMode = 'survival';
+    p.invulnerable = 0;
+    p.health = 20;
+    let roll = 0;
+    p.damage(2, 'mob');
+    for (let i = 0; i < 12; i++) { await new Promise((r) => requestAnimationFrame(r)); roll = Math.max(roll, Math.abs(g.renderer.camera.rotation.z)); }
+    return { hasPack, packMoon: sk.packMoon, span: sk.cloudSpan, roll };
+  });
+  check('Ciel : soleil, phases de la lune et nuages du pack (sinon ceux du jeu)', sky.hasPack ? sky.packMoon && sky.span === 3072 : !sky.packMoon, JSON.stringify(sky));
+  check('Caméra inclinée quand le joueur est blessé', sky.roll > 0.05 && sky.roll < 0.26, JSON.stringify(sky));
   check('Yeux lumineux (araignée, dragon)', dragon.glow && dragon.spiderGlow, JSON.stringify(dragon));
   check('Mort d’un mob : bascule sur le côté pendant 1 s puis disparaît', dragon.midPresent && dragon.midAngle > 0.8 && dragon.midAngle <= Math.PI / 2 + 1e-6 && dragon.gone, JSON.stringify(dragon));
   check('Mort : position mémorisée, message et boussole vers le lieu de la mort', death.last && death.last.x === death.at.x && death.compass === 'Lieu de votre mort' && death.msg, JSON.stringify(death));

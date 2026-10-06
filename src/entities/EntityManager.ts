@@ -161,6 +161,7 @@ export class EntityManager implements EntitySpawner {
     const simDist = ctx.profile.simulationDistance * CHUNK_SIZE + 8;
     this.lodTick++;
     const mobs: Mob[] = [];
+    const items = this.entities.filter((e): e is ItemEntity => e.kind === 'item' && !e.removed);
     for (const e of this.entities) {
       if (e.removed) continue;
       e.distToPlayer = Math.hypot(e.x - p.x, e.y - p.y, e.z - p.z);
@@ -187,7 +188,8 @@ export class EntityManager implements EntitySpawner {
       } else if (e.kind === 'item') {
         const it = e as ItemEntity;
         it.update(ctx, dt);
-        if (!it.removed && it.pickupDelay <= 0 && !p.dead && Math.hypot(it.x - p.x, it.y - (p.y + 0.6), it.z - p.z) < 1.3) {
+        if (!it.removed && it.collecting <= 0) it.tryMerge(items, dt);
+        if (!it.removed && it.collecting <= 0 && it.pickupDelay <= 0 && !p.dead && it.inPickupRange(p.x, p.y, p.z, p.body.height)) {
           const stack = makeStack(it.itemId, it.count);
           if (it.durability !== undefined) stack.durability = it.durability;
           const rest = p.inventory.add(stack);
@@ -196,7 +198,9 @@ export class EntityManager implements EntitySpawner {
             ctx.stats.inc(`collect:${it.itemId}`, it.count - rest);
           }
           it.count = rest;
-          if (rest <= 0) it.removed = true;
+          // tout ramassé : l'objet vole vers le joueur (3 ticks) puis disparaît
+          if (rest <= 0) it.collect(ctx);
+          else it.syncCopies();
         }
       } else {
         const pr = e as Projectile;
