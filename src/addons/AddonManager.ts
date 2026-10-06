@@ -25,12 +25,14 @@ import { VANILLA_MODELS } from '../render/MobModels';
 import { SKIN_PATHS } from '../render/TextureManager';
 import { extract, readEntries } from '../render/ResourcePack';
 import { TileRegistry } from '../render/TileRegistry';
-import { ADDON_BLOCKS, ADDON_TILES, addonTile, registerAddonBlocks, LOOT_TABLES } from './AddonRegistry';
+import { ADDON_BLOCKS, ADDON_TILES, addonTile, registerAddonBlocks, LOOT_TABLES, PLAYER_PROPERTIES, STRUCTURES } from './AddonRegistry';
 import { buildVisual, readBlockGeometries, stateMult, traitStates, metaCount, decodeStates, conditionTrue, type BedrockBlockInfo, type BedrockVisual, type BlockGeo, type StateDef, type Material } from './BedrockBlocks';
 import { parseLenientJson } from './Json';
 import { BEDROCK_BLOCK_TEXTURES, BEDROCK_ENTITY_TEXTURES, BEDROCK_ITEM_TEXTURES, BIOME_TAGS } from './BedrockMaps';
 import { geometryToModel, readGeometries, type BedrockGeo } from './BedrockGeometry';
 import { resolveItem, LANG } from '../commands/Commands';
+import { PROJECTILE_DEFS } from '../entities/Projectile';
+import { parseMcStructure } from './McStructure';
 
 // ---------- stockage ----------
 
@@ -236,7 +238,7 @@ export async function importAddon(file: File): Promise<InstalledAddon> {
 export interface AddonLoadResult {
   images: Map<string, ImageBitmap>;
   report: string[];
-  counts: { blocks: number; items: number; recipes: number; mobs: number; functions: number; textures: number; permutations?: number };
+  counts: { blocks: number; items: number; recipes: number; mobs: number; functions: number; textures: number; permutations?: number; structures?: number };
   functions: Map<string, string[]>;
   tickFunctions: string[];
   /** Scripts JavaScript des packs de comportement (API de script). */
@@ -642,11 +644,26 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       const j = vfs.json(f);
       if (j) recipes.push(j);
     }
+    // structures (.mcstructure) : « dossier:nom » ou « mystructure:nom » à la racine
+    for (const f of vfs.list(root + 'structures', '.mcstructure')) {
+      try {
+        const data = parseMcStructure(vfs.get(f)!);
+        const rel = f.slice(root.length + 'structures/'.length).replace(/\.mcstructure$/i, '');
+        const parts = rel.split('/');
+        const name = parts.pop()!;
+        const ns = parts.length ? parts.join('/') : 'mystructure';
+        for (const k of [`${ns}:${name}`, ...(parts.length ? [] : [name])]) STRUCTURES.set(k.toLowerCase(), data);
+        result.counts.structures = (result.counts.structures ?? 0) + 1;
+      } catch (e) {
+        result.report.push(`Structure « ${f} » illisible : ${(e as Error).message}`);
+      }
+    }
     for (const f of vfs.list(root + 'entities', '.json')) {
       const j = vfs.json(f) as Record<string, { description?: Record<string, unknown>; components?: Record<string, unknown>; component_groups?: Record<string, Record<string, unknown>>; events?: Record<string, unknown> }> | undefined;
       const e = j?.['minecraft:entity'];
       const id = e?.description?.identifier as string | undefined;
-      if (!id || id.startsWith('minecraft:')) continue;
+      // entités du jeu de référence redéfinies : seuls le joueur (propriétés) et les projectiles sont utilisés
+      if (!id || (id.startsWith('minecraft:') && id !== 'minecraft:player' && !e!.components?.['minecraft:projectile'])) continue;
       // composants de base + groupes ajoutés à l'apparition (adulte, variantes…)
       const c = { ...(e!.components ?? {}) };
       const spawned = e!.events?.['minecraft:entity_spawned'] as Record<string, unknown> | undefined;
@@ -900,9 +917,59 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   for (const k of loot.keys()) LOOT_TABLES.set(k.replace(/^loot_tables\//, '').replace(/\.json$/, ''), lootDrops(k));
 
   // 7) entités
+  PLAYER_PROPERTIES.clear();
+  const avgColor = (bmp: ImageBitmap | undefined): string | null => {
+    if (!bmp) return null;
+    try {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 8;
+      const g = cv.getContext('2d')!;
+      g.drawImage(bmp, 0, 0, 8, 8);
+      const d = g.getImageData(0, 0, 8, 8).data;
+      let r = 0, gg = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 40) (r += d[i], gg += d[i + 1], b += d[i + 2], n++);
+      return n ? `rgb(${Math.round(r / n)},${Math.round(gg / n)},${Math.round(b / n)})` : null;
+    } catch {
+      return null;
+    }
+  };
   for (const e of entities) {
     if (MOB_BY_KEY.has(e.id)) continue;
     const c = e.c;
+    // joueur : seules les propriétés d'entité (minecraft:properties) sont utilisées (scripts)
+    if (e.id === 'minecraft:player') {
+      for (const [k, v] of Object.entries((e.desc.properties ?? {}) as Record<string, { type?: string; default?: unknown; values?: unknown[]; range?: number[] }>)) {
+        const d = v.default;
+        PLAYER_PROPERTIES.set(k, typeof d === 'number' || typeof d === 'boolean' ? d : typeof d === 'string' && !/[qv]\.|query|math/.test(d) ? d : v.type === 'bool' ? false : v.type === 'enum' ? String(v.values?.[0] ?? '') : (v.range?.[0] ?? 0));
+      }
+      continue;
+    }
+    // créature du jeu de référence redéfinie par l'add-on : la version du jeu est conservée
+    if (e.id.startsWith('minecraft:') && MOB_BY_KEY.has(e.id.slice(10))) continue;
+    // projectiles (minecraft:projectile) : gérés comme projectiles, pas comme créatures
+    const projC = c['minecraft:projectile'] as { on_hit?: Record<string, Record<string, unknown>>; gravity?: number; power?: number } | undefined;
+    if (projC) {
+      const hit = projC.on_hit ?? {};
+      const dmg = hit.impact_damage?.damage;
+      const eff = (hit.mob_effect ?? {}) as { effect?: string; duration?: number; amplifier?: number };
+      const ce0 = clientEntities.get(e.id);
+      const texKey = await addonImage(ce0?.texture);
+      const base = PROJECTILE_DEFS.get(e.id);
+      PROJECTILE_DEFS.set(e.id, {
+        id: e.id,
+        color: avgColor(texKey ? result.images.get(texKey) : undefined) ?? base?.color ?? '#d0d0d0',
+        size: base?.size ?? Math.max(0.15, Math.min(0.8, val((c['minecraft:collision_box'] as { width?: number } | undefined)?.width, 0.25))),
+        gravity: (projC.gravity ?? 0.05) * 240,
+        damage: Array.isArray(dmg) ? Number(dmg[0]) : val(dmg, base?.damage ?? 0),
+        ...(hit.explode ? { explode: val(hit.explode.power, 1) } : base?.explode ? { explode: base.explode } : {}),
+        ...(hit.catch_fire || base?.fire ? { fire: true } : {}),
+        ...(eff.effect ? { effect: { id: eff.effect, duration: val(eff.duration, 5) * 20, amplifier: val(eff.amplifier, 0) } } : base?.effect ? { effect: base.effect } : {}),
+        ...(hit.stick_in_ground || base?.stick ? { stick: true } : {}),
+        ...(base?.knockback ? { knockback: base.knockback } : {}),
+        ...(hit.teleport_owner || base?.teleport ? { teleport: true } : {}),
+      });
+      continue;
+    }
     const fam = ((c['minecraft:type_family'] as { family?: string[] } | undefined)?.family ?? []).join(' ');
     const hostile = /monster/.test(fam) || !!c['minecraft:behavior.nearest_attackable_target'] && JSON.stringify(c['minecraft:behavior.nearest_attackable_target']).includes('player');
     const attack = c['minecraft:attack'] as { damage?: unknown } | undefined;
@@ -930,7 +997,7 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       drops: lootDrops(lootTable),
       xp: hostile ? 5 : 2,
       food: items.map((i) => itemKey(i)).filter((x): x is string => !!x),
-      ranged: ranged ? { projectile: 'arrow', range: 15, damage: Math.max(2, val(attack?.damage, 3)), speed: 1.5 } : undefined,
+      ranged: ranged ? { projectile: 'arrow', range: 15, damage: Math.max(2, val(attack?.damage, 3)), speed: 1.5, ...((c['minecraft:shooter'] as { def?: string } | undefined)?.def ? { customId: String((c['minecraft:shooter'] as { def?: string }).def) } : {}) } : undefined,
       traits,
       sounds: hostile ? { idle: 'groan', hurt: 'groan_hurt', death: 'groan_death' } : { idle: 'oink', hurt: 'oink_hurt', death: 'oink_hurt' },
       scale: val(c['minecraft:scale'], 1),

@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import { PROJECTILE_DEFS, type ProjectileDef, type Projectile } from './Projectile';
 import type { GameContext } from '../core/GameContext';
 import type { MobDef } from '../data/mobs';
 import { AIController } from '../ai/AIController';
@@ -9,7 +10,7 @@ import type { ProjectileKind } from './Projectile';
 
 /** Services fournis par l'EntityManager aux entités. */
 export interface EntitySpawner {
-  spawnProjectile(kind: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, damage: number, fromPlayer: boolean): void;
+  spawnProjectile(kind: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, damage: number, fromPlayer: boolean, def?: ProjectileDef): Projectile;
   spawnMob(key: string, x: number, y: number, z: number, opts?: { baby?: boolean; persistent?: boolean }): Mob | null;
   spawnItem(id: string, count: number, x: number, y: number, z: number, durability?: number): void;
   modelFor(key: string, scale: number): MobModel;
@@ -106,7 +107,9 @@ export class Mob extends Entity {
     const grav = r.projectile === 'arrow' || r.projectile === 'boulder' ? 12 : 0;
     const vy = (ty - sy) / t + 0.5 * grav * t;
     const spread = 0.06;
-    this.spawner.spawnProjectile(r.projectile, sx, sy, sz, (dx / dh) * r.speed + (Math.random() - 0.5) * spread * r.speed, vy, (dz / dh) * r.speed + (Math.random() - 0.5) * spread * r.speed, r.damage, false);
+    const custom = r.customId ? PROJECTILE_DEFS.get(r.customId) : undefined;
+    const pr = this.spawner.spawnProjectile(custom ? 'custom' : r.projectile, sx, sy, sz, (dx / dh) * r.speed + (Math.random() - 0.5) * spread * r.speed, vy, (dz / dh) * r.speed + (Math.random() - 0.5) * spread * r.speed, custom?.damage || r.damage, false, custom);
+    pr.owner = this;
     ctx.audio.play(r.projectile === 'arrow' ? 'bow' : 'cast', { x: sx, y: sy, z: sz });
   }
 

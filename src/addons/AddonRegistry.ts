@@ -56,3 +56,9 @@ export function rollLoot(name: string): { item: string; count: number }[] {
   }
   return out;
 }
+
+/** Propriétés d'entité du joueur définies par les add-ons (minecraft:properties) → valeur par défaut. */
+export const PLAYER_PROPERTIES = new Map<string, number | string | boolean>();
+
+/** Structures .mcstructure des add-ons (identifiant « espace:nom » et « nom »). */
+export const STRUCTURES = new Map<string, import('./McStructure').StructureData>();

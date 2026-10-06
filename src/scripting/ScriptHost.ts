@@ -137,6 +137,9 @@ export class ScriptHost implements HostServices {
       this.s.game.chat.add(`§c${line.slice(0, 200)}`, 'error');
     }
   }
+  reportWarning(m: string) {
+    this.warn(m);
+  }
   private warn(m: string) {
     if (this.log.length < 200 && !this.log.includes(m)) this.log.push(m);
   }

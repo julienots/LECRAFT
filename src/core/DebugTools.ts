@@ -3,6 +3,9 @@ import type { Game } from './Game';
 import { WorldGenerator } from '../world/WorldGenerator';
 import { BiomeManager } from '../world/BiomeManager';
 import { makeStack } from '../inventory/Inventory';
+import { ItemRegistry } from '../inventory/ItemRegistry';
+import { MOB_DEFS } from '../data/mobs';
+import { hooks } from '../scripting/Hooks';
 
 /**
  * Outils de diagnostic (console / tests automatisés). Exposés sur window.__lecraft.debug.
@@ -48,6 +51,11 @@ export class DebugTools {
 
   give(id: string, count = 1) {
     this.game.session!.player.inventory.add(makeStack(id, count));
+  }
+
+  /** Accès en lecture aux registres et aux crochets de script (tests automatisés). */
+  get registries() {
+    return { blocks: BlockRegistry, items: ItemRegistry, mobs: MOB_DEFS, hooks };
   }
 
   setTime(t: number) {

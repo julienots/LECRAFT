@@ -20,7 +20,7 @@ export interface MobDef {
   xp: number;
   /** Nourriture qui attire / permet la reproduction. */
   food?: string[];
-  ranged?: { projectile: 'arrow' | 'ice' | 'crystal' | 'boulder'; range: number; damage: number; speed: number };
+  ranged?: { projectile: 'arrow' | 'ice' | 'crystal' | 'boulder'; range: number; damage: number; speed: number; /** Projectile d'add-on (minecraft:shooter). */ customId?: string };
   /** Comportements spéciaux. */
   traits?: ('burnsInSun' | 'climbs' | 'hops' | 'flies' | 'splits' | 'knockbackResist' | 'aquatic' | 'poison' | 'neutralInDay' | 'shearable' | 'laysEggs' | 'milkable')[];
   /** Conditions d'apparition naturelle. */

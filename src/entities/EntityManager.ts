@@ -11,7 +11,7 @@ import { Animal } from './Animal';
 import { Monster } from './Monster';
 import { GolemBoss, LichBoss, Boss } from './Boss';
 import { ItemEntity } from './ItemEntity';
-import { Projectile, type ProjectileKind } from './Projectile';
+import { Projectile, type ProjectileKind, type ProjectileDef } from './Projectile';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { makeStack } from '../inventory/Inventory';
 import { DamageSystem } from '../combat/DamageSystem';
@@ -112,8 +112,8 @@ export class EntityManager implements EntitySpawner {
     this.group.add(e.object3d);
   }
 
-  spawnProjectile(kind: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, damage: number, fromPlayer: boolean) {
-    const p = new Projectile(kind, x, y, z, vx, vy, vz, damage, fromPlayer);
+  spawnProjectile(kind: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, damage: number, fromPlayer: boolean, def?: ProjectileDef) {
+    const p = new Projectile(kind, x, y, z, vx, vy, vz, damage, fromPlayer, def);
     this.entities.push(p);
     this.group.add(p.object3d);
     return p;
@@ -235,8 +235,13 @@ export class EntityManager implements EntitySpawner {
       const b = p.body;
       if (pr.x > b.x - 0.4 && pr.x < b.x + 0.4 && pr.z > b.z - 0.4 && pr.z < b.z + 0.4 && pr.y > b.y && pr.y < b.y + b.height) {
         const v = Math.hypot(pr.body.vx, pr.body.vz) || 1;
-        const dealt = p.damage(pr.damage, 'projectile', (pr.body.vx / v) * 4, (pr.body.vz / v) * 4, null, pr);
+        const dealt = pr.damage > 0 ? p.damage(pr.damage, pr.def?.fire ? 'fire' : 'projectile', (pr.body.vx / v) * 4, (pr.body.vz / v) * 4, pr.owner, pr) : 0;
         if (pr.type === 'ice') p.slowTimer = 2;
+        if (pr.def?.effect) p.effects.add(pr.def.effect.id, pr.def.effect.duration, pr.def.effect.amplifier, true, p.effectTarget);
+        if (pr.def) {
+          pr.customImpact(ctx);
+          return;
+        }
         if (dealt > 0) {
           ctx.audio.play('hurt');
           ctx.haptic('medium');
@@ -250,8 +255,20 @@ export class EntityManager implements EntitySpawner {
       const [a, b, c, d, f, g] = e.aabb();
       if (pr.x > a - 0.1 && pr.x < d + 0.1 && pr.y > b && pr.y < f && pr.z > c - 0.1 && pr.z < g + 0.1) {
         const v = Math.hypot(pr.body.vx, pr.body.vz) || 1;
-        this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: true, knockX: (pr.body.vx / v) * 4, knockZ: (pr.body.vz / v) * 4, itemId: pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: ctx.player });
+        if (pr.owner === e) continue;
+        if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: true, knockX: (pr.body.vx / v) * 4, knockZ: (pr.body.vz / v) * 4, itemId: pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
         if (pr.type === 'frost_bolt') (e as Mob).slowTimer = 3;
+        if (pr.def) {
+          const m = e as Mob;
+          if (pr.def.effect) m.effects.add(pr.def.effect.id, pr.def.effect.duration, pr.def.effect.amplifier);
+          if (pr.def.knockback) {
+            m.body.vx += (pr.body.vx / v) * pr.def.knockback;
+            m.body.vz += (pr.body.vz / v) * pr.def.knockback;
+            m.body.vy = Math.max(m.body.vy, pr.def.knockback * 0.5);
+          }
+          pr.customImpact(ctx);
+          return;
+        }
         pr.removed = true;
         return;
       }

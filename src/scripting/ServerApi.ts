@@ -16,7 +16,10 @@ import type { ItemStack as EngineStack } from '../inventory/Item';
 import { Entity as EngineEntity } from '../entities/Entity';
 import { Mob } from '../entities/Mob';
 import { ItemEntity } from '../entities/ItemEntity';
-import { Projectile } from '../entities/Projectile';
+import { Projectile, PROJECTILE_DEFS } from '../entities/Projectile';
+import { PLAYER_PROPERTIES, STRUCTURES } from '../addons/AddonRegistry';
+import { placeStructure, resolveNamedBlock } from '../addons/StructurePlacer';
+import { closestBlock } from '../blocks/BlockAliases';
 import { Player as EnginePlayer } from '../player/Player';
 import { MOB_BY_KEY, MOB_DEFS, familiesOf } from '../data/mobs';
 import { EFFECTS, effectId } from '../entities/Effects';
@@ -43,6 +46,7 @@ export interface HostServices {
   cooldowns: Map<string, number>;
   offhand: EngineStack | null;
   sendScriptEvent(id: string, message: string, source: Actor | null): void;
+  reportWarning?(m: string): void;
   readonly instances: ServerApiInstance[];
   /** Lance un écran de formulaire ; résout avec la réponse. */
   readonly forms: unknown;
@@ -249,7 +253,18 @@ export function createServerApi(host: HostServices, pack: string, version: strin
     if (BlockRegistry.has(k)) return BlockRegistry.byName(k).id;
     const alias: Record<string, string> = { grass: 'grass_block', flowing_water: 'water', flowing_lava: 'lava', stonebrick: 'stone_bricks', planks: 'oak_planks', log: 'oak_log', leaves: 'oak_leaves', wool: 'white_wool', tallgrass: 'short_grass', short_grass: 'short_grass' };
     if (alias[k] && BlockRegistry.has(alias[k])) return BlockRegistry.byName(alias[k]).id;
+    const near = closestBlock(k);
+    if (near >= 0) {
+      warnSubst(t, near);
+      return near;
+    }
     return -1;
+  }
+  const substituted = new Set<string>();
+  function warnSubst(t: string, id: number) {
+    if (substituted.has(t)) return;
+    substituted.add(t);
+    host.reportWarning?.(`Bloc « ${t} » absent du jeu : remplacé par « ${BlockRegistry.get(id).key} ».`);
   }
 
   // ---------- objets ----------
@@ -848,6 +863,21 @@ export function createServerApi(host: HostServices, pack: string, version: strin
         S().explosions.prime(S(), bx, by, bz);
         return fakeEntity(id, p);
       }
+      const pdef = PROJECTILE_DEFS.get(id) ?? PROJECTILE_DEFS.get(NS(k));
+      if (pdef) {
+        const pr = S().entities.spawnProjectile('custom', p.x, p.y, p.z, 0, 0, 0, pdef.damage, true, pdef);
+        pr.owner = null;
+        return wrapEntity(pr);
+      }
+      if (k === 'evocation_fang') {
+        // crocs : morsure après un court délai sur les créatures proches
+        host.schedule(() => {
+          S().particles.burst('crystal', p.x, p.y + 0.5, p.z, 8);
+          S().audio.playId('mob.evocation_fangs.attack', { x: p.x, y: p.y, z: p.z });
+          for (const m of S().entities.mobs) if (!m.dead && Math.hypot(m.x - p.x, m.z - p.z) < 1.2 && Math.abs(m.y - p.y) < 2) S().combat.damageMob(m, 6, { kind: 'environment', cause: 'magic' });
+        }, 10);
+        return fakeEntity(id, p);
+      }
       const key = MOB_BY_KEY.has(id) ? id : MOB_BY_KEY.has(k) ? k : MOB_DEFS.find((d) => d.key === k || NS(d.key) === id)?.key;
       if (!key) throw new Error(`Type d'entité inconnu : ${id}`);
       const m = S().entities.spawnMob(key, p.x, p.y, p.z, { persistent: true });
@@ -1111,7 +1141,7 @@ export function createServerApi(host: HostServices, pack: string, version: strin
     if (e instanceof EnginePlayer) return 'minecraft:player';
     if (e instanceof Mob) return NS(e.def.key);
     if (e instanceof ItemEntity) return 'minecraft:item';
-    if (e instanceof Projectile) return e.type === 'arrow' || e.type === 'player_arrow' ? 'minecraft:arrow' : e.type === 'ice' ? 'minecraft:snowball' : `minecraft:${e.type}`;
+    if (e instanceof Projectile) return e.def ? e.def.id : e.type === 'arrow' || e.type === 'player_arrow' ? 'minecraft:arrow' : e.type === 'ice' ? 'minecraft:snowball' : `minecraft:${e.type}`;
     return 'minecraft:unknown';
   }
   function families(e: Actor): string[] {
@@ -1190,6 +1220,7 @@ export function createServerApi(host: HostServices, pack: string, version: strin
     const dp = e instanceof EnginePlayer ? e.dynProps : (e as EngineEntity).dynProps;
     const k = `__prop:${id}`;
     if (dp.has(k)) return dp.get(k);
+    if (e instanceof EnginePlayer) return PLAYER_PROPERTIES.get(id);
     return e instanceof Mob ? e.def.properties?.[id] : undefined;
   }
 
@@ -1546,8 +1577,38 @@ export function createServerApi(host: HostServices, pack: string, version: strin
     if (k === 'item') return e instanceof ItemEntity ? { ...base, itemStack: ItemStack._from({ id: e.itemId, count: e.count, ...(e.durability !== undefined ? { durability: e.durability } : {}), ...((e as Any).meta ? { meta: (e as Any).meta } : {}) }) } : undefined;
     if (k === 'projectile') {
       if (!(e instanceof Projectile)) return undefined;
-      return { ...base, owner: e.fromPlayer ? wrapEntity(s.player) : undefined, shoot: (v: Any) => ent.applyImpulse(v), gravity: 0.05, airInertia: 0.99 };
+      return {
+        ...base,
+        get owner() {
+          return e.owner ? wrapEntity(e.owner) : e.fromPlayer && !e.def ? wrapEntity(s.player) : undefined;
+        },
+        set owner(o: Any) {
+          e.owner = o?._e ?? null;
+          e.fromPlayer = !(o?._e instanceof Mob);
+        },
+        shoot: (v: Any, opts?: Any) => {
+          const d = toV(v);
+          const u = Number(opts?.uncertainty ?? 0) * 0.01;
+          e.body.vx = clampV((d.x + (Math.random() - 0.5) * u) * 20);
+          e.body.vy = clampV((d.y + (Math.random() - 0.5) * u) * 20);
+          e.body.vz = clampV((d.z + (Math.random() - 0.5) * u) * 20);
+        },
+        gravity: (e.def?.gravity ?? 12) / 240,
+        airInertia: 0.99,
+        catchFireOnHurt: false,
+        critParticlesOnProjectileHurt: false,
+        destroyOnProjectileHurt: false,
+        hitEntitySound: undefined,
+        hitGroundSound: undefined,
+        lightningStrikeOnHit: false,
+        liquidInertia: 0.6,
+        onFireTime: 0,
+        shouldBounceOnHit: false,
+        stopOnHit: false,
+      };
     }
+    if (k === 'rideable') return e instanceof Mob ? { ...base, seatCount: 1, controllingSeat: 0, crouchingSkipInteract: true, family: [], interactText: '', passengerMaxWidth: 0, pullInEntities: false, riderCanInteract: false, addRider: () => false, ejectRider() {}, ejectRiders() {}, getFamilyTypes: () => [], getRiders: () => [], getSeats: () => [] } : undefined;
+    if (k === 'riding') return undefined;
     if (e instanceof EnginePlayer) {
       if (k === 'inventory') return { ...base, container: new Container(playerStore()), inventorySize: e.inventory.size, containerType: 'inventory', canBeSiphonedFrom: false, private: false, restrictToOwner: false, additionalSlotsPerStrength: 0 };
       if (k === 'equippable') return equippable(base);
@@ -1854,6 +1915,78 @@ export function createServerApi(host: HostServices, pack: string, version: strin
     },
   };
 
+  // ---------- structures (en mémoire : copie/rotation de zones du monde) ----------
+  class Structure {
+    blocks: { x: number; y: number; z: number; id: number; meta: number }[] = [];
+    constructor(readonly id: string, public size: V3) {}
+    get isValid() {
+      return structures.has(this.id);
+    }
+    getBlockPermutation(p: Any) {
+      const v = toV(p);
+      const b = this.blocks.find((q) => q.x === v.x && q.y === v.y && q.z === v.z);
+      return b ? new BlockPermutation(b.id, b.meta) : undefined;
+    }
+    setBlockPermutation(p: Any, perm?: BlockPermutation) {
+      const v = toV(p);
+      this.blocks = this.blocks.filter((q) => !(q.x === v.x && q.y === v.y && q.z === v.z));
+      if (perm) this.blocks.push({ ...v, id: perm._id, meta: perm._meta });
+    }
+    getIsWaterlogged() {
+      return false;
+    }
+    saveAs() {
+      return this;
+    }
+    saveToWorld() {}
+  }
+  const structures = new Map<string, Structure>();
+  /** Structure d'un fichier .mcstructure d'add-on (copie modifiable). */
+  function fileStructure(id: string): Structure | undefined {
+    const d = STRUCTURES.get(String(id).toLowerCase()) ?? STRUCTURES.get(`mystructure:${String(id).toLowerCase()}`);
+    if (!d) return undefined;
+    const st = new Structure(id, vec(d.size[0], d.size[1], d.size[2]));
+    for (const b of d.blocks) {
+      const [bid, meta] = resolveNamedBlock(b.name, b.states);
+      if (bid >= 0) st.blocks.push({ x: b.x, y: b.y, z: b.z, id: bid, meta });
+    }
+    structures.set(id, st);
+    return st;
+  }
+  const structureManager = {
+    createEmpty: (id: string, size: Any) => {
+      const st = new Structure(id, toV(size));
+      structures.set(id, st);
+      return st;
+    },
+    createFromWorld: (id: string, _dim: Any, from: Any, to: Any) => {
+      const a = toV(from), b = toV(to);
+      const min = vec(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z));
+      const max = vec(Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z));
+      if ((max.x - min.x + 1) * (max.y - min.y + 1) * (max.z - min.z + 1) > 65536) throw new Error('Structure trop grande');
+      const st = new Structure(id, vec(max.x - min.x + 1, max.y - min.y + 1, max.z - min.z + 1));
+      for (let y = min.y; y <= max.y; y++)
+        for (let z = min.z; z <= max.z; z++)
+          for (let x = min.x; x <= max.x; x++) st.blocks.push({ x: x - min.x, y: y - min.y, z: z - min.z, id: Math.max(0, W().getBlock(x, y, z)), meta: W().getMeta(x, y, z) });
+      structures.set(id, st);
+      return st;
+    },
+    get: (id: string) => structures.get(id) ?? fileStructure(id),
+    getWorldStructureIds: () => [...structures.keys()],
+    delete: (st: Any) => structures.delete(typeof st === 'string' ? st : st?.id),
+    place: (st: Any, _dim: Any, loc: Any, opts?: Any) => {
+      const s0: Structure | undefined = typeof st === 'string' ? structures.get(st) ?? fileStructure(st) : st;
+      if (!s0) throw new Error(`Structure inconnue : ${typeof st === 'string' ? st : st?.id}`);
+      const o = toV(loc);
+      const steps = { Rotate90: 1, Rotate180: 2, Rotate270: 3 }[String(opts?.rotation ?? 'None')] ?? 0;
+      const mirror = String(opts?.mirror ?? 'None');
+      const data = { size: [s0.size.x, s0.size.y, s0.size.z] as [number, number, number], blocks: s0.blocks.map((b) => ({ x: b.x, y: b.y, z: b.z, name: BlockRegistry.get(b.id)?.key ?? 'air', states: b.id > 0 && BlockRegistry.get(b.id).def.bedrock ? (decodeStates(BlockRegistry.get(b.id).def.bedrock!, b.meta) as Record<string, string | number | boolean>) : {} })) };
+      placeStructure(W(), data, Math.floor(o.x), Math.floor(o.y), Math.floor(o.z), steps, mirror, opts?.includeBlocks !== false);
+    },
+    placeJigsaw: () => undefined,
+    placeJigsawStructure: () => undefined,
+  };
+
   // ---------- monde ----------
   const gameRules = new Proxy({} as Record<string, Any>, {
     get(_t, k: string) {
@@ -1875,7 +2008,7 @@ export function createServerApi(host: HostServices, pack: string, version: strin
     beforeEvents,
     scoreboard,
     gameRules,
-    structureManager: { createEmpty: () => { throw new Error('Structures non prises en charge'); }, get: () => undefined, getWorldStructureIds: () => [], place: () => { throw new Error('Structures non prises en charge'); }, delete: () => false, createFromWorld: () => { throw new Error('Structures non prises en charge'); } },
+    structureManager,
     isHardcore: false,
     seed: undefined as Any,
     getDimension: (id: string) => dimById(id),

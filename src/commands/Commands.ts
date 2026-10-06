@@ -18,9 +18,11 @@ import { ItemEntity } from '../entities/ItemEntity';
 import { Projectile } from '../entities/Projectile';
 import { EFFECTS, effectId } from '../entities/Effects';
 import { encodeStates, decodeStates } from '../addons/BedrockBlocks';
-import { rollLoot } from '../addons/AddonRegistry';
+import { rollLoot, STRUCTURES } from '../addons/AddonRegistry';
+import { placeStructure } from '../addons/StructurePlacer';
 import { mapParticle } from '../audio/SoundMap';
 import { hooks } from '../scripting/Hooks';
+import { closestBlock } from '../blocks/BlockAliases';
 import type { ItemStack } from '../inventory/Item';
 
 export class CommandError extends Error {}
@@ -151,6 +153,9 @@ export function resolveBlock(id: string): number {
       /* suivant */
     }
   }
+  // bloc du jeu de référence absent : équivalent le plus proche
+  const near = closestBlock(k);
+  if (near >= 0) return near;
   throw new CommandError(`Bloc inconnu : « ${id} »`);
 }
 
@@ -444,6 +449,17 @@ function rawText(c: Ctx, json: string): string {
 }
 
 // ---------- états de blocs ----------
+
+/** « bloc["etat"=1] » collé : sépare l'identifiant et les états (hors sélecteurs @e[…]). */
+function splitBlockStates(toks: string[]): string[] {
+  const out: string[] = [];
+  for (const t of toks) {
+    const m = /^([a-z0-9_:.-]+)(\[.*\])$/i.exec(t);
+    if (m && !t.startsWith('@')) out.push(m[1], m[2]);
+    else out.push(t);
+  }
+  return out;
+}
 
 /** Lit « ["a"=1,"b"="x"] » en dictionnaire d'états. */
 export function parseStates(tok: string | undefined): Record<string, string | number | boolean> | null {
@@ -1248,9 +1264,17 @@ const COMMANDS: CommandDef[] = [
     },
   },
   {
-    name: 'structure', usage: '/structure <save|load|delete> …', desc: 'Structures (non prises en charge)', cheat: true,
-    run() {
-      throw new CommandError('Les structures (.mcstructure) ne sont pas encore prises en charge');
+    name: 'structure', usage: '/structure load <nom> <x y z> [0_degrees|90_degrees|180_degrees|270_degrees] [none|x|z|xz]', desc: "Pose une structure d'add-on", cheat: true,
+    run(c) {
+      if (c.args[0] !== 'load') throw new CommandError('Seul « /structure load » est pris en charge');
+      const name = (c.args[1] ?? '').toLowerCase();
+      const data = STRUCTURES.get(name) ?? STRUCTURES.get(`mystructure:${name}`);
+      if (!data) throw new CommandError(`Structure inconnue : ${c.args[1] ?? ''}`);
+      const [x, y, z] = c.args.length >= 5 ? blockCoords(c, 2) : [Math.floor(c.origin.x), Math.floor(c.origin.y), Math.floor(c.origin.z)];
+      const rot = { '0_degrees': 0, '90_degrees': 1, '180_degrees': 2, '270_degrees': 3 }[c.args[5] ?? '0_degrees'] ?? 0;
+      const mir = { none: 'None', x: 'X', z: 'Z', xz: 'XZ' }[(c.args[6] ?? 'none').toLowerCase()] ?? 'None';
+      const n = placeStructure(c.s.world, data, x, y, z, rot, mir, c.args[7] !== 'false');
+      c.out(`Structure ${name} posée (${n} blocs)`);
     },
   },
   ...NOOP.map((name): CommandDef => ({ name, usage: `/${name} …`, desc: 'Accepté (sans effet dans cette version)', cheat: true, run() {} })),
@@ -1468,7 +1492,7 @@ export function commandList(): { name: string; usage: string; desc: string }[] {
  * retourne vrai si la commande a réussi. `executor` désigne @s (le joueur par défaut).
  */
 export function execute(s: Session, line: string, out: (m: string, error?: boolean) => void, depth = 0, origin?: Origin, force = false, executor: Target | null = { kind: 'player' }): boolean {
-  const toks = tokenize(line.replace(/^\s*\//, ''));
+  const toks = splitBlockStates(tokenize(line.replace(/^\s*\//, '')));
   if (!toks.length) return false;
   if (depth > 64) {
     out('Trop de commandes imbriquées', true);
