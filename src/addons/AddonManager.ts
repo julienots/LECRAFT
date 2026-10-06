@@ -33,6 +33,7 @@ import { geometryToModel, readGeometries, type BedrockGeo } from './BedrockGeome
 import { resolveItem, LANG } from '../commands/Commands';
 import { PROJECTILE_DEFS } from '../entities/Projectile';
 import { parseMcStructure } from './McStructure';
+import { readAnimations, readControllers, ENTITY_ANIMS } from './BedrockAnimation';
 import { EXTRA_BLOCKS, EXTRA_ITEMS, EXTRA_RECIPES, EXTRA_SMELTING, EXTRA_TAGS } from '../data/vanillaExtra';
 
 // ---------- stockage ----------
@@ -269,11 +270,13 @@ export async function importAddon(file: File): Promise<InstalledAddon> {
 export interface AddonLoadResult {
   images: Map<string, ImageBitmap>;
   report: string[];
-  counts: { blocks: number; items: number; recipes: number; mobs: number; functions: number; textures: number; permutations?: number; structures?: number };
+  counts: { blocks: number; items: number; recipes: number; mobs: number; functions: number; textures: number; permutations?: number; structures?: number; sounds?: number };
   functions: Map<string, string[]>;
   tickFunctions: string[];
   /** Scripts JavaScript des packs de comportement (API de script). */
   scripts: ScriptPack[];
+  /** Sons des packs de ressources : identifiant → fichiers audio. */
+  sounds: Map<string, { data: Uint8Array[]; volume: number; pitch: number }>;
 }
 
 export interface ScriptPack {
@@ -529,7 +532,7 @@ async function buildBedrockInfo(
 
 /** Charge et enregistre tous les add-ons activés. À appeler avant la création de tout monde. */
 export async function loadEnabledAddons(): Promise<AddonLoadResult> {
-  const result: AddonLoadResult = { images: new Map(), report: [], counts: { blocks: 0, items: 0, recipes: 0, mobs: 0, functions: 0, textures: 0 }, functions: new Map(), tickFunctions: [], scripts: [] };
+  const result: AddonLoadResult = { images: new Map(), report: [], counts: { blocks: 0, items: 0, recipes: 0, mobs: 0, functions: 0, textures: 0 }, functions: new Map(), tickFunctions: [], scripts: [], sounds: new Map() };
   const addons = (await listAddons()).filter((a) => a.enabled);
   if (!addons.length) {
     // aucun add-on actif : blocs supplémentaires du jeu de référence ; les identifiants
@@ -580,8 +583,45 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
     if (x && typeof x === 'object') return shortTex((x as Record<string, unknown>).path);
     return undefined;
   };
+  const entitySounds = new Map<string, Record<string, string>>();
   for (const rp of rps) {
     const { vfs, root } = rp;
+    // sons : sound_definitions.json (fichiers .ogg/.wav) et sons des entités (sounds.json)
+    const sd = vfs.json(root + 'sounds/sound_definitions.json') as Record<string, unknown> | undefined;
+    const defs = (sd?.sound_definitions ?? sd ?? {}) as Record<string, { sounds?: (string | { name?: string; volume?: number; pitch?: number })[] }>;
+    for (const [id, d] of Object.entries(defs)) {
+      if (!d || typeof d !== 'object' || !Array.isArray(d.sounds)) continue;
+      const data: Uint8Array[] = [];
+      let volume = 1, pitch = 1;
+      for (const e of d.sounds) {
+        const name = typeof e === 'string' ? e : e?.name;
+        if (!name) continue;
+        if (typeof e === 'object') {
+          volume = e.volume ?? volume;
+          pitch = e.pitch ?? pitch;
+        }
+        for (const ext of ['.ogg', '.wav', '.mp3', '']) {
+          const f = vfs.get(root + name + ext);
+          if (f) {
+            data.push(f);
+            break;
+          }
+        }
+      }
+      if (data.length) {
+        result.sounds.set(id.toLowerCase(), { data, volume, pitch });
+        result.counts.sounds = (result.counts.sounds ?? 0) + 1;
+      }
+    }
+    const sj = vfs.json(root + 'sounds.json') as { entity_sounds?: { entities?: Record<string, { events?: Record<string, unknown> }> } } | undefined;
+    for (const [eid, e] of Object.entries(sj?.entity_sounds?.entities ?? {})) {
+      const ev: Record<string, string> = {};
+      for (const [k, v] of Object.entries(e.events ?? {})) {
+        const sid = typeof v === 'string' ? v : (v as { sound?: string })?.sound;
+        if (sid) ev[k] = sid.toLowerCase();
+      }
+      entitySounds.set(eid, ev);
+    }
     for (const f of ['texts/fr_FR.lang', 'texts/en_US.lang']) {
       const t = vfs.text(root + f);
       if (!t) continue;
@@ -600,6 +640,8 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       const p = shortTex(v.textures);
       if (p) itemTex.set(k, p);
     }
+    for (const f of vfs.list(root + 'animations', '.json')) readAnimations(vfs.json(f));
+    for (const f of vfs.list(root + 'animation_controllers', '.json')) readControllers(vfs.json(f));
     const bj = vfs.json(root + 'blocks.json') as Record<string, unknown> | undefined;
     for (const [k, v] of Object.entries(bj ?? {})) if (k !== 'format_version') blockJson.set(k.includes(':') ? k : `minecraft:${k}`, v);
     for (const f of [...vfs.list(root + 'entity', '.json'), ...vfs.list(root + 'entities', '.json')]) {
@@ -609,6 +651,10 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       const tex = d.textures as Record<string, string> | undefined;
       const geo = d.geometry as Record<string, string> | undefined;
       clientEntities.set(String(d.identifier), { texture: tex?.default ?? Object.values(tex ?? {})[0], geometry: geo?.default ?? Object.values(geo ?? {})[0] });
+      // animations : noms courts → animation/contrôleur, scripts animate/initialize/pre_animation
+      const scr = (d.scripts ?? {}) as { animate?: (string | Record<string, string>)[]; initialize?: string[]; pre_animation?: string[] };
+      if (d.animations && scr.animate?.length)
+        ENTITY_ANIMS.set(String(d.identifier), { map: d.animations as Record<string, string>, animate: scr.animate, initialize: scr.initialize ?? [], preAnimation: scr.pre_animation ?? [] });
     }
     for (const f of vfs.list(root + 'models', '.json')) {
       const j = vfs.json(f) ?? {};
@@ -1074,7 +1120,11 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       food: items.map((i) => itemKey(i)).filter((x): x is string => !!x),
       ranged: ranged ? { projectile: 'arrow', range: 15, damage: Math.max(2, val(attack?.damage, 3)), speed: 1.5, ...((c['minecraft:shooter'] as { def?: string } | undefined)?.def ? { customId: String((c['minecraft:shooter'] as { def?: string }).def) } : {}) } : undefined,
       traits,
-      sounds: hostile ? { idle: 'groan', hurt: 'groan_hurt', death: 'groan_death' } : { idle: 'oink', hurt: 'oink_hurt', death: 'oink_hurt' },
+      sounds: {
+        idle: entitySounds.get(e.id)?.ambient ?? (hostile ? 'groan' : 'oink'),
+        hurt: entitySounds.get(e.id)?.hurt ?? (hostile ? 'groan_hurt' : 'oink_hurt'),
+        death: entitySounds.get(e.id)?.death ?? entitySounds.get(e.id)?.hurt ?? (hostile ? 'groan_death' : 'oink_hurt'),
+      },
       scale: val(c['minecraft:scale'], 1),
       families: ((c['minecraft:type_family'] as { family?: string[] } | undefined)?.family ?? []).map(String),
       properties: Object.fromEntries(

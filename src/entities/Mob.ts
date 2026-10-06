@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import { AnimPlayer, ENTITY_ANIMS } from '../addons/BedrockAnimation';
 import { PROJECTILE_DEFS, type ProjectileDef, type Projectile } from './Projectile';
 import type { GameContext } from '../core/GameContext';
 import type { MobDef } from '../data/mobs';
@@ -49,6 +50,8 @@ export class Mob extends Entity {
   object3d: THREE.Object3D;
   sim = true; // simulé ce tick (LOD)
   private effectTick = 0;
+  /** Lecteur d'animations Bedrock (créatures d'add-ons). */
+  private animPlayer: AnimPlayer | null = null;
   private idleSoundTimer = 4 + Math.random() * 10;
 
   constructor(readonly def: MobDef, readonly index: number, x: number, y: number, z: number, protected spawner: EntitySpawner, handlers?: Partial<Record<AIState, StateHandlers<Mob>>>) {
@@ -200,7 +203,47 @@ export class Mob extends Entity {
       const p = ctx.player;
       headPitch = Math.atan2(p.y + p.eyeHeight - (this.y + this.body.height * 0.85), this.distToPlayer || 1) * 0.6;
     }
-    this.model.animate(this.walkPhase, Math.min(1, sp / 2), t, this.attackAnim, headYaw, headPitch);
+    const animSet = this.model.bones.size ? ENTITY_ANIMS.get(this.def.key) : undefined;
+    if (animSet) {
+      // animations Bedrock de l'add-on (images clés + contrôleurs)
+      this.animPlayer ??= new AnimPlayer(animSet);
+      const DEG = 180 / Math.PI;
+      const chasing = this.ai.state === AIState.CHASE || this.ai.state === AIState.ATTACK;
+      const q = (n: string, a: unknown[]): number | undefined => {
+        switch (n) {
+          case 'modified_distance_moved': case 'distance_moved': case 'walk_distance': return this.walkPhase / 3.2;
+          case 'modified_move_speed': case 'move_speed': return Math.min(1, sp / Math.max(1, this.def.speed));
+          case 'ground_speed': case 'horizontal_speed': return sp;
+          case 'vertical_speed': return this.body.vy;
+          case 'is_moving': case 'is_walking': return sp > 0.15 ? 1 : 0;
+          case 'is_on_ground': return this.body.onGround ? 1 : 0;
+          case 'is_in_water': case 'is_in_water_or_rain': case 'is_swimming': return this.body.inWater ? 1 : 0;
+          case 'is_baby': return this.baby ? 1 : 0;
+          case 'is_alive': return this.dead ? 0 : 1;
+          case 'health': return this.health;
+          case 'max_health': return this.maxHealth;
+          case 'has_target': case 'is_angry': case 'is_attacking': case 'has_any_target': return chasing ? 1 : 0;
+          case 'is_delayed_attacking': return this.attackAnim > 0 ? 1 : 0;
+          case 'attack_time': return this.attackAnim > 0 ? 1 - this.attackAnim : 0;
+          case 'target_x_rotation': case 'head_x_rotation': return -headPitch * DEG;
+          case 'target_y_rotation': case 'head_y_rotation': return headYaw * DEG;
+          case 'body_y_rotation': return this.yaw * DEG;
+          case 'delta_time': return 1 / 60;
+          case 'time_of_day': return ctx.dayCycle.time;
+          case 'is_jumping': return !this.body.onGround && this.body.vy > 0 ? 1 : 0;
+          case 'is_sprinting': case 'is_running': return sp > this.def.speed * 1.2 ? 1 : 0;
+          case 'variant': case 'mark_variant': case 'skin_id': return Number(this.dynProps.get(`__${n}`) ?? (n === 'variant' ? this.def.variant ?? 0 : 0));
+          case 'property': case 'actor_property': case 'has_property': {
+            const k = `__prop:${String(a[0])}`;
+            const v = this.dynProps.has(k) ? this.dynProps.get(k) : this.def.properties?.[String(a[0])];
+            return n === 'has_property' ? (v !== undefined ? 1 : 0) : typeof v === 'boolean' ? (v ? 1 : 0) : typeof v === 'number' ? v : 0;
+          }
+          case 'all_animations_finished': case 'any_animation_finished': return 1;
+          default: return 0;
+        }
+      };
+      this.model.applyPoses(this.animPlayer.evaluate(this.age, q as never));
+    } else this.model.animate(this.walkPhase, Math.min(1, sp / 2), t, this.attackAnim, headYaw, headPitch);
     // éclairage
     const l = ctx.world.getLight(Math.floor(this.x), Math.floor(this.y + this.body.height * 0.6), Math.floor(this.z));
     const sky = (l.sky / 15) * ctx.dayCycle.daylight, blk = l.block / 15;

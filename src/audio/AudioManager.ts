@@ -127,7 +127,11 @@ export class AudioManager implements SoundFx {
   play(name: string, opts: { x?: number; y?: number; z?: number; volume?: number; pitch?: number } = {}) {
     if (!this.ctx || !this.ready || this.ctx.state !== 'running') return;
     const buf = this.buffers.get(name);
-    if (!buf) return;
+    if (!buf) {
+      // son d'add-on (créatures d'add-ons, scripts)
+      if (this.external.has(name.toLowerCase())) this.playId(name, opts);
+      return;
+    }
     // limite les doublons dans la même frame
     const now = this.ctx.currentTime;
     const last = this.recent.get(name) ?? -1;

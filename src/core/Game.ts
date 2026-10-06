@@ -119,6 +119,7 @@ export class Game {
       for (const [k, v] of addons.functions) this.addonFunctions.set(k, v);
       this.addonTickFunctions.push(...addons.tickFunctions);
       this.textures.applyPack(pack, addons.images);
+      for (const [id, snd] of addons.sounds) this.audio.addExternal(id, snd.data, snd.volume, snd.pitch);
     } catch (e) {
       console.error('Chargement des add-ons', e);
       if (pack) this.textures.applyPack(pack);

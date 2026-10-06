@@ -130,7 +130,7 @@ export function geometryToModel(geo: BedrockGeo, skin: string): VanillaModel {
     const relPivot: [number, number, number] = parentPivot ? [-(p[0] - parentPivot[0]), parentPivot[1] - p[1], p[2] - parentPivot[2]] : [-p[0], 24 - p[1], p[2]];
     const anim = animName(b.name);
     // l'os lui-même est un pivot sans géométrie ; ses cubes et sous-os sont ses enfants
-    const node: CubePart = { uv: [0, 0], box: [0, 0, 0, 0, 0, 0], pivot: relPivot, rot: toRot(b.rotation ?? b.bind_pose_rotation), anim, children: [] };
+    const node: CubePart = { uv: [0, 0], box: [0, 0, 0, 0, 0, 0], pivot: relPivot, rot: toRot(b.rotation ?? b.bind_pose_rotation), anim, bone: b.name.toLowerCase(), children: [] };
     if (!b.neverRender)
       for (const c of b.cubes ?? []) {
         if (c.rotation && (c.rotation[0] || c.rotation[1] || c.rotation[2])) {

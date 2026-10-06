@@ -9,6 +9,13 @@ import { BlockRegistry } from './BlockRegistry';
 const COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'];
 const WOODS = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak'];
 
+/** Équivalences directes (anciens identifiants de l'édition mobile). */
+const DIRECT: Record<string, string> = {
+  azalea_leaves_flowered: 'flowering_azalea_leaves', note_block: 'noteblock', lit_pumpkin: 'jack_o_lantern', magma_block: 'magma', stained_glass: 'white_stained_glass',
+  concrete: 'white_concrete', stained_hardened_clay: 'white_terracotta', hardened_clay: 'terracotta', red_nether_brick: 'red_nether_bricks', quartz_ore: 'netherrack',
+  slime: 'slime_block', grass_path: 'dirt_path', stonebrick: 'stone_bricks', end_bricks: 'end_stone_bricks', melon_block: 'melon', double_plant: 'short_grass',
+};
+
 const RULES: [RegExp, (m: RegExpExecArray, k: string) => string | null][] = [
   [/^deepslate_(\w+_ore)$/, (m) => m[1]],
   [/^(\w+)_ore$/, () => 'iron_ore'],
@@ -66,6 +73,7 @@ export function closestBlock(id: string): number {
   if (hit !== undefined) return hit;
   let out = -1;
   if (BlockRegistry.has(k)) out = BlockRegistry.byName(k).id;
+  else if (DIRECT[k] && BlockRegistry.has(DIRECT[k])) out = BlockRegistry.byName(DIRECT[k]).id;
   else
     for (const [re, fn] of RULES) {
       const m = re.exec(k);

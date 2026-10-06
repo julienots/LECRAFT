@@ -22,6 +22,8 @@ interface CubePart {
   faceUV?: Partial<Record<'top' | 'bottom' | 'right' | 'front' | 'left' | 'back', [number, number, number, number]>>;
   /** Couche séparée (laine du mouton). */
   layer?: 'fur';
+  /** Nom d'os (modèles d'add-ons : animations Bedrock). */
+  bone?: string;
   children?: CubePart[];
 }
 export type { CubePart };
@@ -220,6 +222,8 @@ export class MobModel {
   private shadow: THREE.Mesh | null = null;
   readonly vanilla: boolean;
   private animPhase = new Map<THREE.Object3D, THREE.Euler>();
+  /** Os nommés (modèles d'add-ons) avec leur pose de repos. */
+  readonly bones = new Map<string, { o: THREE.Object3D; rot: THREE.Euler; pos: THREE.Vector3 }>();
 
   constructor(readonly type: string, scale: number, shadowTex: THREE.Texture | null, skins: SkinProvider) {
     const def = VANILLA[type];
@@ -259,6 +263,7 @@ export class MobModel {
       pivot.add(mesh);
       if (fur) this.furParts.push(mesh);
     }
+    if (p.bone) this.bones.set(p.bone, { o: pivot, rot: pivot.rotation.clone(), pos: pivot.position.clone() });
     if (p.anim) {
       const list = this.parts.get(p.anim) ?? [];
       list.push(pivot);
@@ -312,6 +317,24 @@ export class MobModel {
       const k = 1 + Math.sin(t * 6) * 0.06 * (0.3 + amp);
       o.scale.set(1 / Math.sqrt(k), k, 1 / Math.sqrt(k));
     });
+  }
+
+  /** Applique des poses d'animation Bedrock (degrés et pixels, repère Bedrock) aux os. */
+  applyPoses(poses: Map<string, { rot: [number, number, number]; pos: [number, number, number]; scale: [number, number, number] }>) {
+    const D = Math.PI / 180;
+    for (const [name, b] of this.bones) {
+      const p = poses.get(name);
+      const o = b.o;
+      if (!p) {
+        o.rotation.copy(b.rot);
+        o.position.copy(b.pos);
+        o.scale.set(1, 1, 1);
+        continue;
+      }
+      o.rotation.set(b.rot.x - p.rot[0] * D, b.rot.y + p.rot[1] * D, b.rot.z - p.rot[2] * D);
+      o.position.set(b.pos.x - p.pos[0] / 16, b.pos.y + p.pos[1] / 16, b.pos.z - p.pos[2] / 16);
+      o.scale.set(p.scale[0], p.scale[1], p.scale[2]);
+    }
   }
 
   setTint(r: number, g: number, b: number) {
