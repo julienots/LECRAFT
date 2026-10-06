@@ -92,8 +92,9 @@ export class TextureManager implements SkinProvider {
   applyPack(pack: LoadedPack | null, extra?: Map<string, ImageBitmap>) {
     this.pack = pack;
     if (extra) this.extra = extra;
-    const merged = new Map(this.extra);
-    if (pack) for (const [k, v] of pack.images) merged.set(k, v);
+    // les add-ons passent au-dessus du pack de ressources (comme l'empilement du jeu de référence)
+    const merged = new Map(pack?.images ?? []);
+    for (const [k, v] of this.extra) merged.set(k, v);
     this.view = merged.size ? new LoadedPack(pack?.info ?? { name: 'add-ons', files: merged.size }, merged) : null;
     const fresh = buildAtlas(this.view ? this.packTiles(this.view) : undefined);
     const ctx = this.atlasCanvas.getContext('2d')!;
