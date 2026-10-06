@@ -8,6 +8,7 @@ import { rayAABB } from '../util/Raycast';
 import type { Entity } from './Entity';
 import { Mob, type EntitySpawner } from './Mob';
 import { Animal } from './Animal';
+import { Enderman, Wolf, Villager } from './Creatures';
 import { Monster } from './Monster';
 import { GolemBoss, LichBoss, Boss } from './Boss';
 import { ItemEntity } from './ItemEntity';
@@ -90,6 +91,9 @@ export class EntityManager implements EntitySpawner {
     let m: Mob;
     if (def.category === 'boss') m = key === 'golem' ? new GolemBoss(def, index, x, y, z, this, opts.altar ?? '') : new LichBoss(def, index, x, y, z, this, opts.altar ?? '');
     else if (def.category === 'hostile') m = new Monster(def, index, x, y, z, this);
+    else if (key === 'enderman') m = new Enderman(def, index, x, y, z, this);
+    else if (key === 'wolf') m = new Wolf(def, index, x, y, z, this);
+    else if (key === 'villager') m = new Villager(def, index, x, y, z, this);
     else m = new Animal(def, index, x, y, z, this);
     m.yaw = Math.random() * Math.PI * 2;
     if (opts.baby) m.setBaby(true);
@@ -307,6 +311,8 @@ export class EntityManager implements EntitySpawner {
         }
       }
     }
+    // créatures aquatiques (calamars ; noyés la nuit) et chauves-souris / calamars luisants des grottes
+    if (Math.random() < 0.25) this.waterAndCaveSpawns(ctx, peaceful);
     if (peaceful || this.count('hostile') >= hostileCap) return;
     // monstres de surface (nuit ou obscurité)
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -338,6 +344,7 @@ export class EntityManager implements EntitySpawner {
       const candidates = MOB_DEFS.filter((d) => {
         if (!d.spawn || d.category !== 'hostile') return false;
         if (d.spawn.where === 'cave' && !underground) return false;
+        if (d.traits?.includes('waterSpawn') || d.spawn.where === 'nether') return false;
         if (d.spawn.where === 'surface' && underground && !biome.hostiles.includes(d.key)) return d.key === 'rodeur';
         if (d.spawn.where === 'surface' && !biome.hostiles.includes(d.key)) return false;
         if (d.spawn.maxY !== undefined && y > d.spawn.maxY) return false;
@@ -348,6 +355,30 @@ export class EntityManager implements EntitySpawner {
       if (Math.hypot(x - p.x, z - p.z) < 18) continue;
       this.spawnMob(def.key, x + 0.5, y, z + 0.5);
     }
+  }
+
+  private waterAndCaveSpawns(ctx: GameContext, peaceful: boolean) {
+    const p = ctx.player, w = ctx.world;
+    const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 24;
+    const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);
+    if (!w.isLoaded(x, z)) return;
+    const count = (k: string) => this.mobs.filter((m) => m.def.key === k && !m.dead).length;
+    const biome = w.biomeAt(x, z);
+    // eau de surface
+    if (w.getBlock(x, SEA_LEVEL, z) === B.WATER && w.getBlock(x, SEA_LEVEL - 3, z) === B.WATER) {
+      const night = ctx.dayCycle.daylight < 0.35;
+      if (!peaceful && night && biome.hostiles.includes('drowned') && count('drowned') < 4) this.spawnMob('drowned', x + 0.5, SEA_LEVEL - 4, z + 0.5);
+      else if (biome.animals.includes('squid') && count('squid') < 5) for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) this.spawnMob('squid', x + 0.5 + Math.random() * 2, SEA_LEVEL - 2 - Math.random() * 3, z + 0.5 + Math.random() * 2);
+      return;
+    }
+    // grottes : chauves-souris dans l'obscurité, calamars luisants dans l'eau profonde
+    const y = 8 + Math.floor(Math.random() * 40);
+    if (y > p.y + 24) return;
+    const b = w.getBlock(x, y, z);
+    const l = w.getLight(x, y, z);
+    if (l.sky > 3 || l.block > 3) return;
+    if (b === B.AIR && w.getBlock(x, y + 1, z) === B.AIR && count('bat') < 4) this.spawnMob('bat', x + 0.5, y, z + 0.5);
+    else if (b === B.WATER && w.getBlock(x, y + 1, z) === B.WATER && y < 45 && count('glow_squid') < 3) this.spawnMob('glow_squid', x + 0.5, y, z + 0.5);
   }
 
   /** Nether : apparitions selon le biome à toute hauteur (pas de cycle jour/nuit). */
@@ -406,6 +437,25 @@ export class EntityManager implements EntitySpawner {
             break;
           }
         }
+      } else if (BlockRegistry.has('bell') && s.block === BlockRegistry.byName('bell').id) {
+        // cloche de village : les villageois apparaissent une seule fois
+        if (s.spawned > 0 || d > 64) continue;
+        const w = ctx.world;
+        let n = 0;
+        const want = 3 + Math.floor(Math.random() * 3);
+        for (let t = 0; t < 60 && n < want; t++) {
+          const x = s.x + Math.floor(Math.random() * 21) - 10, z = s.z + Math.floor(Math.random() * 21) - 10;
+          if (!w.isLoaded(x, z)) continue;
+          const y = w.heightAt(x, z) + 1;
+          if (w.getBlock(x, y, z) !== B.AIR || w.getBlock(x, y + 1, z) !== B.AIR || BlockRegistry.liquid[w.getBlock(x, y - 1, z)]) continue;
+          const v = this.spawnMob('villager', x + 0.5, y, z + 0.5, { persistent: true });
+          if (v) {
+            v.homeX = s.x;
+            v.homeZ = s.z;
+            n++;
+          }
+        }
+        s.spawned = Math.max(1, n);
       } else if (s.block === B.BOSS_ALTAR) {
         if (d > 14 || ctx.defeatedBosses.has(key) || this.activeBoss || p.dead) continue;
         const bossKey = s.meta === BOSS.LICH ? 'liche' : 'golem';

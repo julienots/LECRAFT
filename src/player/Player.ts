@@ -61,6 +61,9 @@ export class Player {
   sprinting = false;
   /** Dernière cause de mort (écran de mort). */
   deathCause: DamageSource | null = null;
+  /** Dernière créature qui a blessé le joueur (loups apprivoisés). */
+  lastAttacker: Actor | null = null;
+  lastAttackedAt = 0;
   onDamage: (amount: number, source: DamageSource) => void = () => {};
   onDeath: () => void = () => {};
   onLevelUp: (level: number) => void = () => {};
@@ -115,6 +118,10 @@ export class Player {
       this.body.vx += knockX;
       this.body.vz += knockZ;
       this.body.vy = Math.max(this.body.vy, 5);
+    }
+    if (attacker) {
+      this.lastAttacker = attacker;
+      this.lastAttackedAt = performance.now();
     }
     this.onDamage(dmg, source);
     hooks.afterHurt?.(this, dmg, { cause: damageCause(source), attacker, projectile });

@@ -86,6 +86,49 @@ const VANILLA: Record<string, VanillaModel> = {
   skeleton: humanoid('skeleton', 64, 32, 2),
   player: playerModel(),
   zombified_piglin: piglinModel('zombified_piglin'),
+  husk: humanoid('husk', 64, 64, 4),
+  drowned: humanoid('drowned', 64, 64, 4),
+  stray: humanoid('stray', 64, 32, 2),
+  enderman: {
+    skin: 'enderman', texW: 64, texH: 32,
+    parts: [
+      P([0, 0], [-4, -8, -4, 8, 8, 8], [0, -14, 0], { anim: 'head', inflate: -0.5, children: [P([0, 16], [-4, -8, -4, 8, 8, 8], [0, 0, 0], { inflate: -0.5 })] }),
+      P([32, 16], [-4, 0, -2, 8, 12, 4], [0, -14, 0]),
+      P([56, 0], [-1, -2, -1, 2, 30, 2], [-5, -12, 0], { anim: 'armR' }),
+      P([56, 0], [-1, -2, -1, 2, 30, 2], [5, -12, 0], { anim: 'armL', mirror: true }),
+      P([56, 0], [-1, 0, -1, 2, 30, 2], [-2, -6, 0], { anim: 'legR' }),
+      P([56, 0], [-1, 0, -1, 2, 30, 2], [2, -6, 0], { anim: 'legL', mirror: true }),
+    ],
+  },
+  wolf: {
+    skin: 'wolf', texW: 64, texH: 32,
+    parts: [
+      P([0, 0], [-2, -3, -2, 6, 6, 4], [-1, 13.5, -7], {
+        anim: 'head',
+        children: [P([16, 14], [-2, -5, 0, 2, 2, 1], [0, 0, 0]), P([16, 14], [2, -5, 0, 2, 2, 1], [0, 0, 0]), P([0, 10], [-0.5, 0, -5, 3, 3, 4], [0, 0, 0])],
+      }),
+      P([18, 14], [-3, -2, -3, 6, 9, 6], [0, 14, 2], { rot: [HALF_PI, 0, 0] }),
+      P([21, 0], [-3, -3, -3, 8, 6, 7], [-1, 14, -3], { rot: [HALF_PI, 0, 0] }),
+      P([0, 18], [0, 0, -1, 2, 8, 2], [-2.5, 16, 7], { anim: 'legBR' }),
+      P([0, 18], [0, 0, -1, 2, 8, 2], [0.5, 16, 7], { anim: 'legBL' }),
+      P([0, 18], [0, 0, -1, 2, 8, 2], [-2.5, 16, -4], { anim: 'legFR' }),
+      P([0, 18], [0, 0, -1, 2, 8, 2], [0.5, 16, -4], { anim: 'legFL' }),
+      P([9, 18], [0, 0, -1, 2, 8, 2], [-1, 12, 8], { rot: [0.9, 0, 0], anim: 'tail' }),
+    ],
+  },
+  squid: squidModel('squid'),
+  glow_squid: squidModel('glow_squid'),
+  bat: {
+    skin: 'bat', texW: 64, texH: 64,
+    parts: [
+      P([0, 0], [-3, -3, -3, 6, 6, 6], [0, 8, 0], { children: [P([24, 0], [-4, -6, -2, 3, 4, 1], [0, 0, 0]), P([24, 0], [1, -6, -2, 3, 4, 1], [0, 0, 0], { mirror: true })] }),
+      P([0, 16], [-3, 4, -3, 6, 12, 6], [0, 8, 0]),
+      P([42, 0], [-12, 1, 1.5, 10, 16, 1], [0, 8, 0], { anim: 'wingR' }),
+      P([42, 0], [2, 1, 1.5, 10, 16, 1], [0, 8, 0], { anim: 'wingL', mirror: true }),
+    ],
+  },
+  villager: villagerModel('villager', false),
+  witch: villagerModel('witch', true),
   ghast: {
     skin: 'ghast', texW: 64, texH: 32,
     parts: [
@@ -189,6 +232,38 @@ function piglinModel(skin: string): VanillaModel {
     ],
   });
   return base;
+}
+
+/** Calamar : corps 12×16×12 et 8 tentacules oscillantes (texture 64×32). */
+function squidModel(skin: string): VanillaModel {
+  return {
+    skin, texW: 64, texH: 32,
+    parts: [
+      P([0, 0], [-6, -8, -6, 12, 16, 12], [0, 6, 0]),
+      ...Array.from({ length: 8 }, (_, i) => {
+        const a = (i / 8) * Math.PI * 2;
+        return P([48, 0], [-1, 0, -1, 2, 18, 2], [Math.cos(a) * 5, 13, Math.sin(a) * 5], { anim: 'tentacle' });
+      }),
+    ],
+  };
+}
+
+/** Villageois (et sorcière : chapeau pointu, texture 64×128), bras croisés, robe. */
+function villagerModel(skin: string, witch: boolean): VanillaModel {
+  const hat: CubePart[] = witch
+    ? [P([0, 64], [0, 0, 0, 10, 2, 10], [-5, -10.03, -5], { children: [P([0, 76], [0, 0, 0, 7, 4, 7], [1.75, 2, 2], { rot: [-0.05, 0, 0.03], children: [P([0, 87], [0, 0, 0, 4, 4, 4], [1.75, 4, 2], { rot: [-0.1, 0, 0.05], children: [P([0, 95], [0, 0, 0, 1, 2, 1], [1.75, 4, 2], { rot: [-0.2, 0, 0.1] })] })] })] })]
+    : [];
+  return {
+    skin, texW: 64, texH: witch ? 128 : 64,
+    parts: [
+      P([0, 0], [-4, -10, -4, 8, 10, 8], [0, 0, 0], { anim: 'head', children: [P([24, 0], [-1, -1, -6, 2, 4, 2], [0, 2, 0]), ...hat] }),
+      P([16, 20], [-4, 0, -3, 8, 12, 6], [0, 0, 0]),
+      P([0, 38], [-4, 0, -3, 8, 18, 6], [0, 0, 0], { inflate: 0.5 }),
+      P([44, 22], [-8, -2, -2, 4, 8, 4], [0, 3, -1], { rot: [-0.75, 0, 0], children: [P([44, 22], [4, -2, -2, 4, 8, 4], [0, 0, 0], { mirror: true }), P([40, 38], [-4, 2, -2, 8, 4, 4], [0, 0, 0])] }),
+      P([0, 22], [-2, 0, -2, 4, 12, 4], [-2, 12, 0], { anim: 'legR' }),
+      P([0, 22], [-2, 0, -2, 4, 12, 4], [2, 12, 0], { anim: 'legL', mirror: true }),
+    ],
+  };
 }
 
 function spider(skin: string): VanillaModel {
@@ -391,6 +466,7 @@ export class MobModel {
       this.rot(`spiderR${i}`, (b, o) => (o.rotation.y = b.y + sw));
       this.rot(`spiderL${i}`, (b, o) => (o.rotation.y = b.y - sw));
     }
+    this.rot('tail', (b, o) => (o.rotation.z = b.z + Math.sin(t * 3) * 0.1 * (1 + amp)));
     this.rot('tentacle', (b, o) => (o.rotation.x = b.x + 0.15 + Math.sin(t * 2.2 + o.position.x * 3 + o.position.z * 5) * 0.25));
     for (let r = 0; r < 3; r++) this.rot(`spin${r}`, (b, o) => (o.rotation.y = b.y + t * (r === 1 ? -1.4 : 1.1 + r * 0.3)));
     this.rot('squash', (_b, o) => {

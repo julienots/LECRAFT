@@ -366,3 +366,9 @@ html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 13' shape-rendering='crispEdges'%3E%3Cpath d='M0 0v11l3-3 2 5 2-1-2-4h4z' fill='%23fff' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") no-repeat 0 0 / contain; }
 .gp-cursor.hidden { display: none; }
 html.gamepad .touch-layer, html.gamepad .btn-pause, html.gamepad .btn-chat, html.gamepad .btn-view, html.gamepad .mc-invbtn { display: none !important; }
+
+/* échanges avec les villageois */
+.trade-screen { background: rgba(0, 0, 0, .55); }
+.trade-list { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.trade-row { display: inline-flex; align-items: center; gap: 8px; }
+.trade-icon { width: 20px; height: 20px; image-rendering: pixelated; }

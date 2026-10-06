@@ -162,6 +162,8 @@ const TYPES: StructureType[] = [
       fill(w, ox - 1, cy - 3, oz - 1, ox + 1, cy, oz + 1, B.WATER);
       for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) fill(w, ox + dx, cy + 1, oz + dz, ox + dx, cy + 3, oz + dz, style.corner);
       fill(w, ox - 2, cy + 4, oz - 2, ox + 2, cy + 4, oz + 2, B.OAK_PLANKS);
+      // cloche du village (point de rassemblement des villageois)
+      if (BlockRegistry.has('bell')) w.set(ox + 2, cy + 3, oz, BlockRegistry.byName('bell').id);
       const n = rng.int(3, 6);
       const a0 = rng.next() * Math.PI * 2;
       for (let i = 0; i < n; i++) {

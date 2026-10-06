@@ -44,6 +44,8 @@ export const PROJECTILE_DEFS = new Map<string, ProjectileDef>([
   ['minecraft:ender_pearl', { id: 'minecraft:ender_pearl', color: '#1a6a5a', size: 0.25, gravity: 12, damage: 0, teleport: true }],
   ['minecraft:xp_bottle', { id: 'minecraft:xp_bottle', color: '#a0e060', size: 0.25, gravity: 12, damage: 0 }],
   ['minecraft:splash_potion', { id: 'minecraft:splash_potion', color: '#d04060', size: 0.25, gravity: 12, damage: 0 }],
+  ['lecraft:stray_arrow', { id: 'lecraft:stray_arrow', color: '#7a8a8a', size: 0.1, gravity: 12, damage: 3, stick: true, effect: { id: 'slowness', duration: 600, amplifier: 0 } }],
+  ['lecraft:witch_potion', { id: 'lecraft:witch_potion', color: '#6a2a9a', size: 0.25, gravity: 12, damage: 2, effect: { id: 'poison', duration: 140, amplifier: 0 } }],
   ['minecraft:arrow', { id: 'minecraft:arrow', color: '#8a6a3c', size: 0.1, gravity: 12, damage: 4, stick: true }],
 ]);
 

@@ -179,6 +179,12 @@ describe('Données', () => {
       for (const v of b.vegetation) expect(BlockRegistry.has(v.block)).toBe(true);
     }
     for (const m of MOB_DEFS) for (const d of m.drops) expect(ItemRegistry.has(d.item) || EXTRA_ITEMS.some((i) => i.key === d.item), d.item).toBe(true);
+    // toute créature à apparition naturelle de surface figure dans au moins un biome
+    for (const m of MOB_DEFS) {
+      if (!m.spawn || m.spawn.where !== 'surface' || m.traits?.includes('waterSpawn')) continue;
+      const inBiome = BiomeManager.biomes.some((b) => b.hostiles.includes(m.key) || b.animals.includes(m.key));
+      expect(inBiome, `${m.key} n'apparaît dans aucun biome`).toBe(true);
+    }
     // indices utilisés par les cages à monstres des structures
     for (const [k, i] of Object.entries(MOB_INDEX)) expect(MOB_DEFS[i].key).toBe(k === 'chef' ? 'zombie_chief' : k);
   });

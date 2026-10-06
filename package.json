@@ -23,7 +23,8 @@
     "tour": "node scripts/tour.mjs",
     "pack:embed": "node scripts/embed-pack.mjs",
     "e2e:controls": "node scripts/e2e-controls.mjs",
-    "e2e:nether": "node scripts/e2e-nether.mjs"
+    "e2e:nether": "node scripts/e2e-nether.mjs",
+    "e2e:mobs": "node scripts/e2e-mobs.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

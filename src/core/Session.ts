@@ -29,6 +29,7 @@ import type { WorldMeta } from '../save/SaveManager';
 import type { ItemStack } from '../inventory/Item';
 import { createShadowTexture } from '../render/MobModels';
 import { PlayerAvatar } from '../render/PlayerAvatar';
+import { openTrades } from '../ui/TradeUI';
 import * as Portals from '../world/Portals';
 import type { Dimension } from '../world/Portals';
 import { NETHER_LAVA_LEVEL } from '../world/NetherGenerator';
@@ -194,6 +195,7 @@ export class Session implements GameContext {
       spawnCompass: () => this.hud.showCompass(this.player.spawn[0], this.player.spawn[2], 'spawn'),
       portalLit: (pos) => this.registerPortal(pos),
       fireLit: (x, y, z) => this.noteFire(x, y, z),
+      trade: (v) => openTrades(game, this, v),
     });
     this.fovCurrent = game.settings.fov;
     // événements joueur

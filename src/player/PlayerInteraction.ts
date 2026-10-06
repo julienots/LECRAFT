@@ -14,6 +14,7 @@ import { encodeStates, type BedrockBlockInfo } from '../addons/BedrockBlocks';
 import { connectionStates } from '../addons/BlockRuntime';
 import { hooks } from '../scripting/Hooks';
 import { tryLight } from '../world/Portals';
+import { Wolf, Villager } from '../entities/Creatures';
 
 /** Face moteur (0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z) d'une normale. */
 const faceOf = (t: RayHit) => (t.nx > 0 ? 0 : t.nx < 0 ? 1 : t.ny > 0 ? 2 : t.ny < 0 ? 3 : t.nz > 0 ? 4 : 5);
@@ -41,6 +42,8 @@ export interface InteractionHost {
   portalLit?(pos: { x: number; y: number; z: number }): void;
   /** Feu posé au briquet. */
   fireLit?(x: number, y: number, z: number): void;
+  /** Échanges avec un villageois. */
+  trade?(v: Villager): void;
 }
 
 /** Index d'orientation correspondant à une direction horizontale (dx, dz). */
@@ -116,6 +119,7 @@ export class PlayerInteraction {
     for (const ev of events) {
       if (ev === 'use') this.use();
       else if (ev === 'attackTap' && this.targetMob) this.entities.combat.playerAttack(ctx, this.targetMob);
+      else if (ev === 'attackTap') this.deflectProjectile();
     }
     // placement continu en maintenant « utiliser »
     if (this.input.useHeld && this.useRepeat <= 0 && this.preview) {
@@ -268,6 +272,19 @@ export class PlayerInteraction {
       if (hooks.interactBlock(t.x, t.y, t.z, faceOf(t), hit, held ? { ...held } : null)) return;
     }
     // 1) nourrir un animal
+    // loup (os : apprivoiser ; apprivoisé : assis / debout, viande : soigner) et villageois (échanges)
+    if (!repeat && this.targetMob instanceof Wolf) {
+      const r = this.targetMob.interact(ctx, held?.id ?? null);
+      if (r === 'tamed' || r === 'failed' || r === 'healed') {
+        if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+        return;
+      }
+      if (r === 'sit') return;
+    }
+    if (!repeat && this.targetMob instanceof Villager && !this.targetMob.baby) {
+      this.host.trade?.(this.targetMob);
+      return;
+    }
     if (!repeat && this.targetMob instanceof Animal && held && this.targetMob.def.food?.includes(held.id)) {
       if (this.targetMob.feed(ctx, held.id)) {
         if (!p.creative) inv.takeFromSlot(inv.selected, 1);
@@ -613,6 +630,30 @@ export class PlayerInteraction {
       default:
         void itemId;
         return false;
+    }
+  }
+
+  /** Frapper une boule de feu (ghast, blaze) la renvoie dans la direction visée. */
+  private deflectProjectile() {
+    const ctx = this.ctx;
+    const [ox, oy, oz, dx, dy, dz] = this.eye();
+    for (const e of this.entities.entities) {
+      if (e.kind !== 'projectile') continue;
+      const pr = e as unknown as { fromPlayer: boolean; def?: { explode?: number; fire?: boolean }; x: number; y: number; z: number; body: { vx: number; vy: number; vz: number }; owner: unknown };
+      if (pr.fromPlayer || !pr.def || !(pr.def.explode || pr.def.fire)) continue;
+      const vx = pr.x - ox, vy = pr.y - oy, vz = pr.z - oz;
+      const t = vx * dx + vy * dy + vz * dz;
+      if (t < 0 || t > 4.5) continue;
+      const px = ox + dx * t - pr.x, py = oy + dy * t - pr.y, pz = oz + dz * t - pr.z;
+      if (Math.hypot(px, py, pz) > 1.2) continue;
+      const sp = Math.max(12, Math.hypot(pr.body.vx, pr.body.vy, pr.body.vz));
+      pr.body.vx = dx * sp;
+      pr.body.vy = dy * sp;
+      pr.body.vz = dz * sp;
+      pr.fromPlayer = true;
+      pr.owner = ctx.player;
+      ctx.audio.play('hit', { x: pr.x, y: pr.y, z: pr.z });
+      return;
     }
   }
 

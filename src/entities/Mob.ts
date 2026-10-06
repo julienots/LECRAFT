@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import { B } from '../blocks/BlockRegistry';
 import { AnimPlayer, ENTITY_ANIMS } from '../addons/BedrockAnimation';
 import { PROJECTILE_DEFS, type ProjectileDef, type Projectile } from './Projectile';
 import type { GameContext } from '../core/GameContext';
@@ -70,8 +71,10 @@ export class Mob extends Entity {
     return this.def.traits?.includes(trait) ?? false;
   }
 
+  /** Santé maximale modifiée (loup apprivoisé…). */
+  maxHealthOverride: number | null = null;
   get maxHealth() {
-    return this.def.health;
+    return this.maxHealthOverride ?? this.def.health;
   }
 
   setBaby(b: boolean) {
@@ -92,6 +95,8 @@ export class Mob extends Entity {
     if (d > this.def.attackRange * 1.2 || dy > 2.5 || dy < -2) return;
     const dealt = p.damage(this.def.damage, 'mob', (dx / d) * 5, (dz / d) * 5, this);
     if (dealt > 0 && this.has('poison') && p.difficulty !== 'easy') p.poisonTimer = Math.max(p.poisonTimer, p.difficulty === 'hard' ? 15 : 7);
+    // zombie momifié : inflige la faim
+    if (dealt > 0 && this.def.key === 'husk') p.effects.add('hunger', 140, 0, true, p.effectTarget);
     if (dealt > 0) {
       ctx.audio.play('hurt', { volume: 0.9 });
       ctx.haptic('medium');
@@ -153,6 +158,7 @@ export class Mob extends Entity {
     }
     this.ai.update(ctx, dt);
     this.customUpdate(ctx, dt);
+    if (this.has('aquatic')) this.swim(ctx, dt);
     if (this.has('flies')) {
       // vol : maintien d'une altitude au-dessus du sol
       const ground = ctx.world.surfaceBelow(Math.floor(this.x), Math.floor(this.y + 1), Math.floor(this.z));
@@ -186,6 +192,42 @@ export class Mob extends Entity {
 
   /** Altitude de vol (créatures volantes). */
   hoverHeight = 2;
+
+  private swimTarget = { x: 0, y: 0, z: 0, t: 0 };
+  /** Créatures aquatiques : nagent en 3D dans l'eau, suffoquent hors de l'eau. */
+  private swim(ctx: GameContext, dt: number) {
+    const b = this.body;
+    if (!b.inWater) {
+      this.airTime = (this.airTime ?? 0) + dt;
+      if (this.airTime > 2) {
+        this.airTime = 1;
+        ctx.combat.damageMob(this, 1, { kind: 'environment' });
+      }
+      if (b.onGround && Math.random() < dt * 2) {
+        b.vy = 4;
+        b.vx = (Math.random() - 0.5) * 3;
+        b.vz = (Math.random() - 0.5) * 3;
+      }
+      return;
+    }
+    this.airTime = 0;
+    const s = this.swimTarget;
+    s.t -= dt;
+    if (s.t <= 0 || Math.hypot(s.x - this.x, s.y - this.y, s.z - this.z) < 1) {
+      s.t = 3 + Math.random() * 4;
+      s.x = this.x + (Math.random() - 0.5) * 12;
+      s.y = this.y + (Math.random() - 0.5) * 6;
+      s.z = this.z + (Math.random() - 0.5) * 12;
+      if (ctx.world.getBlock(Math.floor(s.x), Math.floor(s.y), Math.floor(s.z)) !== B.WATER) s.y = this.y - 1;
+    }
+    const dx = s.x - this.x, dy = s.y - this.y, dz = s.z - this.z, d = Math.hypot(dx, dy, dz) || 1;
+    const sp = this.def.speed;
+    b.vx += ((dx / d) * sp - b.vx) * Math.min(1, dt * 2);
+    b.vz += ((dz / d) * sp - b.vz) * Math.min(1, dt * 2);
+    b.vy += ((dy / d) * sp * 0.6 + 0.3 - b.vy) * Math.min(1, dt * 2); // compense la gravité dans l'eau
+    this.yaw = Math.atan2(b.vx, b.vz);
+  }
+  private airTime = 0;
 
   /** Point d'extension pour les sous-classes. */
   protected customUpdate(_ctx: GameContext, _dt: number) {}

@@ -534,6 +534,17 @@ cube('rooted_dirt', 'Terre racineuse', (t) => {
   for (let i = 0; i < 6; i++) t.vline(t.rng.int(1, 14), t.rng.int(0, 8), t.rng.int(8, 15), hex('#b08060'));
 }, { hardness: 0.5, tool: 'shovel', minTier: 0, sound: 'dirt', color: '#7a5236' });
 
+tile('bell', (t) => {
+  t.clear();
+  const g = ['#a07818', '#d8a830', '#f0c840', '#fff080'].map(hex);
+  for (let y = 3; y < 14; y++) {
+    const w = 2 + Math.floor((y - 3) / 3);
+    for (let x = 8 - w; x < 8 + w; x++) t.set(x, y, g[Math.min(3, ((x + y) % 4))]);
+  }
+  t.rect(7, 1, 2, 2, hex('#5a4a3a'));
+});
+B.push({ key: 'bell', name: 'Cloche', textures: { all: 'bell' }, hardness: 5, tool: 'pickaxe', render: 'model', shape: 'lantern', solid: false, sound: 'metal', color: '#d8a830' });
+
 export const EXTRA_BLOCKS: BlockDef[] = B;
 export const EXTRA_ITEMS: ItemDef[] = I;
 export const EXTRA_RECIPES = R;

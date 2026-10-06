@@ -51,6 +51,11 @@ export class DamageSystem {
       if (m.body.onGround) m.body.vy = Math.max(m.body.vy, 5 * resist);
     }
     ctx.particles.burst('damage', m.x, m.y + m.body.height * 0.7, m.z, Math.min(10, 3 + Math.round(dmg)));
+    (m as unknown as { onHurt?: (c: GameContext) => void }).onHurt?.(ctx);
+    // loups apprivoisés : défendent leur maître (attaquent ce que le joueur frappe)
+    if (src.fromPlayer || src.kind === 'player')
+      for (const o of (this.spawner as unknown as { mobs: Mob[] }).mobs ?? [])
+        if (o !== m && o.def.key === 'wolf' && (o as unknown as { tamed?: boolean }).tamed && !(o as unknown as { sitting?: boolean }).sitting) (o as unknown as { target: Mob | null }).target = m;
     if (src.fromPlayer || src.kind === 'player') {
       if (m.def.category === 'passive') m.fleeTimer = 5;
       else if (m.def.category === 'neutral') {

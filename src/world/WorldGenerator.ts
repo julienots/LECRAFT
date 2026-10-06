@@ -352,9 +352,10 @@ export class WorldGenerator implements TerrainQuery {
 export function scanSpecials(c: ChunkData): SpecialBlock[] {
   const out: SpecialBlock[] = [];
   const blocks = c.blocks;
+  const bell = BlockRegistry.has('bell') ? BlockRegistry.byName('bell').id : -1;
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
-    if (b === B.SPAWNER || b === B.BOSS_ALTAR) {
+    if (b === B.SPAWNER || b === B.BOSS_ALTAR || b === bell) {
       const x = i & 15, z = (i >> 4) & 15, y = i >> 8;
       out.push({ x: c.cx * CHUNK_SIZE + x, y, z: c.cz * CHUNK_SIZE + z, block: b, meta: c.meta[i] });
     }

@@ -133,6 +133,17 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.groan = s.mix({ buf: s.tone(1.0, 95, 70, { wave: 'saw', decay: 1.6, attack: 0.15, gain: 0.25, vibrato: 0.04, vibRate: 4 }) }, { buf: s.noise(1.0, { lp: 400, decay: 2, gain: 0.25 }) });
   out.groan_hurt = s.tone(0.3, 140, 90, { wave: 'saw', decay: 7, gain: 0.35 });
   out.groan_death = s.tone(0.9, 120, 50, { wave: 'saw', decay: 3, gain: 0.35 });
+  out.enderman_idle = s.tone(1.0, 180, 120, { wave: 'saw', decay: 2, attack: 0.2, gain: 0.18, vibrato: 0.2, vibRate: 9 });
+  out.enderman_hurt = s.tone(0.4, 300, 160, { wave: 'saw', decay: 7, gain: 0.25, vibrato: 0.15, vibRate: 30 });
+  out.enderman_scream = s.mix({ buf: s.tone(1.1, 900, 400, { wave: 'saw', decay: 2, gain: 0.25, vibrato: 0.25, vibRate: 40 }) }, { buf: s.noise(1.1, { hp: 1500, decay: 2, gain: 0.2 }) });
+  out.enderman_tp = s.mix({ buf: s.tone(0.5, 200, 900, { wave: 'sine', decay: 5, gain: 0.25 }) }, { buf: s.noise(0.5, { lp: 2000, decay: 6, gain: 0.15 }) });
+  out.bark = s.mix({ buf: s.tone(0.12, 420, 300, { wave: 'saw', decay: 14, gain: 0.3 }) }, { buf: s.noise(0.12, { lp: 1200, decay: 14, gain: 0.3 }) });
+  out.whine = s.tone(0.5, 900, 700, { wave: 'sine', decay: 4, gain: 0.25, vibrato: 0.05, vibRate: 10 });
+  out.squeak = s.tone(0.08, 3200, 2600, { wave: 'square', decay: 20, gain: 0.08 });
+  out.cackle = s.mix(...[0, 0.09, 0.18, 0.27].map((at) => ({ buf: s.tone(0.08, 700, 500, { wave: 'saw', decay: 15, gain: 0.2 }), at })));
+  out.hmm = s.tone(0.45, 160, 140, { wave: 'saw', decay: 3, attack: 0.05, gain: 0.25, vibrato: 0.05, vibRate: 6 });
+  out.hmm_hurt = s.tone(0.3, 220, 150, { wave: 'saw', decay: 8, gain: 0.3 });
+  out.villager_yes = s.mix({ buf: s.tone(0.18, 170, 190, { wave: 'saw', decay: 8, gain: 0.25 }) }, { buf: s.tone(0.18, 200, 220, { wave: 'saw', decay: 8, gain: 0.25 }), at: 0.2 });
   out.portal = s.mix({ buf: s.tone(2.4, 70, 140, { wave: 'saw', decay: 0.6, attack: 0.6, gain: 0.18, vibrato: 0.12, vibRate: 3 }) }, { buf: s.noise(2.4, { lp: 900, decay: 0.8, attack: 0.5, gain: 0.25 }) });
   out.extinguish = s.noise(0.6, { hp: 1800, decay: 6, gain: 0.45, crackle: 0.3 });
   out.ghast_moan = s.tone(1.6, 520, 380, { wave: 'tri', decay: 1.5, attack: 0.25, gain: 0.22, vibrato: 0.06, vibRate: 6 });

@@ -126,6 +126,48 @@ export const SKINS: Record<string, SkinSpec> = {
       ctx.drawImage(ctx.canvas, 0, 16, 16, 16, 16, 48, 16, 16);
     },
   },
+  husk: humanSkin({ skin: ['#b8a070', '#a89060', '#c8b080'], shirt: ['#7a6a4a', '#6a5a3a', '#8a7a5a'], pants: ['#5a4a3a', '#4a3a2a', '#6a5a4a'], shoes: '#3a2a1a', eyes: '#2a1a0a', mouth: '#5a4a2a' }),
+  drowned: humanSkin({ skin: ['#4a9a8a', '#3a8a7a', '#5aaa9a'], shirt: ['#5a7a3a', '#4a6a2a', '#6a8a4a'], pants: ['#3a5a6a', '#2a4a5a', '#4a6a7a'], shoes: '#2a3a3a', eyes: '#60f0e0', mouth: '#2a4a3a' }),
+  stray: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const bone = ['#b8c4c8', '#a8b4b8', '#c8d4d8'];
+      const rag = ['#4a5a5a', '#5a6a6a', '#3a4a4a'];
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && y >= 3 && y <= 4 && (x === 1 || x === 2 || x === 5 || x === 6) ? '#1a1a1a' : pick(rng, bone)));
+      box(ctx, 16, 16, 8, 12, 4, () => pick(rng, rag));
+      box(ctx, 40, 16, 2, 12, 2, () => pick(rng, bone));
+      box(ctx, 0, 16, 2, 12, 2, () => pick(rng, rag));
+    },
+  },
+  enderman: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const b = ['#0e0e12', '#141418', '#1a1a20'];
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && y === 4 && (x <= 2 || x >= 5) ? (x === 1 || x === 6 ? '#e070ff' : '#c040e8') : pick(rng, b)));
+      box(ctx, 32, 16, 8, 12, 4, () => pick(rng, b));
+      box(ctx, 56, 0, 2, 30, 2, () => pick(rng, b));
+    },
+  },
+  wolf: wolfSkin('#d8d0c8', '#b8b0a8'),
+  wolf_tame: wolfSkin('#e0d8d0', '#c0b8b0'),
+  wolf_angry: wolfSkin('#d0c8c0', '#a8a098', true),
+  squid: squidSkin(['#1a3a5a', '#24486a', '#2e567a'], '#c8d8e8'),
+  glow_squid: squidSkin(['#0a6a6a', '#10807a', '#18a098'], '#a0fff0'),
+  bat: {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      const fur = ['#4a3a2a', '#3a2a1a', '#5a4a3a'];
+      box(ctx, 0, 0, 6, 6, 6, (f, x, y) => (f === 'front' && y === 2 && (x === 1 || x === 4) ? '#000000' : pick(rng, fur)));
+      box(ctx, 0, 16, 6, 12, 6, () => pick(rng, fur));
+      box(ctx, 24, 0, 3, 4, 1, () => pick(rng, fur));
+      box(ctx, 42, 0, 10, 16, 1, () => pick(rng, ['#2a2018', '#1a1410', '#3a2a20']));
+    },
+  },
+  villager: villagerSkin(['#6a4a2a', '#5a3a1a', '#7a5a3a'], false),
+  witch: villagerSkin(['#3a2a4a', '#2a1a3a', '#4a3a5a'], true),
   zombified_piglin: {
     w: 64,
     h: 64,
@@ -243,6 +285,58 @@ function humanSkin(c: { skin: string[]; shirt: string[]; pants: string[]; shoes:
       box(ctx, 16, 16, 8, 12, 4, () => pick(rng, c.shirt));
       box(ctx, 40, 16, 4, 12, 4, (f, _x, y) => (f !== 'bottom' && y < 4 ? pick(rng, c.shirt) : pick(rng, c.skin)));
       box(ctx, 0, 16, 4, 12, 4, (f, _x, y, _w, h) => (f !== 'top' && y >= h - 2 ? c.shoes : pick(rng, c.pants)));
+    },
+  };
+}
+
+function wolfSkin(fur: string, dark: string, angry = false): SkinSpec {
+  return {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const f = [fur, dark, fur, '#ffffff'];
+      box(ctx, 0, 0, 6, 6, 4, (side, x, y) => (side === 'front' && y === 2 && (x === 1 || x === 4) ? (angry ? '#c01010' : '#1a1a1a') : pick(rng, f)));
+      box(ctx, 16, 14, 2, 2, 1, () => dark);
+      box(ctx, 0, 10, 3, 3, 4, (side, x, y) => (side === 'front' && y === 0 && x === 1 ? '#1a1a1a' : pick(rng, f)));
+      box(ctx, 18, 14, 6, 9, 6, () => pick(rng, f));
+      box(ctx, 21, 0, 8, 6, 7, () => pick(rng, f));
+      box(ctx, 0, 18, 2, 8, 2, () => pick(rng, f));
+      box(ctx, 9, 18, 2, 8, 2, () => pick(rng, f));
+    },
+  };
+}
+
+function squidSkin(pal: string[], eye: string): SkinSpec {
+  return {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      box(ctx, 0, 0, 12, 16, 12, (f, x, y) => (f === 'front' && y === 11 && (x === 2 || x === 9) ? eye : pick(rng, pal)));
+      box(ctx, 48, 0, 2, 18, 2, () => pick(rng, pal));
+    },
+  };
+}
+
+function villagerSkin(robe: string[], witch: boolean): SkinSpec {
+  return {
+    w: 64,
+    h: witch ? 128 : 64,
+    paint(ctx, rng) {
+      const skin = witch ? ['#9aa080', '#8a9070', '#aab090'] : ['#b48a6a', '#a87e5e', '#c09676'];
+      box(ctx, 0, 0, 8, 10, 8, (f, x, y) => (f === 'front' && y === 4 && (x === 2 || x === 5) ? '#2a6a2a' : f === 'front' && y === 4 && (x === 1 || x === 6) ? '#f0f0f0' : f === 'front' && y === 3 && x >= 1 && x <= 6 ? '#3a2a1a' : pick(rng, skin)));
+      box(ctx, 24, 0, 2, 4, 2, () => pick(rng, skin));
+      box(ctx, 16, 20, 8, 12, 6, () => pick(rng, robe));
+      box(ctx, 0, 38, 8, 18, 6, () => pick(rng, robe));
+      box(ctx, 44, 22, 4, 8, 4, () => pick(rng, robe));
+      box(ctx, 40, 38, 8, 4, 4, () => pick(rng, robe));
+      box(ctx, 0, 22, 4, 12, 4, () => pick(rng, ['#3a3a3a', '#2a2a2a']));
+      if (witch) {
+        const hat = ['#1a1a1a', '#2a1a2a', '#202020'];
+        box(ctx, 0, 64, 10, 2, 10, () => pick(rng, hat));
+        box(ctx, 0, 76, 7, 4, 7, (_f, _x, y) => (y === 3 ? '#7a2a9a' : pick(rng, hat)));
+        box(ctx, 0, 87, 4, 4, 4, () => pick(rng, hat));
+        box(ctx, 0, 95, 1, 2, 1, () => pick(rng, hat));
+      }
     },
   };
 }
