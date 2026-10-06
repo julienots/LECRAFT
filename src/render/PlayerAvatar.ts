@@ -31,7 +31,7 @@ export class PlayerAvatar {
 
   update(o: {
     x: number; y: number; z: number; yaw: number; pitch: number; phase: number; speed: number; swing: number;
-    sneaking: boolean; held: string; light: number; hurt: boolean; visible: boolean;
+    sneaking: boolean; held: string; light: number; hurt: boolean; visible: boolean; prone?: boolean;
   }) {
     const g = this.model.group;
     g.visible = o.visible;
@@ -39,8 +39,15 @@ export class PlayerAvatar {
     g.position.set(o.x, o.y, o.z);
     g.rotation.y = o.yaw + Math.PI;
     this.model.animate(o.phase / 2.2, Math.min(1, o.speed / 4.3), 0, o.swing, 0, o.pitch);
-    // accroupi : buste penché vers l'avant
-    g.rotation.x = 0;
+    // nage / rampe : corps à l'horizontale
+    g.rotation.order = 'YXZ';
+    g.rotation.x = o.prone ? Math.PI / 2 : 0;
+    if (o.prone) {
+      // corps allongé centré sur la boîte du joueur
+      g.position.x -= Math.sin(g.rotation.y) * 0.9;
+      g.position.z -= Math.cos(g.rotation.y) * 0.9;
+      g.position.y += 0.3;
+    }
     g.scale.set(SCALE, SCALE * (o.sneaking ? 0.92 : 1), SCALE);
     if (o.held !== this.itemId) {
       this.itemId = o.held;

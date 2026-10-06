@@ -565,6 +565,11 @@ s'accroupir, double appui sur avant = sprint ; on peut glisser d'une flèche à 
 clic droit (utiliser), molette/1–9 (hotbar), E (inventaire), Q/G (jeter), T ou Entrée (chat),
 / (commande), F3 (diagnostic), **F5 (vue)**, Échap (retour).
 
+**Mouvements (comme le jeu de référence)** : double appui sur avancer (Z/W/↑) = sprint ; saut en
+sprint avec élan ; **nage rapide** (sprint la tête sous l'eau : corps à l'horizontale, on suit le
+regard pour plonger ou remonter) ; on **rampe** sous un plafond d'un bloc ; poussière soulevée en
+sprintant ; les créatures proches suivent le joueur du regard.
+
 **Vues (comme le jeu de référence)** : F5, le bouton 👁 en haut à droite ou la croix ↑ de la manette
 font défiler **1re personne → 3e personne de dos → 3e personne de face**. En 3e personne, le modèle
 du joueur est affiché (skin `entity/player/wide/steve.png` du pack de ressources si présent, sinon
@@ -617,6 +622,8 @@ npm run e2e:nether               # 18 vérifications : portail (allumage, cadre 
 npm run e2e:mobs                 # 13 vérifications : modèles, loup (apprivoisement, défense), enderman
                                  # (regard, téléportation), échanges, calamar, boule de feu renvoyée,
                                  # flèche de lenteur, village (cloche, villageois)
+npm run e2e:movement             # 8 vérifications : sprint au double appui, saut en sprint, poussière,
+                                 # nage rapide (pose, vitesse, plongée), ramper, regard des créatures
 npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
                                  # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,
                                  # lâcher), vues 1re/3e personne (F5, croix ↑), caméra contre un mur

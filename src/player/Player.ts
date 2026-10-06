@@ -59,6 +59,10 @@ export class Player {
   starveTimer = 0;
   sneaking = false;
   sprinting = false;
+  /** Nage rapide (sprint sous l'eau) : corps à l'horizontale, 0,6 bloc de haut. */
+  swimming = false;
+  /** Rampe (sortie de nage sous un plafond bas). */
+  crawling = false;
   /** Dernière cause de mort (écran de mort). */
   deathCause: DamageSource | null = null;
   /** Dernière créature qui a blessé le joueur (loups apprivoisés). */
@@ -74,7 +78,7 @@ export class Player {
     return 20 + 2 * Math.min(5, Math.floor(this.level / 5));
   }
   get eyeHeight() {
-    return this.sneaking ? SNEAK_EYE_HEIGHT : EYE_HEIGHT;
+    return this.swimming || this.crawling ? 0.4 : this.sneaking ? SNEAK_EYE_HEIGHT : EYE_HEIGHT;
   }
   get creative() {
     return this.gameMode === 'creative';

@@ -4,6 +4,9 @@ import type { InputState } from './InputState';
 /** Contrôles clavier/souris (développement sur ordinateur, claviers Bluetooth, ChromeOS). */
 export class KeyboardMouse {
   private keys = new Set<string>();
+  /** Double appui sur « avancer » : sprint jusqu'au relâchement (comme le jeu de référence). */
+  private lastForward = 0;
+  private tapSprint = false;
   private cleanup: (() => void)[] = [];
   enabled = true;
   /** Échap = bouton retour Android. */
@@ -57,6 +60,14 @@ export class KeyboardMouse {
       if (this.keys.has(code)) return;
       this.keys.add(code);
       this.input.mode = 'keyboard';
+      if (code === 'KeyW' || code === 'KeyZ' || code === 'ArrowUp') {
+        const now = performance.now();
+        if (now - this.lastForward < 280) {
+          this.tapSprint = true;
+          this.input.sprint = true;
+        }
+        this.lastForward = now;
+      }
       if (code === 'KeyE' || code === 'KeyI') this.input.push('inventory');
       else if (code === 'ShiftLeft' || code === 'ShiftRight') this.input.sneak = true;
       else if (code === 'ControlLeft') this.input.sprint = true;
@@ -79,6 +90,10 @@ export class KeyboardMouse {
       else if (code === 'Escape' || code === 'KeyP') this.onBack();
     } else {
       this.keys.delete(code);
+      if (this.tapSprint && (code === 'KeyW' || code === 'KeyZ' || code === 'ArrowUp')) {
+        this.tapSprint = false;
+        if (!this.keys.has('ControlLeft')) this.input.sprint = false;
+      }
       if (code === 'ShiftLeft' || code === 'ShiftRight') this.input.sneak = false;
       else if (code === 'ControlLeft') this.input.sprint = false;
     }

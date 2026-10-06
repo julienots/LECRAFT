@@ -62,11 +62,11 @@ export class PhysicsBody {
   }
 
   /** Vrai si l'AABB à la position donnée chevauche une boîte de collision. */
-  collides(world: World, x: number, y: number, z: number): boolean {
+  collides(world: World, x: number, y: number, z: number, height = this.height): boolean {
     const hw = this.halfWidth;
-    const b = gatherBoxes(world, x - hw, y, z - hw, x + hw, y + this.height, z + hw, this.boxes);
+    const b = gatherBoxes(world, x - hw, y, z - hw, x + hw, y + height, z + hw, this.boxes);
     for (let i = 0; i < b.length; i += 6)
-      if (b[i] < x + hw - EPS && b[i + 3] > x - hw + EPS && b[i + 1] < y + this.height - EPS && b[i + 4] > y + EPS && b[i + 2] < z + hw - EPS && b[i + 5] > z - hw + EPS) return true;
+      if (b[i] < x + hw - EPS && b[i + 3] > x - hw + EPS && b[i + 1] < y + height - EPS && b[i + 4] > y + EPS && b[i + 2] < z + hw - EPS && b[i + 5] > z - hw + EPS) return true;
     return false;
   }
 

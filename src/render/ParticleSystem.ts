@@ -79,6 +79,13 @@ export class ParticleSystem implements ParticleFx {
     }
   }
 
+  /** Poussière soulevée en sprintant (couleur du bloc sous les pieds). */
+  sprintDust(x: number, y: number, z: number, block: number) {
+    const [r, g, b] = this.blockColor(block);
+    const v = 0.8 + Math.random() * 0.3;
+    this.emit(x + (Math.random() - 0.5) * 0.5, y + 0.05, z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 1.5, 1 + Math.random() * 1.5, (Math.random() - 0.5) * 1.5, r * v, g * v, b * v, 0.07, 0.35, 10);
+  }
+
   blockHit(x: number, y: number, z: number, block: number, nx: number, ny: number, nz: number) {
     const [r, g, b] = this.blockColor(block);
     for (let i = 0; i < 3; i++) {

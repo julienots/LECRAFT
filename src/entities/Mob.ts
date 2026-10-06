@@ -241,9 +241,14 @@ export class Mob extends Entity {
     g.rotation.z = this.dead ? Math.min(Math.PI / 2, this.deathTimer * 4) : 0;
     const sp = Math.hypot(this.body.vx, this.body.vz);
     let headYaw = 0, headPitch = 0;
-    if (this.ai.state === AIState.CHASE || this.ai.state === AIState.ATTACK || this.ai.state === AIState.FOLLOW) {
-      const p = ctx.player;
+    const p = ctx.player;
+    const chasing = this.ai.state === AIState.CHASE || this.ai.state === AIState.ATTACK || this.ai.state === AIState.FOLLOW;
+    if (chasing || (this.distToPlayer < 8 && !p.dead && !this.dead)) {
+      // les créatures suivent le joueur du regard (rotation de la tête limitée)
       headPitch = Math.atan2(p.y + p.eyeHeight - (this.y + this.body.height * 0.85), this.distToPlayer || 1) * 0.6;
+      let d = Math.atan2(p.x - this.x, p.z - this.z) - this.yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      headYaw = Math.max(-1.1, Math.min(1.1, d));
     }
     const animSet = this.model.bones.size ? ENTITY_ANIMS.get(this.def.key) : undefined;
     if (animSet) {

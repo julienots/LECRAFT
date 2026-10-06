@@ -527,6 +527,12 @@ export class Session implements GameContext {
     this.controller.update(this.world, dt);
     this.updatePortal(dt);
     this.updateFires();
+    // poussière de sprint et bulles de nage
+    if (p.sprinting && p.body.onGround && Math.random() < dt * 25) {
+      const below = this.world.getBlock(Math.floor(p.x), Math.floor(p.y - 0.1), Math.floor(p.z));
+      if (below > 0 && BlockRegistry.solid[below]) this.particles.sprintDust(p.x, p.y, p.z, below);
+    }
+    if (p.swimming && Math.random() < dt * 12) this.particles.burst('water', p.x, p.y + 0.3, p.z, 1);
     this.interaction.update(dt, remaining);
     // ticks fixes 20 Hz
     this.tickAcc += dt;
@@ -837,7 +843,7 @@ export class Session implements GameContext {
     }
     this.avatar?.update({
       x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, phase: this.controller.bobPhase, speed: Math.hypot(p.body.vx, p.body.vz),
-      swing: this.entities.combat.swing, sneaking: p.sneaking, held, light: br, hurt: p.hurtFlash > 0,
+      swing: this.entities.combat.swing, sneaking: p.sneaking, held, light: br, hurt: p.hurtFlash > 0, prone: p.swimming || p.crawling,
       visible: this.perspective !== 0 && !p.dead && !p.effects.level('invisibility'),
     });
     // audio
