@@ -9,6 +9,7 @@ import type { Entity } from './Entity';
 import { Mob, type EntitySpawner } from './Mob';
 import { Animal } from './Animal';
 import { Enderman, Wolf, Villager } from './Creatures';
+import { EnderDragon, EndCrystal } from './EnderDragon';
 import { Monster } from './Monster';
 import { GolemBoss, LichBoss, Boss } from './Boss';
 import { ItemEntity } from './ItemEntity';
@@ -89,7 +90,9 @@ export class EntityManager implements EntitySpawner {
     if (!info) return null;
     const { def, index } = info;
     let m: Mob;
-    if (def.category === 'boss') m = key === 'golem' ? new GolemBoss(def, index, x, y, z, this, opts.altar ?? '') : new LichBoss(def, index, x, y, z, this, opts.altar ?? '');
+    if (key === 'ender_dragon') m = new EnderDragon(def, index, x, y, z, this, 'end_dragon');
+    else if (key === 'end_crystal') m = new EndCrystal(def, index, x, y, z, this);
+    else if (def.category === 'boss') m = key === 'golem' ? new GolemBoss(def, index, x, y, z, this, opts.altar ?? '') : new LichBoss(def, index, x, y, z, this, opts.altar ?? '');
     else if (def.category === 'hostile') m = new Monster(def, index, x, y, z, this);
     else if (key === 'enderman') m = new Enderman(def, index, x, y, z, this);
     else if (key === 'wolf') m = new Wolf(def, index, x, y, z, this);
@@ -166,7 +169,8 @@ export class EntityManager implements EntitySpawner {
       if (e.removed) continue;
       e.distToPlayer = Math.hypot(e.x - p.x, e.y - p.y, e.z - p.z);
       // les entités hors des chunks chargés sont gelées
-      if (!ctx.world.isLoaded(Math.floor(e.x), Math.floor(e.z))) {
+      const roaming = e.kind === 'mob' && (e as Mob).def.key === 'ender_dragon';
+      if (!roaming && !ctx.world.isLoaded(Math.floor(e.x), Math.floor(e.z))) {
         if (e.kind !== 'mob') e.removed = true;
         continue;
       }
@@ -176,11 +180,11 @@ export class EntityManager implements EntitySpawner {
         // LOD de simulation
         const far = e.distToPlayer > simDist;
         const mid = e.distToPlayer > 32;
-        m.sim = !far && (!mid || (this.lodTick + m.id) % 4 === 0);
-        if (m.sim) m.update(ctx, mid ? dt * 4 : dt);
+        m.sim = roaming || (!far && (!mid || (this.lodTick + m.id) % 4 === 0));
+        if (m.sim) m.update(ctx, mid && !roaming ? dt * 4 : dt);
         // disparition des monstres
         if (m instanceof Monster && !m.persistent && (e.distToPlayer > 80 || m.farTime > 60) && !m.origin) m.removed = true;
-        if (m instanceof Boss && (e.distToPlayer > 48 || p.dead) && !m.dead) {
+        if (m instanceof Boss && !roaming && (e.distToPlayer > 48 || p.dead) && !m.dead) {
           m.removed = true;
           ctx.hud.toast(`${m.def.name} retourne au silence…`, 'info');
         }
@@ -206,6 +210,8 @@ export class EntityManager implements EntitySpawner {
     }
     // reproduction
     for (const m of mobs) if (m instanceof Animal && m.loveTimer > 0) m.tryBreed(ctx, mobs);
+    // chute dans le vide (l'End)
+    for (const e of this.entities) if (e.y < -64) e.removed = true;
     // nettoyage
     for (let i = this.entities.length - 1; i >= 0; i--) {
       const e = this.entities[i];
@@ -285,7 +291,7 @@ export class EntityManager implements EntitySpawner {
     const w = ctx.world;
     const peaceful = ctx.player.difficulty === 'peaceful';
     if (!ctx.gamerules.doMobSpawning) return;
-    if (ctx.dimension === 'nether') {
+    if (ctx.dimension !== 'overworld') {
       if (!peaceful) this.netherSpawns(ctx, cap);
       return;
     }
@@ -384,7 +390,7 @@ export class EntityManager implements EntitySpawner {
   /** Nether : apparitions selon le biome à toute hauteur (pas de cycle jour/nuit). */
   private netherSpawns(ctx: GameContext, cap: number) {
     const p = ctx.player, w = ctx.world;
-    const nether = this.mobs.filter((m) => !m.dead && m.def.spawn?.where === 'nether').length;
+    const nether = this.mobs.filter((m) => !m.dead && m.def.category !== 'passive' && m.def.category !== 'boss').length;
     if (nether >= Math.round(cap * 0.7) || Math.random() > 0.5) return;
     const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 28;
     const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);

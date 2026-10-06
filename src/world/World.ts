@@ -56,8 +56,11 @@ export class World {
     return this.chunks.get(chunkKey(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)));
   }
 
+  /** Vide sous y = 0 (l'End) au lieu d'un plancher de bedrock. */
+  voidBelow = false;
+
   getBlock(x: number, y: number, z: number): number {
-    if (y < 0) return B.BEDROCK;
+    if (y < 0) return this.voidBelow ? B.AIR : B.BEDROCK;
     if (y >= WORLD_HEIGHT) return B.AIR;
     const c = this.chunkAt(x, z);
     if (!c) return -1;

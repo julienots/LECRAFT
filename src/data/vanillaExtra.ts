@@ -321,7 +321,7 @@ item('nether_wart', 'Verrue du Nether', 'seeds', ['#8a1a1a', '#c02a2a']);
 item('nether_brick', 'Brique du Nether', 'ingot', ['#3a1c20', '#5a2c30']);
 item('glowstone_dust', 'Poudre lumineuse', 'dust', ['#d8a030', '#ffe080']);
 item('ender_pearl', "Perle de l'Ender", 'ball', ['#1a6a5a', '#2aaa8a'], { maxStack: 16 });
-item('ender_eye', "Œil de l'Ender", 'eye', ['#2a8a5a', '#b0f0a0']);
+item('ender_eye', "Œil de l'Ender", 'eye', ['#2a8a5a', '#b0f0a0'], { use: 'ender_eye' });
 item('ghast_tear', 'Larme de ghast', 'gem', ['#d8e8f0', '#ffffff']);
 item('magma_cream', 'Crème de magma', 'ball', ['#c05010', '#f0a020']);
 item('phantom_membrane', 'Membrane de phantom', 'leather', ['#c8c0a8', '#e8e0d0']);
@@ -544,6 +544,54 @@ tile('bell', (t) => {
   t.rect(7, 1, 2, 2, hex('#5a4a3a'));
 });
 B.push({ key: 'bell', name: 'Cloche', textures: { all: 'bell' }, hardness: 5, tool: 'pickaxe', render: 'model', shape: 'lantern', solid: false, sound: 'metal', color: '#d8a830' });
+
+// ---------- l'End : cadres et portail de l'End, œuf de dragon, bâton de l'End ----------
+tile('end_portal_frame_side', (t) => {
+  t.grain(['#d8d8a0', '#c8c890', '#b8b880', '#e0e0b0'].map(hex), 0.5, 4);
+  t.rect(0, 0, 16, 3, hex('#2a5a4a'));
+  t.hline(0, 15, 3, hex('#1a3a30'));
+});
+tile('end_portal_frame_top', (t) => {
+  t.grain(['#2a5a4a', '#3a6a5a', '#1e4a3c'].map(hex), 0.5, 4);
+  t.border(hex('#d8d8a0'));
+  t.rect(4, 4, 8, 8, hex('#16302a'));
+});
+tile('end_portal_frame_eye', (t) => {
+  t.grain(['#2a5a4a', '#3a6a5a', '#1e4a3c'].map(hex), 0.5, 4);
+  t.border(hex('#d8d8a0'));
+  t.rect(4, 4, 8, 8, hex('#2a8a5a'));
+  t.rect(6, 6, 4, 4, hex('#b0f0a0'));
+  t.rect(7, 7, 2, 2, hex('#0a1a10'));
+});
+B.push({ key: 'end_portal_frame', name: "Cadre de portail de l'End", textures: { top: 'end_portal_frame_top', bottom: 'end_stone', side: 'end_portal_frame_side' }, hardness: -1, sound: 'stone', light: 1, drops: [], color: '#3a6a5a' });
+B.push({ key: 'end_portal_frame_filled', name: "Cadre de portail de l'End (œil)", textures: { top: 'end_portal_frame_eye', bottom: 'end_stone', side: 'end_portal_frame_side' }, hardness: -1, sound: 'stone', light: 1, drops: [], color: '#3a6a5a' });
+tile('end_portal', (t) => {
+  t.rect(0, 0, 16, 16, hex('#05040a'));
+  const c = ['#1a3a3a', '#2a6a6a', '#5ad0c0', '#a0f0e0', '#e8e0ff'].map(hex);
+  for (let i = 0; i < 26; i++) t.set(t.rng.int(0, 15), t.rng.int(0, 15), c[t.rng.int(0, 4)]);
+});
+B.push({ key: 'end_portal', name: "Portail de l'End", textures: { all: 'end_portal' }, hardness: -1, render: 'translucent', solid: false, light: 15, lightFilter: 0, sound: 'glass', drops: [], color: '#05040a' });
+tile('dragon_egg', (t) => {
+  t.clear();
+  const c = ['#0c0610', '#1a0e22', '#2a1636', '#5a2a7a'].map(hex);
+  for (let y = 1; y < 16; y++) {
+    const w = Math.round(Math.sin((y / 16) * Math.PI) * 6 + 1);
+    for (let x = 8 - w; x < 8 + w; x++) t.set(x, y, c[(x * 7 + y * 3) % 4]);
+  }
+});
+B.push({ key: 'dragon_egg', name: 'Œuf de dragon', textures: { all: 'dragon_egg' }, hardness: 3, render: 'cutout', solid: true, light: 1, sound: 'stone', color: '#1a0e22' });
+tile('end_rod', (t) => {
+  t.clear();
+  t.rect(7, 2, 2, 14, hex('#f0f0f0'));
+  t.rect(6, 13, 4, 2, hex('#c8b8a8'));
+});
+B.push({ key: 'end_rod', name: "Bâton de l'End", textures: { all: 'end_rod' }, hardness: 0, render: 'model', shape: 'torch', solid: false, light: 14, sound: 'glass', color: '#f0f0f0' });
+shaped('end_rod', 'end_rod', 4, ['B', 'P'], { B: 'blaze_rod', P: 'popped_chorus_fruit' });
+cube('purpur_pillar', 'Pilier de purpur', (t) => {
+  t.grain(['#a77ba7', '#b48ab4', '#9a6e9a'].map(hex), 0.5, 4);
+  t.vline(1, 0, 15, hex('#8a5e8a'));
+  t.vline(14, 0, 15, hex('#8a5e8a'));
+}, { hardness: 1.5, color: '#a77ba7' });
 
 export const EXTRA_BLOCKS: BlockDef[] = B;
 export const EXTRA_ITEMS: ItemDef[] = I;

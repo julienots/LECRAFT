@@ -476,6 +476,66 @@ const TYPES: StructureType[] = [
       for (const dz of [-9, 9]) w.set(ox + 9, ay, oz + dz, B.CHEST, chestMeta(LOOT.BOSS, 3));
     },
   },
+  {
+    // Fort : couloirs de briques de pierre, bibliothèque et salle du portail de l'End (12 cadres)
+    key: 'stronghold',
+    spacing: 48,
+    chance: 1,
+    radius: 44,
+    underground: true,
+    anyBiome: true,
+    build(w, ox, oz, rng) {
+      if (!BlockRegistry.has('end_portal_frame')) return;
+      const FRAME = BlockRegistry.byName('end_portal_frame').id, FILLED = BlockRegistry.byName('end_portal_frame_filled').id;
+      const y = rng.int(18, 26);
+      const brick = () => (rng.next() < 0.2 ? B.MOSSY_STONE_BRICKS : rng.next() < 0.15 ? B.CRACKED_STONE_BRICKS : B.STONE_BRICKS);
+      const shell = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) => {
+        for (let yy = y0; yy <= y1; yy++)
+          for (let zz = z0; zz <= z1; zz++)
+            for (let xx = x0; xx <= x1; xx++) {
+              const edge = xx === x0 || xx === x1 || yy === y0 || yy === y1 || zz === z0 || zz === z1;
+              w.set(xx, yy, zz, edge ? brick() : B.AIR);
+            }
+      };
+      // couloirs en croix (3 de large, 3 de haut) puis salles
+      const arms: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (const [dx, dz] of arms) {
+        const len = rng.int(18, 26);
+        for (let i = 0; i <= len; i++) {
+          const cx = ox + dx * i, cz = oz + dz * i;
+          shell(cx - Math.abs(dz) * 2 - (dx ? 0 : 0), y - 1, cz - Math.abs(dx) * 2, cx + Math.abs(dz) * 2, y + 3, cz + Math.abs(dx) * 2);
+          if (i % 6 === 3) w.set(cx + Math.abs(dz) * 1, y + 2, cz + Math.abs(dx) * 1, B.TORCH);
+        }
+      }
+      // salle centrale (carrefour)
+      shell(ox - 4, y - 1, oz - 4, ox + 4, y + 5, oz + 4);
+      // bibliothèque au bout d'un couloir
+      const [lx, lz] = [ox + 26, oz];
+      shell(lx - 5, y - 1, lz - 6, lx + 7, y + 6, lz + 6);
+      for (let zz = lz - 5; zz <= lz + 5; zz++) for (let yy = y; yy <= y + 3; yy++) if (zz !== lz && zz !== lz - 1 && zz !== lz + 1) { w.set(lx + 6, yy, zz, B.BOOKSHELF); w.set(lx - 4, yy, zz, B.BOOKSHELF); }
+      w.set(lx + 5, y, lz + 4, B.CHEST, chestMeta(LOOT.DUNGEON, 3));
+      w.set(lx, y + 4, lz, B.LANTERN);
+      // salle du portail au bout d'un autre couloir
+      const px = ox - 30, pz = oz;
+      shell(px - 7, y - 3, pz - 6, px + 7, y + 7, pz + 6);
+      // escalier d'accès et estrade
+      for (let zz = pz - 3; zz <= pz + 3; zz++) for (let xx = px - 3; xx <= px + 3; xx++) w.set(xx, y - 2, zz, B.STONE_BRICKS);
+      for (let zz = pz - 3; zz <= pz + 3; zz++) for (let xx = px - 3; xx <= px + 3; xx++) w.set(xx, y - 1, zz, B.STONE_BRICKS);
+      // bassin de lave sous le portail
+      for (let zz = pz - 1; zz <= pz + 1; zz++) for (let xx = px - 1; xx <= px + 1; xx++) { w.set(xx, y - 1, zz, B.LAVA); w.set(xx, y, zz, B.AIR); }
+      // 12 cadres (anneau 5×5 sans les coins), ~10 % ont déjà un œil
+      for (let dz = -2; dz <= 2; dz++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const ring = (Math.abs(dx) === 2) !== (Math.abs(dz) === 2);
+          if (!ring) continue;
+          w.set(px + dx, y, pz + dz, rng.next() < 0.1 ? FILLED : FRAME);
+        }
+      w.set(px - 6, y + 4, pz, B.LANTERN);
+      w.set(px + 6, y + 4, pz, B.LANTERN);
+      w.set(px, y + 6, pz - 5, B.LANTERN);
+      w.set(px - 6, y - 2, pz - 5, B.CHEST, chestMeta(LOOT.DUNGEON, 0));
+    },
+  },
 ];
 
 export const STRUCTURE_KEYS = TYPES.map((t) => t.key);

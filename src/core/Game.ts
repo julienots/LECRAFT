@@ -19,6 +19,7 @@ import { InputState } from '../input/InputState';
 import { TouchController } from '../input/TouchController';
 import { KeyboardMouse } from '../input/KeyboardMouse';
 import { GamepadInput } from '../input/Gamepad';
+import { END_SPAWN } from '../world/EndGenerator';
 import { UIManager } from '../ui/UIManager';
 import { HUD } from '../ui/HUD';
 import { Platform } from '../platform/Platform';
@@ -289,7 +290,7 @@ export class Game {
    * Passage d'un portail : sauvegarde la dimension quittée, convertit les coordonnées (÷ 8 vers le
    * Nether, × 8 vers la surface) et relance la partie dans l'autre dimension (écran de chargement).
    */
-  async changeDimension(target: 'overworld' | 'nether', at?: { x: number; y: number; z: number }) {
+  async changeDimension(target: 'overworld' | 'nether' | 'end', at?: { x: number; y: number; z: number }) {
     const s = this.session;
     if (!s || this.state !== 'playing') return;
     this.closeInventory();
@@ -301,9 +302,14 @@ export class Game {
     dims[from] = { chests: state.chests, spawners: state.spawners, furnaces: state.furnaces, mobs: state.mobs };
     const next = dims[target];
     delete dims[target];
-    const k = target === 'nether' ? 1 / 8 : 8;
+    const k = target === 'nether' ? 1 / 8 : from === 'nether' ? 8 : 1;
     const p = s.player;
-    const ax = Math.floor(p.x * k) + 0.5, az = Math.floor(p.z * k) + 0.5;
+    let ax = Math.floor(p.x * k) + 0.5, az = Math.floor(p.z * k) + 0.5;
+    // l'End : arrivée sur la plateforme d'obsidienne
+    if (target === 'end') {
+      ax = END_SPAWN.x + 0.5;
+      az = END_SPAWN.z + 0.5;
+    }
     const newState: WorldState = {
       ...state,
       dimension: target,
@@ -313,11 +319,11 @@ export class Game {
       furnaces: next?.furnaces ?? {},
       mobs: next?.mobs ?? [],
       arrival: at ? undefined : { x: ax, y: p.y, z: az },
-      player: (at ? { ...state.player, ...at } : { ...state.player, x: ax, y: Math.min(120, Math.max(40, p.y)), z: az }) as WorldState['player'],
+      player: (at ? { ...state.player, ...at } : { ...state.player, x: ax, y: target === 'end' ? END_SPAWN.y : Math.min(120, Math.max(40, p.y)), z: az }) as WorldState['player'],
     };
     // la nouvelle dimension est enregistrée tout de suite (un arrêt pendant le chargement reste cohérent)
     await this.saves.save(s.meta, newState, []).catch((e) => console.error(e));
-    await this.startWorld(s.meta, newState, false, target === 'nether' ? 'Entrée dans le Nether' : 'Retour à la surface');
+    await this.startWorld(s.meta, newState, false, target === 'nether' ? 'Entrée dans le Nether' : target === 'end' ? "Entrée dans l'End" : 'Retour à la surface');
   }
 
   pause() {

@@ -6,7 +6,7 @@ import type { World } from './World';
  * Portails du Nether : cadre d'obsidienne rectangulaire (intérieur de 2×3 à 21×21, coins
  * facultatifs) allumé au briquet, dans le plan X ou Z. Méta du bloc de portail : 0 = plan X, 1 = plan Z.
  */
-export type Dimension = 'overworld' | 'nether';
+export type Dimension = 'overworld' | 'nether' | 'end';
 
 export const portalId = () => (BlockRegistry.has('nether_portal') ? BlockRegistry.byName('nether_portal').id : -1);
 
@@ -175,4 +175,54 @@ export function buildArrivalPortal(w: World, tx: number, tz: number, dim: Dimens
   }
   filling = false;
   return { x, y, z };
+}
+
+// ---------- portail de l'End ----------
+const bid = (k: string) => (BlockRegistry.has(k) ? BlockRegistry.byName(k).id : -1);
+export const endPortalId = () => bid('end_portal');
+
+/**
+ * Œil de l'Ender posé sur un cadre vide. Si les 12 cadres de l'anneau (5×5 sans les coins)
+ * ont un œil, l'intérieur 3×3 devient un portail de l'End. Retourne 'inserted', 'opened' ou null.
+ */
+export function insertEye(w: World, x: number, y: number, z: number): 'inserted' | 'opened' | null {
+  const FRAME = bid('end_portal_frame'), FILLED = bid('end_portal_frame_filled'), PORTAL = endPortalId();
+  if (FRAME < 0 || w.getBlock(x, y, z) !== FRAME) return null;
+  w.setBlock(x, y, z, FILLED, w.getMeta(x, y, z));
+  // centres possibles de l'anneau dont (x, z) fait partie
+  for (let cx = x - 2; cx <= x + 2; cx++)
+    for (let cz = z - 2; cz <= z + 2; cz++) {
+      let ok = true;
+      for (let dz = -2; dz <= 2 && ok; dz++)
+        for (let dx = -2; dx <= 2 && ok; dx++) {
+          const ring = (Math.abs(dx) === 2) !== (Math.abs(dz) === 2);
+          if (ring && w.getBlock(cx + dx, y, cz + dz) !== FILLED) ok = false;
+        }
+      if (!ok) continue;
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) w.setBlock(cx + dx, y, cz + dz, PORTAL);
+      return 'opened';
+    }
+  return 'inserted';
+}
+
+/** Le joueur touche-t-il un portail de l'End ? */
+export function touchesEndPortal(w: World, x: number, y: number, z: number, halfW: number): boolean {
+  const P = endPortalId();
+  if (P < 0) return false;
+  for (let bx = Math.floor(x - halfW); bx <= Math.floor(x + halfW); bx++)
+    for (let bz = Math.floor(z - halfW); bz <= Math.floor(z + halfW); bz++)
+      for (const by of [Math.floor(y), Math.floor(y - 0.2)]) if (w.getBlock(bx, by, bz) === P) return true;
+  return false;
+}
+
+/** Active la fontaine de sortie de l'End (après la mort du dragon) et pose l'œuf de dragon. */
+export function activateExitPortal(w: World, y0: number) {
+  const P = endPortalId();
+  for (let x = -3; x <= 3; x++)
+    for (let z = -3; z <= 3; z++) {
+      const d = Math.hypot(x, z);
+      if (d <= 2.6 && !(x === 0 && z === 0)) w.setBlock(x, y0, z, P);
+    }
+  const egg = bid('dragon_egg');
+  if (egg > 0) w.setBlock(0, y0 + 4, 0, egg);
 }

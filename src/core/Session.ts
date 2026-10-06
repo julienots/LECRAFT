@@ -29,10 +29,12 @@ import type { WorldMeta } from '../save/SaveManager';
 import type { ItemStack } from '../inventory/Item';
 import { createShadowTexture } from '../render/MobModels';
 import { PlayerAvatar } from '../render/PlayerAvatar';
+import { PROJECTILE_DEFS } from '../entities/Projectile';
 import { openTrades } from '../ui/TradeUI';
 import * as Portals from '../world/Portals';
 import type { Dimension } from '../world/Portals';
 import { NETHER_LAVA_LEVEL } from '../world/NetherGenerator';
+import { END_ISLAND_Y, END_SPAWN, endPillars } from '../world/EndGenerator';
 
 /** Couleur du brouillard des biomes du Nether (valeurs du jeu de référence). */
 const NETHER_FOG: Record<string, number> = { nether_wastes: 0x330808, crimson_forest: 0x330303, warped_forest: 0x1a051a, soul_sand_valley: 0x1b4745, basalt_deltas: 0x685f70 };
@@ -69,6 +71,8 @@ export interface WorldState {
   dims?: Partial<Record<Dimension, DimState>>;
   /** Registre des portails connus par dimension (blocs de portail). */
   portals?: Partial<Record<Dimension, { x: number; y: number; z: number }[]>>;
+  /** Combat du dragon : dragon vaincu, cristaux déjà posés. */
+  endState?: { dragonKilled?: boolean; crystals?: boolean; exitBuilt?: boolean };
   /** Arrivée par un portail : position visée (coordonnées converties). */
   arrival?: { x: number; y: number; z: number };
   /** Données des scripts d'add-ons : propriétés dynamiques du monde, tableau des scores, règles. */
@@ -105,11 +109,13 @@ export class Session implements GameContext {
   /** Dimension de cette partie (un changement de dimension recrée la session). */
   readonly dimension: Dimension;
   private dims: Partial<Record<Dimension, DimState>> = {};
-  readonly portals: Record<Dimension, { x: number; y: number; z: number }[]> = { overworld: [], nether: [] };
+  readonly portals: Record<Dimension, { x: number; y: number; z: number }[]> = { overworld: [], nether: [], end: [] };
   private arrival: { x: number; y: number; z: number } | null = null;
   /** Temps passé dans un portail (s) ; le joueur doit en sortir avant de pouvoir repartir. */
   portalTime = 0;
   private portalBlocked = true;
+  endState: { dragonKilled?: boolean; crystals?: boolean; exitBuilt?: boolean } = {};
+  private voidTimer = 0;
   /** Vue : 0 = 1re personne, 1 = 3e personne arrière, 2 = 3e personne avant (F5). */
   perspective: 0 | 1 | 2 = 0;
   private avatar: PlayerAvatar | null = null;
@@ -145,6 +151,7 @@ export class Session implements GameContext {
     this.scene = r.scene;
     this.dimension = state?.dimension ?? 'overworld';
     this.world = new World(meta.seed);
+    this.world.voidBelow = this.dimension === 'end';
     this.player = new Player(meta.gameMode, meta.difficulty);
     this.functions = game.addonFunctions;
     this.player.difficulty = game.settings.difficulty;
@@ -196,6 +203,7 @@ export class Session implements GameContext {
       portalLit: (pos) => this.registerPortal(pos),
       fireLit: (x, y, z) => this.noteFire(x, y, z),
       trade: (v) => openTrades(game, this, v),
+      throwEye: () => void this.throwEye(),
     });
     this.fovCurrent = game.settings.fov;
     // événements joueur
@@ -213,6 +221,17 @@ export class Session implements GameContext {
       this.hud.toast(`🏆 ${a.name} — ${a.desc}`, 'achievement');
     };
     this.entities.damage.onBossDefeated = (b: Boss) => {
+      if (b.def.key === 'ender_dragon') {
+        this.endState.dragonKilled = true;
+        this.buildExitPortal();
+        this.player.addXp(b.def.xp);
+        this.hud.toast("Le dragon de l'Ender est vaincu ! Le portail de sortie est ouvert.", 'achievement');
+        this.progression.inc('boss:ender_dragon');
+        this.audio.play('dragon_death', { volume: 1 });
+        this.shake(1);
+        void this.save();
+        return;
+      }
       this.defeatedBosses.add(b.altarKey);
       this.progression.inc(`boss:${b.def.key}`);
       this.hud.toast(`${b.def.name} est vaincu !`, 'achievement');
@@ -366,6 +385,8 @@ export class Session implements GameContext {
       p.body.setPos(p.x, y, p.z);
     }
     this.loaded = true;
+    // partie reprise dans l'End : le dragon revient s'il n'est pas vaincu
+    if (this.dimension === 'end') this.startDragonFight();
   }
 
   /** Coffre bonus près du point d'apparition (bois, outils en bois, pommes, pain). */
@@ -436,13 +457,14 @@ export class Session implements GameContext {
     this.scoreboard.load(s.scripting?.scoreboard);
     for (const [k, v] of Object.entries(s.scripting?.extraRules ?? {})) this.extraRules.set(k, v);
     this.dims = s.dims ?? {};
-    for (const d of ['overworld', 'nether'] as const) this.portals[d] = s.portals?.[d] ?? [];
+    for (const d of ['overworld', 'nether', 'end'] as const) this.portals[d] = s.portals?.[d] ?? [];
     this.arrival = s.arrival ?? null;
+    this.endState = s.endState ?? {};
   }
 
   /** Préfixe des chunks sauvegardés de la dimension. */
   get chunkPrefix() {
-    return this.dimension === 'nether' ? `${this.meta.id}:nether` : this.meta.id;
+    return this.dimension === 'overworld' ? this.meta.id : `${this.meta.id}:${this.dimension}`;
   }
   private pendingMobs: SavedMob[] | null = null;
 
@@ -467,6 +489,7 @@ export class Session implements GameContext {
       dimension: this.dimension,
       dims: this.dims,
       portals: this.portals,
+      endState: this.endState,
     };
   }
 
@@ -527,6 +550,15 @@ export class Session implements GameContext {
     this.controller.update(this.world, dt);
     this.updatePortal(dt);
     this.updateFires();
+    if (this.dimension === 'end' && this.endState.dragonKilled && !this.endState.exitBuilt) this.buildExitPortal();
+    // vide (l'End) : dégâts sous l'île, mort assurée bien plus bas
+    if (p.y < -16 && !p.dead) {
+      this.voidTimer -= dt;
+      if (this.voidTimer <= 0) {
+        this.voidTimer = 0.5;
+        p.damage(p.y < -80 ? 1000 : 4, 'void');
+      }
+    }
     // poussière de sprint et bulles de nage
     if (p.sprinting && p.body.onGround && Math.random() < dt * 25) {
       const below = this.world.getBlock(Math.floor(p.x), Math.floor(p.y - 0.1), Math.floor(p.z));
@@ -567,6 +599,15 @@ export class Session implements GameContext {
   /** Portail : 4 s dedans (1 s en créatif) pour changer de dimension ; il faut en sortir pour repartir. */
   private updatePortal(dt: number) {
     const p = this.player;
+    // portail de l'End : passage immédiat (aller vers l'End, ou retour à la surface)
+    if (!p.dead && !this.portalBlocked && Portals.touchesEndPortal(this.world, p.x, p.y, p.z, p.body.halfWidth)) {
+      this.portalBlocked = true;
+      if (this.dimension === 'end') {
+        const [sx, sy, sz] = p.spawn;
+        void this.game.changeDimension('overworld', { x: sx, y: sy, z: sz });
+      } else void this.game.changeDimension('end');
+      return;
+    }
     const inside = !p.dead && Portals.touchesPortal(this.world, p.x, p.y, p.z, p.body.halfWidth, p.body.height);
     if (!inside) {
       this.portalBlocked = false;
@@ -600,6 +641,10 @@ export class Session implements GameContext {
   /** Arrivée par un portail : portail existant proche (registre), sinon nouveau portail. */
   private arrive(a: { x: number; y: number; z: number }) {
     const w = this.world, p = this.player;
+    if (this.dimension === 'end') {
+      this.arriveEnd();
+      return;
+    }
     const nether = this.dimension === 'nether';
     let spot = Portals.findNearbyPortal(w, a.x, a.z, nether ? 16 : 128, this.portals[this.dimension]);
     if (!spot) {
@@ -613,6 +658,64 @@ export class Session implements GameContext {
     p.body.fallDistance = 0;
     this.portalBlocked = true;
   }
+
+  /** Arrivée dans l'End : plateforme d'obsidienne 5×5 (air dégagé au-dessus), dragon et cristaux. */
+  private arriveEnd() {
+    const w = this.world, p = this.player;
+    const { x, y, z } = END_SPAWN;
+    for (let dx = -2; dx <= 2; dx++)
+      for (let dz = -2; dz <= 2; dz++) {
+        w.setBlock(x + dx, y - 1, z + dz, B.OBSIDIAN);
+        for (let h = 0; h < 3; h++) w.setBlock(x + dx, y + h, z + dz, B.AIR);
+      }
+    p.body.setPos(x + 0.5, y, z + 0.5);
+    p.body.vx = p.body.vy = p.body.vz = 0;
+    p.body.fallDistance = 0;
+    p.yaw = Math.PI / 2;
+    this.portalBlocked = true;
+    this.startDragonFight();
+  }
+
+  /** Portail de sortie : construit dès que le centre de l'île est chargé (différé sinon). */
+  private buildExitPortal() {
+    if (this.dimension !== 'end' || !this.endState.dragonKilled || this.endState.exitBuilt) return;
+    const w = this.world;
+    if (!w.isLoaded(-3, -3) || !w.isLoaded(3, 3) || !w.isLoaded(-3, 3) || !w.isLoaded(3, -3)) return;
+    Portals.activateExitPortal(w, END_ISLAND_Y);
+    this.endState.exitBuilt = true;
+  }
+
+  /** Dragon et cristaux (une seule fois pour les cristaux ; le dragon revient tant qu'il n'est pas vaincu). */
+  startDragonFight() {
+    if (this.dimension !== 'end' || this.endState.dragonKilled) return;
+    if (!this.endState.crystals) {
+      for (const pl of endPillars(this.meta.seed)) this.entities.spawnMob('end_crystal', pl.x + 0.5, pl.top + 1, pl.z + 0.5, { persistent: true });
+      this.endState.crystals = true;
+    }
+    if (!this.entities.mobs.some((m) => m.def.key === 'ender_dragon' && !m.dead)) this.entities.spawnMob('ender_dragon', 0, END_ISLAND_Y + 30, -50, { persistent: true });
+  }
+
+  /** Œil de l'Ender : s'envole vers le fort le plus proche puis retombe (ou se brise). */
+  private async throwEye() {
+    const p = this.player;
+    const r = await this.chunks.locate('stronghold', p.x, p.z);
+    const def = PROJECTILE_DEFS.get('lecraft:eye_of_ender')!;
+    let dx = 0, dz = 0;
+    if (r.found) {
+      const d = Math.hypot(r.x - p.x, r.z - p.z) || 1;
+      dx = (r.x - p.x) / d;
+      dz = (r.z - p.z) / d;
+    } else {
+      dx = -Math.sin(p.yaw);
+      dz = -Math.cos(p.yaw);
+    }
+    const pr = this.entities.spawnProjectile('custom', p.x, p.y + p.eyeHeight, p.z, dx * 9, 5, dz * 9, 0, true, def);
+    pr.owner = p;
+    this.audio.play('cast', { x: p.x, y: p.y, z: p.z });
+    this.lastEye = r.found ? { x: r.x, z: r.z } : null;
+  }
+  /** Dernière destination d'un œil lancé (tests). */
+  lastEye: { x: number; z: number } | null = null;
 
   /** Portail allumé par le joueur : mémorisé pour relier les dimensions. */
   registerPortal(pos: { x: number; y: number; z: number }) {
@@ -798,15 +901,15 @@ export class Session implements GameContext {
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2);
     r.shake = this.shakeAmt;
     // ciel, brouillard, lumière
-    const nether = this.dimension === 'nether';
+    const nether = this.dimension !== 'overworld';
     const rain = nether || this.biomeWeather() === 'none' ? 0 : this.weather.intensity;
-    const netherFog = nether ? new THREE.Color(NETHER_FOG[this.world.biomeAt(Math.floor(p.x), Math.floor(p.z)).key] ?? 0x330808) : null;
+    const netherFog = this.dimension === 'end' ? new THREE.Color(0x120a18) : nether ? new THREE.Color(NETHER_FOG[this.world.biomeAt(Math.floor(p.x), Math.floor(p.z)).key] ?? 0x330808) : null;
     if (netherFog) r.sky.updateNether(cam.position, netherFog);
     else r.sky.update(this.dayCycle.time, cam.position, rain, this.weather.flash, this.elapsed, s.clouds);
     const u = r.materials.uniforms;
     u.uTime.value = this.elapsed;
     u.uDaylight.value = nether ? 0 : Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
-    u.uAmbient.value = nether ? 0.3 : 0.035;
+    u.uAmbient.value = this.dimension === 'end' ? 0.7 : nether ? 0.3 : 0.035;
     u.uSkyColor.value.copy(r.sky.skyLightColor);
     u.uSway.value = this.profile.foliageAnimation ? 1 : 0;
     u.uWaterAnim.value = s.waterQuality === 'animated' ? 1 : 0;
@@ -817,6 +920,7 @@ export class Session implements GameContext {
     const far = Math.max(24, s.renderDistance * CHUNK_SIZE - 6);
     if (underwater) r.setFog(1, 18, new THREE.Color(0.12, 0.25, 0.55).multiplyScalar(Math.max(0.3, this.dayCycle.daylight)));
     else if (inLava) r.setFog(0.2, 3, new THREE.Color(0.9, 0.35, 0.05));
+    else if (netherFog && this.dimension === 'end') r.setFog(far * 0.75, far * 1.1, netherFog);
     else if (netherFog) r.setFog(Math.min(far, 64) * 0.1, Math.min(far, 64), netherFog);
     else r.setFog(far * (rain > 0.3 ? 0.35 : 0.6), far, r.sky.horizon);
     game.hud.setOverlays(underwater, inLava);
@@ -896,7 +1000,7 @@ export class Session implements GameContext {
     this.player.respawn();
     this.game.input.reset();
     // le point de réapparition est à la surface
-    if (this.dimension === 'nether') void this.game.changeDimension('overworld', { x: this.player.x, y: this.player.y, z: this.player.z });
+    if (this.dimension !== 'overworld') void this.game.changeDimension('overworld', { x: this.player.x, y: this.player.y, z: this.player.z });
   }
 
   private async useCompass(target: string) {

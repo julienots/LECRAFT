@@ -66,7 +66,7 @@ export interface GameContext {
   /** Règles du jeu (/gamerule). */
   gamerules: GameRules;
   /** Dimension de la partie en cours. */
-  dimension: 'overworld' | 'nether';
+  dimension: 'overworld' | 'nether' | 'end';
   iconTexture(itemId: string): THREE.Texture;
   /** Pluie active (pour l'IA/brûlure solaire). */
   raining(): boolean;

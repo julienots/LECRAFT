@@ -1306,7 +1306,7 @@ const COMMANDS: CommandDef[] = [
       let i = 0;
       const sub = (st: St): Ctx => ({ ...c, origin: st.origin, executor: st.executor });
       const rotOf = (t: Target) => (t.kind === 'player' ? { yaw: c.s.player.yaw, pitch: c.s.player.pitch } : { yaw: t.e.yaw, pitch: 0 });
-      let inDim: 'overworld' | 'nether' | null = null;
+      let inDim: 'overworld' | 'nether' | 'end' | null = null;
       while (i < args.length) {
         const kw = args[i++];
         if (kw === 'run') {
@@ -1314,11 +1314,11 @@ const COMMANDS: CommandDef[] = [
           // « execute in <dimension> run tp … » : voyage vers l'autre dimension
           if (inDim && inDim !== c.s.dimension) {
             const tp = /^\/?(tp|teleport)\s+(?:@s|@p)?\s*(\S+)\s+(\S+)\s+(\S+)/.exec(rest);
-            if (!tp) throw new CommandError(`La dimension ${inDim === 'nether' ? 'du Nether' : 'de la surface'} n'est pas chargée (seul « run tp » est possible)`);
+            if (!tp) throw new CommandError(`Cette dimension n'est pas chargée (seul « run tp » est possible)`);
             const st = states[0];
             const [x, y, z] = parseCoords([tp[2], tp[3], tp[4]], st.origin, false);
             void c.s.game.changeDimension(inDim, { x, y, z });
-            c.out(`Téléportation vers ${inDim === 'nether' ? 'le Nether' : 'la surface'}`);
+            c.out(`Téléportation vers ${inDim === 'nether' ? 'le Nether' : inDim === 'end' ? "l'End" : 'la surface'}`);
             return;
           }
           let ok = 0;
@@ -1362,7 +1362,7 @@ const COMMANDS: CommandDef[] = [
             break;
           case 'in': {
             const d = String(args[i++] ?? '').replace(/^minecraft:/, '');
-            inDim = d === 'the_nether' || d === 'nether' ? 'nether' : d === 'overworld' ? 'overworld' : null;
+            inDim = d === 'the_nether' || d === 'nether' ? 'nether' : d === 'the_end' || d === 'end' ? 'end' : d === 'overworld' ? 'overworld' : null;
             if (!inDim) throw new CommandError(`Dimension inconnue : ${d}`);
             break;
           }

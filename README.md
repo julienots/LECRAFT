@@ -112,6 +112,22 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   dimension conservés. `/execute in minecraft:the_nether run tp @s x y z` (et `in minecraft:overworld`)
   fait voyager directement.
 
+### L'End
+
+- **Œil de l'Ender** (perle de l'Ender + poudre de blaze) : lancé, il s'envole vers le **fort** le plus
+  proche puis retombe (80 %) ou se brise. Les forts (souterrains, ~1 tous les 768 blocs) ont des
+  couloirs de briques de pierre, une bibliothèque, des coffres et la **salle du portail** : 12 cadres
+  autour d'un bassin de lave (environ 1 sur 10 a déjà un œil).
+- Un œil posé sur chaque cadre **ouvre le portail** (3×3) ; y entrer mène instantanément dans l'End,
+  sur une plateforme d'obsidienne.
+- **L'End** (`EndGenerator`) : île de pierre de l'End au-dessus du **vide** (4 dégâts / 0,5 s en
+  tombant), dix **piliers d'obsidienne** (deux en cage de barreaux de fer) surmontés de **cristaux**,
+  fontaine de bedrock au centre, grand vide puis îles extérieures au-delà de 400 blocs ; endermen.
+- **Dragon de l'Ender** (200 PV, barre de boss) : vol circulaire, charges, boules de feu, se pose sur
+  la fontaine et souffle ; soigné par le cristal le plus proche (rayon visible) — détruire ce cristal
+  le blesse. Vaincu : 500 XP, **portail de sortie** et **œuf de dragon** ; la sortie ramène au point
+  d'apparition. `/execute in minecraft:the_end run tp @s x y z` y mène directement.
+
 ### Commandes (chat)
 
 Bouton 💬 (ou touche **T**, **/** au clavier) : chat avec historique et **autocomplétion**. Syntaxe du
@@ -600,7 +616,7 @@ La sensibilité et l'inversion de l'axe vertical des Paramètres s'appliquent au
 ## 14. Tests
 
 ```bash
-npm test                         # 51 tests unitaires : génération déterministe, biomes, grottes,
+npm test                         # 53 tests unitaires : génération déterministe, biomes, grottes,
                                  # mesher/lumière, physique, liquides, inventaire, grilles 2x2/3x3,
                                  # fourneau, formes/orientations, drops, butin, survie, police TrueType,
                                  # sauvegarde/corruption (fake-indexeddb)
@@ -624,6 +640,9 @@ npm run e2e:mobs                 # 13 vérifications : modèles, loup (apprivois
                                  # flèche de lenteur, village (cloche, villageois)
 npm run e2e:movement             # 8 vérifications : sprint au double appui, saut en sprint, poussière,
                                  # nage rapide (pose, vitesse, plongée), ramper, regard des créatures
+npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 12 cadres, ouverture,
+                                 # arrivée, cristaux et dragon, soin et cristal détruit, vide, victoire
+                                 # (portail de sortie, œuf), retour à la surface
 npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
                                  # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,
                                  # lâcher), vues 1re/3e personne (F5, croix ↑), caméra contre un mur

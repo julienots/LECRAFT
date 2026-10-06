@@ -64,7 +64,55 @@ function eyes(y: number, z: number, spread: number, color = '#101010', size = 2,
   return out;
 }
 
+const DRAGON = '#16161a', DRAGON2 = '#24242a', SPIKE = '#3a3a42', EYE = '#d050ff';
+/** Segments enchaînés (cou, queue) : chaque segment est l'enfant du précédent. */
+function chain(n: number, size: [number, number, number], step: number, color: string, last?: PartDef): PartDef {
+  let part: PartDef | undefined = last;
+  for (let i = n - 1; i >= 0; i--) {
+    const p: PartDef = { size, at: [0, 0, step / 2], pivot: [0, 0, i === 0 ? 0 : step], color: i % 2 ? color : DRAGON2, children: [{ size: [2, 4, 4], at: [0, size[1] / 2 + 2, step / 2], color: SPIKE }, ...(part ? [part] : [])] };
+    part = p;
+  }
+  return part!;
+}
+
 export const VOXEL_MODELS: Record<string, () => PartDef> = {
+  ender_dragon: () => ({
+    size: [0.01, 0.01, 0.01], color: '#000',
+    children: [
+      // corps
+      { size: [24, 20, 48], at: [0, 40, 0], color: DRAGON, children: [0, 1, 2].map((i) => ({ size: [2, 6, 6], at: [0, 53, -16 + i * 16], color: SPIKE })) },
+      // cou + tête (vers l'avant : +Z)
+      { size: [0.01, 0.01, 0.01], pivot: [0, 44, 24], color: DRAGON, anim: 'head', children: [chain(5, [10, 10, 10], 10, DRAGON, {
+        size: [16, 12, 20], at: [0, 0, 14], pivot: [0, 0, 10], color: DRAGON,
+        children: [
+          { size: [12, 4, 16], at: [0, -6, 22], color: DRAGON2 },
+          { size: [3, 3, 1], at: [-5, 3, 24.5], color: EYE },
+          { size: [3, 3, 1], at: [5, 3, 24.5], color: EYE },
+          { size: [2, 6, 4], at: [-5, 9, 6], color: SPIKE },
+          { size: [2, 6, 4], at: [5, 9, 6], color: SPIKE },
+        ],
+      })] },
+      // queue (vers l'arrière)
+      { size: [0.01, 0.01, 0.01], pivot: [0, 40, -24], color: DRAGON, anim: 'tail', children: [{ ...chain(10, [10, 10, 10], -10, DRAGON) }] },
+      // ailes
+      { size: [56, 3, 40], at: [-30, 0, 0], pivot: [-12, 48, 4], color: DRAGON2, anim: 'wingL', children: [{ size: [56, 2, 36], at: [-86, 0, 0], color: '#2e2e36' }] },
+      { size: [56, 3, 40], at: [30, 0, 0], pivot: [12, 48, 4], color: DRAGON2, anim: 'wingR', children: [{ size: [56, 2, 36], at: [86, 0, 0], color: '#2e2e36' }] },
+      // pattes
+      { size: [8, 20, 8], at: [0, -10, 0], pivot: [-10, 32, 14], color: DRAGON2, anim: 'legFL' },
+      { size: [8, 20, 8], at: [0, -10, 0], pivot: [10, 32, 14], color: DRAGON2, anim: 'legFR' },
+      { size: [10, 24, 10], at: [0, -12, 0], pivot: [-10, 32, -14], color: DRAGON2, anim: 'legBL' },
+      { size: [10, 24, 10], at: [0, -12, 0], pivot: [10, 32, -14], color: DRAGON2, anim: 'legBR' },
+    ],
+  }),
+  end_crystal: () => ({
+    size: [0.01, 0.01, 0.01], color: '#000',
+    children: [
+      { size: [16, 4, 16], at: [0, 2, 0], color: '#3a3a3a' },
+      { size: [0.01, 0.01, 0.01], pivot: [0, 18, 0], color: '#000', anim: 'spin0', children: [
+        { size: [14, 14, 14], at: [0, 0, 0], color: '#c8a8ff', children: [{ size: [9, 9, 9], at: [0, 0, 0], color: '#ff60c8' }] },
+      ] },
+    ],
+  }),
   golem: () => ({
     size: [0.01, 0.01, 0.01], color: '#000',
     children: [

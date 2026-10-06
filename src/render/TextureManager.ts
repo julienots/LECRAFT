@@ -27,7 +27,7 @@ const PACK_RENAME: Record<string, string> = {
   bamboo_block_side: 'bamboo_block', basalt: 'basalt_side', quartz_block: 'quartz_block_side', smooth_quartz: 'quartz_block_bottom', bone_block: 'bone_block_side',
   noteblock_top: 'note_block', noteblock_side: 'note_block', cartography_table_side: 'cartography_table_side1', lectern_side: 'lectern_sides', grindstone_top: 'grindstone_side',
   carved_pumpkin_top: 'pumpkin_top', carved_pumpkin_side: 'carved_pumpkin', jack_o_lantern_top: 'pumpkin_top', jack_o_lantern_side: 'jack_o_lantern',
-  campfire_top: 'campfire_log_lit', campfire_side: 'campfire_log_lit', azalea: 'azalea_top', fire: 'fire_0', soul_fire: 'soul_fire_0', pointed_dripstone: 'pointed_dripstone_down_tip',
+  campfire_top: 'campfire_log_lit', campfire_side: 'campfire_log_lit', azalea: 'azalea_top', fire: 'fire_0', soul_fire: 'soul_fire_0', pointed_dripstone: 'pointed_dripstone_down_tip', end_portal_frame_eye: 'end_portal_frame_eye', end_portal_frame_top: 'end_portal_frame_top',
 };
 const WATER_TINT = hex('#3f76e4');
 

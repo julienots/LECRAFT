@@ -25,6 +25,9 @@ export interface ProjectileDef {
   teleport?: boolean;
   /** Durée de vie maximale (s). */
   life?: number;
+  /** Objet lâché à la fin de sa course (œil de l'Ender), avec une probabilité. */
+  dropItem?: string;
+  dropChance?: number;
 }
 
 /** Projectiles connus (add-ons et équivalents des projectiles du jeu de référence). */
@@ -46,6 +49,7 @@ export const PROJECTILE_DEFS = new Map<string, ProjectileDef>([
   ['minecraft:splash_potion', { id: 'minecraft:splash_potion', color: '#d04060', size: 0.25, gravity: 12, damage: 0 }],
   ['lecraft:stray_arrow', { id: 'lecraft:stray_arrow', color: '#7a8a8a', size: 0.1, gravity: 12, damage: 3, stick: true, effect: { id: 'slowness', duration: 600, amplifier: 0 } }],
   ['lecraft:witch_potion', { id: 'lecraft:witch_potion', color: '#6a2a9a', size: 0.25, gravity: 12, damage: 2, effect: { id: 'poison', duration: 140, amplifier: 0 } }],
+  ['lecraft:eye_of_ender', { id: 'lecraft:eye_of_ender', color: '#3aa070', size: 0.3, gravity: 3, damage: 0, life: 1.8, dropItem: 'ender_eye', dropChance: 0.8 }],
   ['minecraft:arrow', { id: 'minecraft:arrow', color: '#8a6a3c', size: 0.1, gravity: 12, damage: 4, stick: true }],
 ]);
 
@@ -106,8 +110,17 @@ export class Projectile extends Entity {
     this.age += dt;
     if (this.age > this.life) {
       this.removed = true;
+      const d = this.def;
+      if (d?.dropItem) {
+        if (Math.random() < (d.dropChance ?? 1)) (ctx as unknown as { entities?: { spawnItem(id: string, n: number, x: number, y: number, z: number): void } }).entities?.spawnItem(d.dropItem, 1, this.x, this.y, this.z);
+        else {
+          ctx.particles.burst('magic', this.x, this.y, this.z, 12);
+          ctx.audio.play('glass_break', { x: this.x, y: this.y, z: this.z });
+        }
+      }
       return;
     }
+    if (this.def?.dropItem) ctx.particles.burst('magic', this.x, this.y, this.z, 1);
     if (this.stuck) {
       if (this.pickable && !ctx.player.dead) {
         const p = ctx.player;
@@ -155,6 +168,11 @@ export class Projectile extends Entity {
   /** Effets d'impact d'un projectile défini (explosion, souffle, téléportation…). */
   customImpact(ctx: GameContext) {
     const d = this.def!;
+    if (d.dropItem) {
+      this.age = this.life + 1; // l'œil retombe à l'endroit de l'impact
+      this.update(ctx, 0);
+      return;
+    }
     if (d.stick) {
       this.stuck = true;
       this.life = this.age + 4;

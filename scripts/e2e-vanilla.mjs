@@ -284,19 +284,22 @@ try {
     p.gameMode = 'survival'; p.health = 20;
     s.player.body.setPos(a.x + 10.5, a.y, a.z + 0.5);
     p.yaw = 0; p.pitch = 0;
+    s.runCommand('/gamerule doMobSpawning false');
+    for (const o of s.entities.mobs) if (o.def.key === 'creeper') o.removed = true;
     const m = s.entities.spawnMob('creeper', a.x + 10.5, a.y, a.z - 1.5, { persistent: true });
+    window.__cr = m;
     return { ok: !!m, model: !!m?.model?.vanilla };
   });
   check('Creeper : apparition (modèle vanilla)', cr.ok && cr.model, JSON.stringify(cr));
   await wait(700);
-  const lit = await G(() => window.__lecraft.session.entities.mobs.find((m) => m.def.key === 'creeper')?.fuse ?? -1);
+  const lit = await G(() => window.__cr?.fuse ?? -1);
   await page.screenshot({ path: `${OUT}/vanilla-03-creeper.png` });
   await wait(2200);
   const boom = await G(() => {
     const s = window.__lecraft.session, a = window.__a;
     let air = 0;
     for (let dx = 9; dx <= 11; dx++) for (let dz = -3; dz <= 0; dz++) if (s.world.getBlock(a.x + dx, a.y - 1, a.z + dz) === 0) air++;
-    return { gone: !s.entities.mobs.some((m) => m.def.key === 'creeper' && !m.dead), health: s.player.health, air };
+    return { gone: window.__cr.dead || window.__cr.removed, health: s.player.health, air };
   });
   check('Creeper : la mèche s’allume près du joueur', lit > 0, `mèche ${lit.toFixed?.(2) ?? lit} s`);
   check('Creeper : explosion (disparaît, blesse le joueur, cratère)', boom.gone && boom.health < 20 && boom.air >= 3, JSON.stringify(boom));

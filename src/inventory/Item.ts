@@ -2,6 +2,7 @@ import type { ToolType } from '../blocks/Block';
 
 export type ArmorSlot = 'head' | 'chest' | 'legs' | 'feet';
 export type ItemUse =
+  | 'ender_eye'
   | 'till'
   | 'plant'
   | 'shoot'

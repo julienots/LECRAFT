@@ -13,7 +13,7 @@ import { FACING_DIR, facingFromYaw, opposite } from '../blocks/Shapes';
 import { encodeStates, type BedrockBlockInfo } from '../addons/BedrockBlocks';
 import { connectionStates } from '../addons/BlockRuntime';
 import { hooks } from '../scripting/Hooks';
-import { tryLight } from '../world/Portals';
+import { tryLight, insertEye } from '../world/Portals';
 import { Wolf, Villager } from '../entities/Creatures';
 
 /** Face moteur (0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z) d'une normale. */
@@ -44,6 +44,8 @@ export interface InteractionHost {
   fireLit?(x: number, y: number, z: number): void;
   /** Échanges avec un villageois. */
   trade?(v: Villager): void;
+  /** Œil de l'Ender lancé vers le fort le plus proche. */
+  throwEye?(): void;
 }
 
 /** Index d'orientation correspondant à une direction horizontale (dx, dz). */
@@ -601,6 +603,22 @@ export class PlayerInteraction {
           return true;
         }
         return false;
+      }
+      case 'ender_eye': {
+        // sur un cadre de portail de l'End : l'œil s'y insère (les 12 ouvrent le portail)
+        if (t) {
+          const r = insertEye(w, t.x, t.y, t.z);
+          if (r) {
+            if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+            ctx.audio.play(r === 'opened' ? 'portal' : 'pop', { x: t.x, y: t.y, z: t.z, volume: 1 });
+            if (r === 'opened') ctx.hud.toast("Le portail de l'End s'ouvre !", 'achievement');
+            return true;
+          }
+        }
+        if (ctx.dimension !== 'overworld' || !this.host.throwEye) return false;
+        this.host.throwEye();
+        if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+        return true;
       }
       case 'spawn_egg': {
         const def = ItemRegistry.get(itemId);
