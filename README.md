@@ -154,6 +154,15 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   beiges des coups critiques ; mobs qui basculent sur le côté en mourant puis disparaissent dans un nuage
   de fumée ; le dragon s'élève dans les explosions ; yeux lumineux des araignées, endermen et du
   dragon dans le noir (`*_eyes.png` du pack, sinon extraits de la skin).
+- **Shaders** (Options › Graphismes › Shaders) : *Activés* par défaut — lumière directionnelle du
+  soleil (chaude) et de la lune (bleutée), eau qui reflète le ciel avec reflet du soleil et vaguelettes,
+  brouillard éclairé par le couchant, couleurs plus riches et vignette ; *Ultra* ajoute de vraies
+  **ombres projetées** (carte d'ombres du soleil, filtrée, découpe des feuilles et herbes respectée) ;
+  *NON* revient au rendu classique.
+- **Liquides et blocs** : surface de l'eau et de la lave en pente comme le jeu original (hauteur de
+  chaque coin moyennée, plus de trous entre niveaux), animation à 16 images (8 images/s) issue du pack,
+  surfaces translucides sans « parois fantômes », glace et verre sans double face contre l'eau ;
+  coffre aux couleurs de `entity/chest/normal.png` avec loquet en relief.
 - **Petites touches LeCraft** : des **feuilles tombent** des arbres ; à la mort, la **position** est
   affichée et, après la réapparition, une **boussole** guide 5 minutes vers le lieu de la mort.
 
@@ -672,11 +681,11 @@ npm run e2e:movement             # 8 vérifications : sprint au double appui, sa
 npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 12 cadres, ouverture,
                                  # arrivée, cristaux et dragon, soin et cristal détruit, vide, victoire
                                  # (portail de sortie, œuf), retour à la surface
-npm run e2e:wither               # 25 vérifications : pas de bloc fantôme, icônes plates, squelette
+npm run e2e:wither               # 26 vérifications : pas de bloc fantôme, icônes plates, squelette
                                  # wither, invocation, charge, crânes, armure, étoile du Nether, bras
                                  # en 1re personne, pose accroupie, feuilles qui tombent, objets au sol
                                  # en 3D (fusion, ramassage, éclairage), ciel du pack, caméra blessée,
-                                 # fragments de blocs texturés, pluie par colonne,
+                                 # fragments de blocs texturés, pluie par colonne, shaders et ombres,
                                  # modèle du dragon, yeux lumineux, chute à la mort, lieu de mort
 npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
                                  # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,

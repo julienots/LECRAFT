@@ -149,6 +149,8 @@ export class ChunkMesher {
     if (R.opaque[n]) return false;
     const rt = R.renderType[b];
     if (rt === 1) return true; // cube opaque : visible contre tout non-opaque
+    // translucide (glace, verre…) contre de l'eau : seule la face de l'eau est dessinée (pas de double paroi)
+    if (rt === 5 && R.renderType[n] === 4 && R.blocks[n].liquid === 'water') return false;
     return n !== b; // cutout/translucide : masqué contre lui-même
   }
 
@@ -438,11 +440,38 @@ export class ChunkMesher {
     }
   }
 
+  /** Hauteur d'une case de liquide (source 0,875, puis -0,1 par niveau ; 1 si le même liquide est au-dessus). */
   private liquidHeight(blocks: Uint16Array, meta: Uint8Array, x: number, y: number, z: number, pi: number, b: number) {
     if (y + 1 < WORLD_HEIGHT && blocks[pi + AREA] === b) return 1;
     const m = meta[x + z * 16 + y * 256];
     if (m === 0 || m >= 8) return 0.875;
     return Math.max(0.15, 0.875 - m * 0.1);
+  }
+
+  /**
+   * Hauteur d'un coin de la surface, comme le jeu original : moyenne des 4 cases qui partagent le coin
+   * (les sources pèsent 10 fois plus, une case vide tire vers le bas, un bloc plein est ignoré ;
+   * 1 si du même liquide est au-dessus de l'une d'elles). Les surfaces voisines se raccordent en pente.
+   */
+  private cornerHeight(blocks: Uint16Array, meta: Uint8Array, x: number, y: number, z: number, pi: number, b: number, own: number, cx: number, cz: number) {
+    let sum = 0, wsum = 0;
+    for (let dz = cz - 1; dz <= cz; dz++)
+      for (let dx = cx - 1; dx <= cx; dx++) {
+        const ni = pi + dx + dz * W;
+        const nb = blocks[ni];
+        if (nb === b) {
+          if (y + 1 < WORLD_HEIGHT && blocks[ni + AREA] === b) return 1;
+          const nx = x + dx, nz = z + dz;
+          const inside = nx >= 0 && nx < 16 && nz >= 0 && nz < 16;
+          const h = inside ? this.liquidHeight(blocks, meta, nx, y, nz, ni, b) : own;
+          const wgt = h >= 0.87 ? 10 : 1;
+          sum += h * wgt;
+          wsum += wgt;
+        } else if (!BlockRegistry.solid[nb]) {
+          wsum += 1;
+        }
+      }
+    return wsum > 0 ? sum / wsum : own;
   }
 
   private liquid(blocks: Uint16Array, meta: Uint8Array, sky: Uint8Array, blk: Uint8Array, x: number, y: number, z: number, pi: number, b: number) {
@@ -452,6 +481,13 @@ export class ChunkMesher {
     const builder = isWater ? this.trans : this.opaque;
     const tile = block.faceTiles[0];
     const h = this.liquidHeight(blocks, meta, x, y, z, pi, b);
+    // hauteurs des coins : (x, z), (x+1, z), (x, z+1), (x+1, z+1)
+    const full = h >= 1;
+    const h00 = full ? 1 : this.cornerHeight(blocks, meta, x, y, z, pi, b, h, 0, 0);
+    const h10 = full ? 1 : this.cornerHeight(blocks, meta, x, y, z, pi, b, h, 1, 0);
+    const h01 = full ? 1 : this.cornerHeight(blocks, meta, x, y, z, pi, b, h, 0, 1);
+    const h11 = full ? 1 : this.cornerHeight(blocks, meta, x, y, z, pi, b, h, 1, 1);
+    const top = Math.max(h00, h10, h01, h11);
     for (let d = 0; d < 6; d++) {
       const [dx, dy, dz] = DIRS[d];
       if (y + dy < 0 || y + dy >= WORLD_HEIGHT) continue;
@@ -459,22 +495,25 @@ export class ChunkMesher {
       const n = blocks[ni];
       if (n === b) continue;
       if (d !== 2 && R.opaque[n]) continue;
-      if (d === 2 && R.opaque[n] && h >= 1) continue;
+      if (d === 2 && R.opaque[n] && top >= 1) continue;
       const sl = Math.max(sky[ni], sky[pi]) * 16, bl = Math.max(blk[ni], blk[pi]) * 16;
-      const flags = FLAG_ANIM | FLAG_LIQUID | (d === 2 && h < 1 && isWater ? FLAG_WAVE : 0);
+      const flags = FLAG_ANIM | FLAG_LIQUID | (d === 2 && top < 1 && isWater ? FLAG_WAVE : 0);
       const shade = Math.round(255 * FACE_SHADE[d]);
-      let c: number[][];
-      const y0 = y, y1 = y + (d === 2 ? h : h);
+      const y0 = y;
+      // 4 sommets [x, y, z] (y = hauteur relative du sommet ; 0 = bas du bloc)
+      let c: [number, number, number][];
       switch (d) {
-        case 0: c = [[x + 1, y0, z + 1], [x + 1, y0, z], [x + 1, y1, z], [x + 1, y1, z + 1]]; break;
-        case 1: c = [[x, y0, z], [x, y0, z + 1], [x, y1, z + 1], [x, y1, z]]; break;
-        case 2: c = [[x, y1, z + 1], [x + 1, y1, z + 1], [x + 1, y1, z], [x, y1, z]]; break;
-        case 3: c = [[x, y0, z], [x + 1, y0, z], [x + 1, y0, z + 1], [x, y0, z + 1]]; break;
-        case 4: c = [[x, y0, z + 1], [x + 1, y0, z + 1], [x + 1, y1, z + 1], [x, y1, z + 1]]; break;
-        default: c = [[x + 1, y0, z], [x, y0, z], [x, y1, z], [x + 1, y1, z]]; break;
+        case 0: c = [[x + 1, 0, z + 1], [x + 1, 0, z], [x + 1, h10, z], [x + 1, h11, z + 1]]; break;
+        case 1: c = [[x, 0, z], [x, 0, z + 1], [x, h01, z + 1], [x, h00, z]]; break;
+        case 2: c = [[x, h01, z + 1], [x + 1, h11, z + 1], [x + 1, h10, z], [x, h00, z]]; break;
+        case 3: c = [[x, 0, z], [x + 1, 0, z], [x + 1, 0, z + 1], [x, 0, z + 1]]; break;
+        case 4: c = [[x, 0, z + 1], [x + 1, 0, z + 1], [x + 1, h11, z + 1], [x, h01, z + 1]]; break;
+        default: c = [[x + 1, 0, z], [x, 0, z], [x, h00, z], [x + 1, h10, z]]; break;
       }
-      const vh = d === 2 || d === 3 ? 1 : h;
-      const ids = c.map((p, k) => builder.vertex(p[0], p[1], p[2], k === 1 || k === 2 ? 16 : 0, k >= 2 ? Math.round(vh * 16) : 0, tile, flags, sl, bl, 255, 255, 255, shade));
+      const ids = c.map((p, k) => {
+        const v = d === 2 || d === 3 ? (k >= 2 ? 16 : 0) : Math.round(p[1] * 16);
+        return builder.vertex(p[0], y0 + p[1], p[2], k === 1 || k === 2 ? 16 : 0, v, tile, flags, sl, bl, 255, 255, 255, shade);
+      });
       builder.quad(ids[0], ids[1], ids[2], ids[3], false);
     }
   }

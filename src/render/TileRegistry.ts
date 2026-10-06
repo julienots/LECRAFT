@@ -1,7 +1,7 @@
 import { BLOCK_DEFS } from '../data/blocks';
 
 /** Tuiles animées : nombre d'images consécutives dans l'atlas. */
-export const ANIMATED_TILES: Record<string, number> = { water: 4, lava: 4 };
+export const ANIMATED_TILES: Record<string, number> = { water: 16, lava: 16 };
 export const EXTRA_TILES = Array.from({ length: 10 }, (_, i) => `destroy_stage_${i}`);
 export const ATLAS_COLS = 32;
 export const TILE_PX = 16;

@@ -74,7 +74,8 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
       return [rotate([7, 3, 0, 9, 13, 2], (meta - 1) & 3)];
     }
     case 'chest':
-      return [[1, 0, 1, 15, 14, 15]];
+      // corps 14×14×14 et loquet 2×4×1 en relief sur la façade (comme le modèle du jeu original)
+      return [[1, 0, 1, 15, 14, 15], rotate([7, 7, 0, 9, 11, 1], f)];
     case 'farmland':
       return [[0, 0, 0, 16, 15, 16]];
     case 'snow_layer':

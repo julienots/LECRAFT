@@ -62,6 +62,7 @@ function videoScreen(game: Game): Screen {
         mcCycle('Ombres', [['off', 'NON'], ['blob', 'Entités'], ['blob+ao', 'Entités + OA']], s.shadows, (v) => ((s.shadows = v as typeof s.shadows), apply())),
         mcCycle('Particules', [['high', 'Toutes'], ['low', 'Réduites'], ['off', 'Minimales']], s.particles, (v) => ((s.particles = v as typeof s.particles), apply())),
         mcCycle('Eau', [['animated', 'Animée'], ['simple', 'Simple']], s.waterQuality, (v) => ((s.waterQuality = v as typeof s.waterQuality), apply())),
+        mcCycle('Shaders', [['on', 'Activés'], ['ultra', 'Ultra (ombres)'], ['off', 'NON']], s.shaders, (v) => ((s.shaders = v as typeof s.shaders), apply())),
         mcToggle('Nuages', s.clouds, (v) => ((s.clouds = v), apply())),
         mcToggle('Balancement de la vue', s.viewBobbing, (v) => ((s.viewBobbing = v), apply())),
         mcToggle('Afficher les FPS', s.showFps, (v) => ((s.showFps = v), apply())),

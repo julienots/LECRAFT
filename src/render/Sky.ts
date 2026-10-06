@@ -36,6 +36,10 @@ export class Sky {
   readonly horizon = new THREE.Color();
   readonly zenith = new THREE.Color();
   readonly skyLightColor = new THREE.Color(1, 1, 1);
+  /** Shaders : direction de la lumière dominante (soleil, ou lune la nuit), sa couleur et la lueur du couchant. */
+  readonly lightDir = new THREE.Vector3(0, 1, 0);
+  readonly lightColor = new THREE.Color(0, 0, 0);
+  readonly sunGlow = new THREE.Color(0, 0, 0);
   private disposables: { dispose(): void }[] = [];
   private tmp = new THREE.Vector3();
   private defaultSun!: THREE.Texture;
@@ -166,6 +170,8 @@ export class Sky {
     this.domeMat.uniforms.uSunGlow.value.setRGB(0, 0, 0);
     this.group.position.copy(camPos);
     this.sun.visible = this.moon.visible = this.stars.visible = this.clouds.visible = false;
+    this.lightColor.setRGB(0, 0, 0);
+    this.sunGlow.setRGB(0, 0, 0);
   }
 
   /**
@@ -276,6 +282,16 @@ export class Sky {
     const sunDir = new THREE.Vector3(Math.cos(ang), h, 0.25).normalize();
     this.domeMat.uniforms.uSunDir.value.copy(sunDir);
     this.domeMat.uniforms.uSunGlow.value.setRGB(1, 0.6, 0.3).multiplyScalar(sunset * (1 - rain));
+    this.sunGlow.copy(this.domeMat.uniforms.uSunGlow.value);
+    // lumière directe : soleil (blanc chaud, orangé au couchant) ou lune (bleu pâle)
+    const sunUp = smoothstep(-0.05, 0.15, h), moonUp = smoothstep(-0.05, 0.15, -h);
+    if (h >= 0) {
+      this.lightDir.copy(sunDir);
+      this.lightColor.setRGB(1.0, 0.94, 0.82).lerp(new THREE.Color(1.0, 0.58, 0.32), sunset).multiplyScalar(sunUp * (1 - rain * 0.85));
+    } else {
+      this.lightDir.copy(sunDir).negate();
+      this.lightColor.setRGB(0.2, 0.25, 0.4).multiplyScalar(moonUp * (1 - rain * 0.85));
+    }
     this.group.position.copy(camPos);
     this.sun.position.copy(sunDir).multiplyScalar(380);
     this.face(this.sun, this.tmp.copy(sunDir).negate());

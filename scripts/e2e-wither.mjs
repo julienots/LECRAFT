@@ -225,7 +225,9 @@ try {
     // le joueur s'approche : ramassé avec l'animation de vol
     p.body.setPos(x + 3.6, y, z + 0.5);
     let flew = false;
-    for (let i = 0; i < 40 && !alive[0].removed; i++) { if (alive[0].collecting > 0) flew = true; await sleep(25); }
+    const orig = alive[0].collect;
+    alive[0].collect = function (ctx) { flew = true; return orig.call(this, ctx); };
+    for (let i = 0; i < 40 && !alive[0].removed; i++) await sleep(25);
     const got = p.inventory.count?.('cobblestone') ?? p.inventory.slots.reduce((n, st) => n + (st?.id === 'cobblestone' ? st.count : 0), 0);
     // éclairage : un objet dans le noir est plus sombre qu'au soleil
     s.runCommand('/time set midnight');
@@ -281,6 +283,27 @@ try {
   });
   check('Blocs cassés : fragments de leur texture (64)', fx.n === 64 && fx.textured === 64, JSON.stringify(fx));
   check('Pluie en rideaux par colonne, arrêtée par les blocs (toit)', fx.visible && fx.openY === fx.ground && (fx.underY === undefined || fx.underY > fx.ground + 4), JSON.stringify(fx));
+  const shd = await G(async () => {
+    const g = window.__lecraft, s = g.session, u = g.renderer.materials.uniforms, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    s.runCommand('/time set 6000');
+    const def = g.settings.shaders;
+    await sleep(200);
+    const on = u.uShaders.value;
+    g.settings.shaders = 'ultra';
+    await sleep(600);
+    const ultra = u.uShaders.value, map = !!u.uShadowMap.value, matrix = u.uShadowMatrix.value.elements.some((v, i) => i % 5 !== 0 && v !== 0);
+    g.settings.shaders = 'off';
+    await sleep(200);
+    const off = u.uShaders.value;
+    g.settings.shaders = def;
+    // coffre : corps + loquet en relief
+    const a = window.__a;
+    s.world.setBlock(a.x, a.y + 2, a.z + 5, I('chest'), 2);
+    s.interaction.target = null;
+    const boxes = s.world.getBlock(a.x, a.y + 2, a.z + 5) === I('chest');
+    return { def, on, ultra, map, matrix, off, boxes };
+  });
+  check('Shaders activés par défaut ; Ultra : carte d’ombres du soleil ; désactivables', shd.def === 'on' && shd.on === 1 && shd.ultra === 2 && shd.map && shd.matrix && shd.off === 0, JSON.stringify(shd));
   check('Yeux lumineux (araignée, dragon)', dragon.glow && dragon.spiderGlow, JSON.stringify(dragon));
   check('Mort d’un mob : bascule sur le côté pendant 1 s puis disparaît', dragon.midPresent && dragon.midAngle > 0.8 && dragon.midAngle <= Math.PI / 2 + 1e-6 && dragon.gone, JSON.stringify(dragon));
   check('Mort : position mémorisée, message et boussole vers le lieu de la mort', death.last && death.last.x === death.at.x && death.compass === 'Lieu de votre mort' && death.msg, JSON.stringify(death));

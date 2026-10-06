@@ -52,6 +52,7 @@ import { Scoreboard, type ScoreboardSnapshot } from '../scripting/Scoreboard';
 import { Mob } from '../entities/Mob';
 import { ScriptHost } from '../scripting/ScriptHost';
 import { DroppedItemModels } from '../render/DroppedItems';
+import { ShadowMap } from '../render/ShadowMap';
 
 export interface WorldState {
   version: number;
@@ -108,6 +109,7 @@ export class Session implements GameContext {
   readonly shadowTexture: THREE.Texture;
   private iconTex = new Map<string, THREE.Texture>();
   private dropped: DroppedItemModels;
+  private shadowMap: ShadowMap | null = null;
   /** Dimension de cette partie (un changement de dimension recrée la session). */
   readonly dimension: Dimension;
   private dims: Partial<Record<Dimension, DimState>> = {};
@@ -971,6 +973,22 @@ export class Session implements GameContext {
     u.uSway.value = this.profile.foliageAnimation ? 1 : 0;
     u.uWaterAnim.value = s.waterQuality === 'animated' ? 1 : 0;
     u.uAO.value = s.shadows === 'off' ? 0.65 : 1;
+    // shaders : lumière dominante, couleurs du ciel, ombres projetées (ultra)
+    const shaders = s.shaders === 'ultra' ? 2 : s.shaders === 'on' ? 1 : 0;
+    u.uShaders.value = shaders;
+    u.uLightDir.value.copy(r.sky.lightDir);
+    u.uLightColor.value.copy(r.sky.lightColor);
+    u.uSkyZenith.value.copy(r.sky.zenith);
+    u.uSkyHorizon.value.copy(r.sky.horizon);
+    u.uSunGlow.value.copy(r.sky.sunGlow);
+    document.documentElement.classList.toggle('shaders-on', shaders > 0);
+    if (shaders === 2 && this.dimension === 'overworld') {
+      if (!this.shadowMap) this.shadowMap = new ShadowMap(game.textures.atlas, this.profile.maxParticles > 500 ? 2048 : 1024);
+      this.shadowMap.update(r.gl, [this.chunks.group, this.entities.group], cam.position, r.sky.lightDir);
+      u.uShadowMap.value = this.shadowMap.texture;
+      u.uShadowMatrix.value.copy(this.shadowMap.matrix);
+      u.uShadowTexel.value = 1 / this.shadowMap.size;
+    } else if (shaders === 2) u.uShaders.value = 1;
     const headBlock = this.world.getBlock(Math.floor(cam.position.x), Math.floor(cam.position.y), Math.floor(cam.position.z));
     const underwater = headBlock === B.WATER;
     const inLava = headBlock === B.LAVA;
@@ -1128,6 +1146,9 @@ export class Session implements GameContext {
   dispose() {
     this.scripts?.dispose();
     this.dropped.dispose();
+    this.shadowMap?.dispose();
+    this.shadowMap = null;
+    document.documentElement.classList.remove('shaders-on');
     document.documentElement.classList.remove('view-front');
     if (this.avatar) {
       this.scene.remove(this.avatar.group);

@@ -623,14 +623,14 @@ const painters: Record<string, Painter> = {
   water: (t, f) => {
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        const w = Math.sin((x + f * 4) * 0.8) + Math.sin((y * 1.3 + x * 0.4 - f * 3) * 0.7);
+        const w = Math.sin((x + f) * 0.8) + Math.sin((y * 1.3 + x * 0.4 - f * 0.75) * 0.7);
         t.set(x, y, hex('#3f76e4'), 180, 0.82 + w * 0.08 + t.rng.next() * 0.05);
       }
   },
   lava: (t, f) => {
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
-        const w = Math.sin((x + f * 2) * 0.6 + Math.sin(y * 0.5 + f)) + Math.cos((y - f * 2) * 0.7);
+        const w = Math.sin((x + f * 0.5) * 0.6 + Math.sin(y * 0.5 + f * 0.25)) + Math.cos((y - f * 0.5) * 0.7);
         t.set(x, y, w > 0.6 ? hex('#ffd24a') : w > -0.4 ? hex('#ff7a1a') : hex('#c83c0a'));
       }
   },

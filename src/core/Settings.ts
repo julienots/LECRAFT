@@ -12,6 +12,8 @@ export interface Settings {
   shadows: 'off' | 'blob' | 'blob+ao';
   particles: 'off' | 'low' | 'high';
   waterQuality: 'simple' | 'animated';
+  /** Shaders : lumière du soleil, eau réfléchissante, brouillard, couleurs ; « ultra » ajoute les ombres projetées. */
+  shaders: 'off' | 'on' | 'ultra';
   resolutionScale: number; // 0.5..1
   clouds: boolean;
   sensitivity: number; // 0.2..3
@@ -46,6 +48,7 @@ export function defaultSettings(q: QualityLevel = 'MEDIUM'): Settings {
     shadows: p.shadows,
     particles: q === 'LOW' ? 'low' : 'high',
     waterQuality: p.waterQuality,
+    shaders: 'on',
     resolutionScale: p.pixelRatio,
     clouds: p.clouds,
     sensitivity: 1,

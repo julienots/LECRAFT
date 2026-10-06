@@ -19,7 +19,7 @@ const DEFAULT_FOLIAGE = hex('#5fa83a');
 /** Tuiles en niveaux de gris teintées par le biome dans le jeu vanilla. */
 const GRAY_TINTED = /^(grass_block_top|short_grass|fern|sugar_cane|(?!cherry|azalea|flowering_azalea|pale_oak)\w*_leaves)$/;
 /** Tuiles sans équivalent direct dans un pack (dessinées par le jeu). */
-const PACK_SKIP = new Set(['missing', 'altar_top', 'altar_side', 'chest_top', 'chest_side', 'chest_front', 'bed_foot', 'bed_side', 'bed_head']);
+const PACK_SKIP = new Set(['missing', 'altar_top', 'altar_side', 'bed_foot', 'bed_side', 'bed_head']);
 const PACK_RENAME: Record<string, string> = {
   water: 'water_still', lava: 'lava_still',
   // blocs de la palette élargie : noms des fichiers du pack
@@ -72,6 +72,47 @@ export const SKIN_PATHS: Record<string, string[]> = {
   slime: ['entity/slime/slime.png'],
 };
 /** Skin générée de remplacement pour une clé sans peintre (entités d'add-ons sur un modèle vanilla). */
+/**
+ * Faces du coffre tirées de entity/chest/normal.png (64×64, mesures du jeu original) :
+ * couvercle 14×14×5 en (0,0), base 14×14×10 en (0,19), loquet 2×4×1 en (0,0).
+ * Les bandes latérales sont stockées à l'envers dans la texture (modèle en repère « y vers le bas »).
+ */
+const CHEST_TILES: Record<string, true> = { chest_top: true, chest_side: true, chest_front: true };
+function chestTile(img: ImageBitmap, name: string): ImageData {
+  const k = img.width / 64;
+  const c = document.createElement('canvas');
+  c.width = c.height = TILE_PX;
+  const ctx = c.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  const flip = (sx: number, sy: number, w: number, h: number, dx: number, dy: number) => {
+    ctx.save();
+    ctx.translate(dx, dy + h);
+    ctx.scale(1, -1);
+    ctx.drawImage(img, sx * k, sy * k, w * k, h * k, 0, 0, w, h);
+    ctx.restore();
+  };
+  if (name === 'chest_top') ctx.drawImage(img, 28 * k, 0, 14 * k, 14 * k, 1, 1, 14, 14);
+  else {
+    // la tuile couvre y = 0..14 du bloc (lignes 2..16 de l'image) : base (10 px) puis couvercle (5 px)
+    const u = name === 'chest_front' ? 42 : 0;
+    flip(u, 33, 14, 10, 1, 6);
+    flip(u, 14, 14, 5, 1, 2);
+    if (name === 'chest_front') ctx.drawImage(img, 4 * k, 1 * k, 2 * k, 4 * k, 7, 5, 2, 4);
+  }
+  // côtés et dessus du loquet en relief : lus sur les bords de la tuile (zone libre hors du coffre)
+  const lock = (dx: number, dy: number, w: number, h: number) => ctx.drawImage(img, 1 * k, 1 * k, 1 * k, 1 * k, dx, dy, w, h);
+  if (name === 'chest_side') {
+    lock(0, 5, 1, 4);
+    lock(15, 5, 1, 4);
+  } else if (name === 'chest_top') {
+    lock(7, 0, 2, 1);
+    lock(7, 15, 2, 1);
+    lock(0, 7, 1, 2);
+    lock(15, 7, 1, 2);
+  }
+  return ctx.getImageData(0, 0, TILE_PX, TILE_PX);
+}
+
 /** Couches d'yeux lumineux : skin de base et couleur des yeux (si le pack ne fournit pas la texture). */
 const GLOW_FROM: Record<string, [string, 'red' | 'purple']> = {
   spider_eyes: ['spider', 'red'],
@@ -155,7 +196,13 @@ export class TextureManager implements SkinProvider {
       const [name, fs] = full.split('#');
       if (PACK_SKIP.has(name)) continue;
       const img = pack.get(`block/${PACK_RENAME[name] ?? name}.png`);
-      if (!img) continue;
+      if (!img) {
+        // le coffre n'a pas de texture de bloc dans le jeu original : on compose ses faces
+        // à partir de la texture d'entité (entity/chest/normal.png)
+        const chest = CHEST_TILES[name] && pack.get('entity/chest/normal.png');
+        if (chest) out.set(full, chestTile(chest, name));
+        continue;
+      }
       const frames = Math.max(1, Math.floor(img.height / img.width));
       const ours = ANIMATED_TILES[name] ?? 1;
       const frame = Math.floor(((fs ? Number(fs) : 0) * frames) / ours);
