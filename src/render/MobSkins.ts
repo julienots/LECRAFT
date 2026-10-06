@@ -126,6 +126,51 @@ export const SKINS: Record<string, SkinSpec> = {
       ctx.drawImage(ctx.canvas, 0, 16, 16, 16, 16, 48, 16, 16);
     },
   },
+  wither_skeleton: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const bone = ['#2a2a2a', '#323232', '#262626', '#3a3a3a'];
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && y >= 3 && y <= 4 && (x === 1 || x === 2 || x === 5 || x === 6) ? '#050505' : f === 'front' && y === 6 && x >= 2 && x <= 5 ? '#101010' : pick(rng, bone)));
+      box(ctx, 16, 16, 8, 12, 4, (f, x, y) => (f === 'front' && y % 3 === 1 && x > 0 && x < 7 ? '#151515' : pick(rng, bone)));
+      box(ctx, 40, 16, 2, 12, 2, () => pick(rng, bone));
+      box(ctx, 0, 16, 2, 12, 2, () => pick(rng, bone));
+    },
+  },
+  wither: {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      const d = ['#1e1e1e', '#2a2a2a', '#242424', '#323232'];
+      const face = (f: string, x: number, y: number, w: number) => (f === 'front' && y === Math.floor(w / 2) - 1 && (x === 1 || x === w - 2) ? '#f0f0f0' : f === 'front' && y === w - 2 && x > 0 && x < w - 1 ? '#0a0a0a' : null);
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => face(f, x, y, 8) ?? pick(rng, d));
+      box(ctx, 32, 0, 6, 6, 6, (f, x, y) => face(f, x, y, 6) ?? pick(rng, d));
+      box(ctx, 0, 16, 20, 3, 3, () => pick(rng, d));
+      box(ctx, 0, 22, 3, 10, 3, () => pick(rng, d));
+      box(ctx, 24, 22, 11, 2, 2, () => pick(rng, d));
+      box(ctx, 12, 22, 3, 6, 3, () => pick(rng, d));
+    },
+  },
+  snow_golem: {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      const snow = ['#f4f8fc', '#e8eef4', '#ffffff', '#dce4ec'];
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' ? (y > 1 && y < 7 && (x === 1 || x === 6 || y === 6) ? '#6a3a0a' : y === 3 && (x === 2 || x === 5) ? '#ffd040' : pick(rng, ['#e08a20', '#d07a18', '#f09a30'])) : pick(rng, ['#e08a20', '#c87018', '#d88028'])));
+      box(ctx, 0, 16, 10, 10, 10, () => pick(rng, snow));
+      box(ctx, 0, 36, 12, 12, 12, () => pick(rng, snow));
+      box(ctx, 32, 0, 12, 2, 2, () => pick(rng, ['#5a3a1a', '#4a2a10']));
+    },
+  },
+  minecart: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const iron = ['#8a8a8a', '#9a9a9a', '#7a7a7a', '#a8a8a8'];
+      box(ctx, 0, 10, 20, 16, 2, () => pick(rng, iron));
+      box(ctx, 0, 0, 16, 8, 2, (_f, _x, y) => (y === 0 || y === 7 ? '#5a5a5a' : pick(rng, iron)));
+    },
+  },
   husk: humanSkin({ skin: ['#b8a070', '#a89060', '#c8b080'], shirt: ['#7a6a4a', '#6a5a3a', '#8a7a5a'], pants: ['#5a4a3a', '#4a3a2a', '#6a5a4a'], shoes: '#3a2a1a', eyes: '#2a1a0a', mouth: '#5a4a2a' }),
   drowned: humanSkin({ skin: ['#4a9a8a', '#3a8a7a', '#5aaa9a'], shirt: ['#5a7a3a', '#4a6a2a', '#6a8a4a'], pants: ['#3a5a6a', '#2a4a5a', '#4a6a7a'], shoes: '#2a3a3a', eyes: '#60f0e0', mouth: '#2a4a3a' }),
   stray: {

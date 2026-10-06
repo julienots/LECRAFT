@@ -79,6 +79,14 @@ export class ParticleSystem implements ParticleFx {
     }
   }
 
+  /** Feuille qui tombe lentement en se balançant sous un bloc de feuillage. */
+  fallingLeaf(x: number, y: number, z: number, block: number, tint: [number, number, number] | null) {
+    let [r, g, b] = this.blockColor(block);
+    if (tint) [r, g, b] = [r * tint[0], g * tint[1], b * tint[2]];
+    const v = 0.85 + Math.random() * 0.25;
+    this.emit(x + Math.random(), y - 0.05, z + Math.random(), (Math.random() - 0.5) * 0.6, -0.3, (Math.random() - 0.5) * 0.6, r * v, g * v, b * v, 0.1, 3 + Math.random() * 2, 0.15);
+  }
+
   /** Poussière soulevée en sprintant (couleur du bloc sous les pieds). */
   sprintDust(x: number, y: number, z: number, block: number) {
     const [r, g, b] = this.blockColor(block);

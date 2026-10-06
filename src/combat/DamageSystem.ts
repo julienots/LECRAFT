@@ -33,6 +33,10 @@ export class DamageSystem {
   damageMob(m: Mob, amount: number, src: DamageInfo): number {
     const ctx = this.ctx();
     if (m.dead || (m.iframes > 0 && src.kind !== 'environment')) return 0;
+    // Wither : invulnérable pendant sa charge ; son armure arrête les projectiles
+    const w = m as unknown as { invulnerable?: boolean; armored?: boolean };
+    if (w.invulnerable) return 0;
+    if (w.armored && src.kind === 'projectile') return 0;
     // créatures du Nether : insensibles au feu et à la lave
     if (src.fire && src.kind === 'environment' && m.has('fireImmune')) return 0;
     let dmg = amount * this.multiplier(m, src) * m.effects.damageMul(!!src.fire);

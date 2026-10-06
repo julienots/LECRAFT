@@ -128,6 +128,24 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   le blesse. Vaincu : 500 XP, **portail de sortie** et **œuf de dragon** ; la sortie ramène au point
   d'apparition. `/execute in minecraft:the_end run tp @s x y z` y mène directement.
 
+### Le Wither et les finitions
+
+- **Squelettes wither** dans les forteresses du Nether (épée de pierre, coup = effet *Wither*,
+  5 % de chance de lâcher leur **crâne**).
+- **Invocation du Wither** : T de 4 blocs de sable (ou terre) des âmes + 3 crânes de squelette wither
+  posés dessus. Il charge 10 s (invulnérable, santé qui remonte), explose, puis vole autour du
+  joueur, se régénère, tire des **crânes noirs** (explosifs) et parfois **bleus**, casse les blocs
+  autour de lui quand on le frappe ; sous la moitié de sa santé, son **armure** arrête les flèches et
+  il fonce sur le joueur. Vaincu : **étoile du Nether**.
+- **Placement comme le jeu original** : plus de bloc fantôme, seulement le contour noir et les fissures.
+- **Icônes plates** dans l'inventaire et en main pour les fleurs, torches, vitres, barreaux, portes,
+  échelles, lanternes… (plus de « cube » pour ces objets).
+- **Bras du joueur** en 1re personne (skin du pack), **pose accroupie** du modèle vanilla en vue 3e personne.
+- **Entités d'add-ons** : les géométries vanilla référencées (golem de neige, minecart, villageois…)
+  et les textures de blocs du jeu sont reconnues ; les entités « techniques » sans rendu sont invisibles.
+- **Petites touches LeCraft** : des **feuilles tombent** des arbres ; à la mort, la **position** est
+  affichée et, après la réapparition, une **boussole** guide 5 minutes vers le lieu de la mort.
+
 ### Commandes (chat)
 
 Bouton 💬 (ou touche **T**, **/** au clavier) : chat avec historique et **autocomplétion**. Syntaxe du
@@ -643,6 +661,9 @@ npm run e2e:movement             # 8 vérifications : sprint au double appui, sa
 npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 12 cadres, ouverture,
                                  # arrivée, cristaux et dragon, soin et cristal détruit, vide, victoire
                                  # (portail de sortie, œuf), retour à la surface
+npm run e2e:wither               # 14 vérifications : pas de bloc fantôme, icônes plates, squelette
+                                 # wither, invocation, charge, crânes, armure, étoile du Nether, bras
+                                 # en 1re personne, pose accroupie, feuilles qui tombent, lieu de mort
 npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
                                  # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,
                                  # lâcher), vues 1re/3e personne (F5, croix ↑), caméra contre un mur

@@ -39,6 +39,7 @@ export class PlayerAvatar {
     g.position.set(o.x, o.y, o.z);
     g.rotation.y = o.yaw + Math.PI;
     this.model.animate(o.phase / 2.2, Math.min(1, o.speed / 4.3), 0, o.swing, 0, o.pitch);
+    this.model.crouch(o.sneaking && !o.prone);
     // nage / rampe : corps à l'horizontale
     g.rotation.order = 'YXZ';
     g.rotation.x = o.prone ? Math.PI / 2 : 0;
@@ -48,7 +49,8 @@ export class PlayerAvatar {
       g.position.z -= Math.cos(g.rotation.y) * 0.9;
       g.position.y += 0.3;
     }
-    g.scale.set(SCALE, SCALE * (o.sneaking ? 0.92 : 1), SCALE);
+    // accroupi : le modèle descend de 2 px (la pose est faite par crouch())
+    if (o.sneaking && !o.prone) g.position.y -= (2 / 16) * SCALE;
     if (o.held !== this.itemId) {
       this.itemId = o.held;
       const m = this.item.material as THREE.MeshBasicMaterial;

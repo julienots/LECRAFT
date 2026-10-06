@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BlockRegistry } from '../blocks/BlockRegistry';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { TextureManager } from './TextureManager';
+import { cachedCube } from './MobModels';
 
 /** Objet tenu en main (vue à la première personne), rendu dans une scène dédiée au-dessus du monde. */
 export class HeldItem {
@@ -35,16 +36,21 @@ export class HeldItem {
   private build(id: string): THREE.Object3D {
     const def = ItemRegistry.get(id);
     if (!id || !def) {
-      const m = new THREE.MeshBasicMaterial({ color: 0xd8a888 });
+      // bras droit du joueur (skin du pack ou générée, UV vanilla 64×64), comme en vue 1re personne
+      const m = new THREE.MeshBasicMaterial({ map: this.tm.skin('player'), alphaTest: 0.3 });
       this.mats.push(m);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.6), m);
-      arm.position.set(0.12, -0.1, 0.15);
-      arm.rotation.set(0.15, -0.1, 0);
-      return arm;
+      const g = new THREE.Group();
+      const arm = new THREE.Mesh(cachedCube({ uv: [40, 16], box: [-3, -2, -2, 4, 12, 4], pivot: [0, 0, 0] }, 64, 64), m);
+      arm.rotation.set(Math.PI * 0.6, Math.PI * 0.14, Math.PI * 0.2);
+      arm.scale.setScalar(0.8);
+      arm.position.set(-0.06, 0.02, 0.36);
+      arm.name = 'arm';
+      g.add(arm);
+      return g;
     }
     if ('block' in def.icon) {
       const b = BlockRegistry.byName(def.icon.block);
-      if (b.render !== 'cross') {
+      if (!this.tm.flatIcon(b)) {
         const order = [0, 1, 2, 3, 4, 5];
         const mats = order.map((f) => {
           const m = new THREE.MeshBasicMaterial({ map: this.tileTex(b.faceTiles[f]), transparent: b.render !== 'cube', alphaTest: 0.3 });

@@ -147,6 +147,11 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.dragon_growl = s.mix({ buf: s.tone(2.2, 90, 50, { wave: 'saw', decay: 1, attack: 0.3, gain: 0.35, vibrato: 0.15, vibRate: 7 }) }, { buf: s.noise(2.2, { lp: 600, decay: 1.2, attack: 0.3, gain: 0.35 }) });
   out.dragon_hurt = s.mix({ buf: s.tone(0.7, 160, 80, { wave: 'saw', decay: 4, gain: 0.35 }) }, { buf: s.noise(0.7, { lp: 900, decay: 4, gain: 0.3 }) });
   out.dragon_death = s.mix({ buf: s.tone(4, 120, 30, { wave: 'saw', decay: 0.6, attack: 0.2, gain: 0.4, vibrato: 0.2, vibRate: 5 }) }, { buf: s.noise(4, { lp: 700, decay: 0.7, gain: 0.4 }) });
+  out.wither_idle = s.mix({ buf: s.tone(1.4, 110, 80, { wave: 'saw', decay: 1.5, attack: 0.2, gain: 0.25, vibrato: 0.2, vibRate: 11 }) }, { buf: s.noise(1.4, { lp: 500, decay: 1.6, gain: 0.25 }) });
+  out.wither_hurt = s.mix({ buf: s.tone(0.5, 220, 120, { wave: 'saw', decay: 6, gain: 0.3, vibrato: 0.2, vibRate: 25 }) }, { buf: s.noise(0.5, { hp: 800, decay: 6, gain: 0.25 }) });
+  out.wither_death = s.mix({ buf: s.tone(3, 160, 40, { wave: 'saw', decay: 0.8, gain: 0.4, vibrato: 0.3, vibRate: 6 }) }, { buf: s.noise(3, { lp: 600, decay: 0.9, gain: 0.4 }) });
+  out.wither_spawn = s.mix({ buf: s.tone(2.5, 60, 30, { wave: 'saw', decay: 1, gain: 0.45 }) }, { buf: s.noise(2.5, { lp: 400, decay: 1.2, gain: 0.5, crackle: 0.3 }) });
+  out.wither_shoot = s.mix({ buf: s.tone(0.4, 300, 150, { wave: 'saw', decay: 8, gain: 0.25 }) }, { buf: s.noise(0.4, { lp: 1500, decay: 8, gain: 0.2 }) });
   out.portal = s.mix({ buf: s.tone(2.4, 70, 140, { wave: 'saw', decay: 0.6, attack: 0.6, gain: 0.18, vibrato: 0.12, vibRate: 3 }) }, { buf: s.noise(2.4, { lp: 900, decay: 0.8, attack: 0.5, gain: 0.25 }) });
   out.extinguish = s.noise(0.6, { hp: 1800, decay: 6, gain: 0.45, crackle: 0.3 });
   out.ghast_moan = s.tone(1.6, 520, 380, { wave: 'tri', decay: 1.5, attack: 0.25, gain: 0.22, vibrato: 0.06, vibRate: 6 });

@@ -38,7 +38,7 @@ export class HUD implements HudApi {
   private compass: HTMLElement;
   private compassArrow: HTMLElement;
   private compassText: HTMLElement;
-  private compassTarget: { x: number; z: number; until: number; name: string } | null = null;
+  private compassTarget: { x: number; z: number; until: number; name: string; autoHide?: boolean } | null = null;
   private last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1 };
   private hotbarDirty = true;
   private nameTimer = 0;
@@ -214,9 +214,9 @@ export class HUD implements HudApi {
     this.bossFill.style.width = `${Math.round(frac * 100)}%`;
   }
 
-  showCompass(x: number, z: number, target: string) {
-    const names: Record<string, string> = { spawn: "Point d'apparition", golem_lair: 'Repaire du Golem', ice_temple: 'Sanctuaire de givre', village: 'Village' };
-    this.compassTarget = { x, z, until: performance.now() + 45000, name: names[target] ?? target };
+  showCompass(x: number, z: number, target: string, seconds = 45) {
+    const names: Record<string, string> = { spawn: "Point d'apparition", golem_lair: 'Repaire du Golem', ice_temple: 'Sanctuaire de givre', village: 'Village', death: 'Lieu de votre mort' };
+    this.compassTarget = { x, z, until: performance.now() + seconds * 1000, name: names[target] ?? target, autoHide: target === 'death' };
     this.compass.classList.remove('hidden');
   }
 
@@ -357,7 +357,8 @@ export class HUD implements HudApi {
     }
     // boussole
     if (this.compassTarget) {
-      if (performance.now() > this.compassTarget.until) {
+      const t = this.compassTarget;
+      if (performance.now() > t.until || (t.autoHide && Math.hypot(t.x - p.x, t.z - p.z) < 3)) {
         this.compassTarget = null;
         this.compass.classList.add('hidden');
       } else {

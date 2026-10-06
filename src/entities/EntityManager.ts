@@ -10,6 +10,7 @@ import { Mob, type EntitySpawner } from './Mob';
 import { Animal } from './Animal';
 import { Enderman, Wolf, Villager } from './Creatures';
 import { EnderDragon, EndCrystal } from './EnderDragon';
+import { WitherBoss } from './Wither';
 import { Monster } from './Monster';
 import { GolemBoss, LichBoss, Boss } from './Boss';
 import { ItemEntity } from './ItemEntity';
@@ -91,6 +92,7 @@ export class EntityManager implements EntitySpawner {
     const { def, index } = info;
     let m: Mob;
     if (key === 'ender_dragon') m = new EnderDragon(def, index, x, y, z, this, 'end_dragon');
+    else if (key === 'wither') m = new WitherBoss(def, index, x, y, z, this, 'wither');
     else if (key === 'end_crystal') m = new EndCrystal(def, index, x, y, z, this);
     else if (def.category === 'boss') m = key === 'golem' ? new GolemBoss(def, index, x, y, z, this, opts.altar ?? '') : new LichBoss(def, index, x, y, z, this, opts.altar ?? '');
     else if (def.category === 'hostile') m = new Monster(def, index, x, y, z, this);
@@ -169,7 +171,7 @@ export class EntityManager implements EntitySpawner {
       if (e.removed) continue;
       e.distToPlayer = Math.hypot(e.x - p.x, e.y - p.y, e.z - p.z);
       // les entités hors des chunks chargés sont gelées
-      const roaming = e.kind === 'mob' && (e as Mob).def.key === 'ender_dragon';
+      const roaming = e.kind === 'mob' && ((e as Mob).def.key === 'ender_dragon' || (e as Mob).def.key === 'wither');
       if (!roaming && !ctx.world.isLoaded(Math.floor(e.x), Math.floor(e.z))) {
         if (e.kind !== 'mob') e.removed = true;
         continue;
@@ -390,6 +392,18 @@ export class EntityManager implements EntitySpawner {
   /** Nether : apparitions selon le biome à toute hauteur (pas de cycle jour/nuit). */
   private netherSpawns(ctx: GameContext, cap: number) {
     const p = ctx.player, w = ctx.world;
+    // forteresses : squelettes wither et blazes sur les briques du Nether
+    if (ctx.dimension === 'nether' && BlockRegistry.has('nether_bricks') && Math.random() < 0.4 && this.mobs.filter((m) => !m.dead && (m.def.key === 'wither_skeleton' || m.def.key === 'blaze')).length < 6) {
+      const bricks = BlockRegistry.byName('nether_bricks').id;
+      const a = Math.random() * Math.PI * 2, r = 12 + Math.random() * 30;
+      const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);
+      if (w.isLoaded(x, z))
+        for (let y = 60; y < 76; y++)
+          if (w.getBlock(x, y - 1, z) === bricks && w.getBlock(x, y, z) === B.AIR && w.getBlock(x, y + 1, z) === B.AIR && w.getBlock(x, y + 2, z) === B.AIR) {
+            this.spawnMob(Math.random() < 0.6 ? 'wither_skeleton' : 'blaze', x + 0.5, y, z + 0.5);
+            return;
+          }
+    }
     const nether = this.mobs.filter((m) => !m.dead && m.def.category !== 'passive' && m.def.category !== 'boss').length;
     if (nether >= Math.round(cap * 0.7) || Math.random() > 0.5) return;
     const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 28;

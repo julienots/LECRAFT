@@ -230,6 +230,7 @@ export function deathScreen(game: Game, s: Session): Screen {
       el('div', { class: 'mc-big' }, 'Vous êtes mort !'),
       mcLabel(`Joueur ${CAUSES[s.player.deathCause ?? 'mob'] ?? 'est mort'}`, 'white'),
       el('div', { class: 'mc-label white' }, 'Score : ', el('span', { style: 'color:#ffff55' }, String(Math.floor(score)))),
+      ...(s.lastDeath ? [mcLabel(`Position : ${s.lastDeath.x}, ${s.lastDeath.y}, ${s.lastDeath.z}`)] : []),
       el('div', { style: 'height:calc(var(--gs) * 24px)' }),
       respawn,
       title,

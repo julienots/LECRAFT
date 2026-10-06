@@ -113,6 +113,8 @@ export class Session implements GameContext {
   private arrival: { x: number; y: number; z: number } | null = null;
   /** Temps passé dans un portail (s) ; le joueur doit en sortir avant de pouvoir repartir. */
   portalTime = 0;
+  /** Dernier lieu de mort du joueur (affiché à l'écran de mort et suivi à la boussole). */
+  lastDeath: { x: number; y: number; z: number; dim: Dimension } | null = null;
   private portalBlocked = true;
   endState: { dragonKilled?: boolean; crystals?: boolean; exitBuilt?: boolean } = {};
   private voidTimer = 0;
@@ -166,7 +168,10 @@ export class Session implements GameContext {
       jobsInFlight: this.profile.workerJobsInFlight,
       meshUploadsPerFrame: this.profile.chunkBudgetPerFrame,
     }, this.dimension);
-    this.world.events.on('blockChanged', (e) => Portals.onBlockChanged(this.world, e.x, e.y, e.z));
+    this.world.events.on('blockChanged', (e) => {
+      Portals.onBlockChanged(this.world, e.x, e.y, e.z);
+      if (BlockRegistry.has('wither_skeleton_skull') && e.id === BlockRegistry.byName('wither_skeleton_skull').id) this.checkWitherSummon(e.x, e.y, e.z);
+    });
     this.chunks.onSpecials = (list) => {
       this.entities.registerSpecials(this, list);
       for (const s of list) {
@@ -565,6 +570,7 @@ export class Session implements GameContext {
       if (below > 0 && BlockRegistry.solid[below]) this.particles.sprintDust(p.x, p.y, p.z, below);
     }
     if (p.swimming && Math.random() < dt * 12) this.particles.burst('water', p.x, p.y + 0.3, p.z, 1);
+    this.fallingLeaves(dt);
     this.interaction.update(dt, remaining);
     // ticks fixes 20 Hz
     this.tickAcc += dt;
@@ -716,6 +722,35 @@ export class Session implements GameContext {
   }
   /** Dernière destination d'un œil lancé (tests). */
   lastEye: { x: number; z: number } | null = null;
+
+  /**
+   * Invocation du Wither : 4 blocs de sable (ou terre) des âmes en T et 3 crânes de squelette
+   * wither alignés au-dessus de la barre du T, dans le plan X ou Z.
+   */
+  private checkWitherSummon(x: number, y: number, z: number) {
+    const w = this.world;
+    const skull = BlockRegistry.byName('wither_skeleton_skull').id;
+    const soul = new Set(['soul_sand', 'soul_soil'].filter((k) => BlockRegistry.has(k)).map((k) => BlockRegistry.byName(k).id));
+    for (const [ax, az] of [[1, 0], [0, 1]])
+      for (let d = -1; d <= 1; d++) {
+        const mx = x - ax * d, mz = z - az * d;
+        let ok = true;
+        for (let k = -1; k <= 1 && ok; k++) {
+          if (w.getBlock(mx + ax * k, y, mz + az * k) !== skull) ok = false;
+          if (!soul.has(w.getBlock(mx + ax * k, y - 1, mz + az * k))) ok = false;
+        }
+        if (!ok || !soul.has(w.getBlock(mx, y - 2, mz))) continue;
+        for (let k = -1; k <= 1; k++) {
+          w.setBlock(mx + ax * k, y, mz + az * k, B.AIR);
+          w.setBlock(mx + ax * k, y - 1, mz + az * k, B.AIR);
+        }
+        w.setBlock(mx, y - 2, mz, B.AIR);
+        this.entities.spawnMob('wither', mx + 0.5, y - 2, mz + 0.5, { persistent: true });
+        this.audio.play('wither_spawn', { volume: 1 });
+        this.hud.toast('Le Wither se réveille…', 'warn');
+        return;
+      }
+  }
 
   /** Portail allumé par le joueur : mémorisé pour relier les dimensions. */
   registerPortal(pos: { x: number; y: number; z: number }) {
@@ -935,7 +970,7 @@ export class Session implements GameContext {
       const w = this.world;
       box = boundsOf(modelBoxes(tg.block, w.getMeta(tg.x, tg.y, tg.z), (dx, dy, dz) => Math.max(0, w.getBlock(tg.x + dx, tg.y + dy, tg.z + dz))));
     } else if (tg && BlockRegistry.get(tg.block).render === 'cross') box = [2, 0, 2, 14, 13, 14];
-    this.highlight.update(tg ? { x: tg.x, y: tg.y, z: tg.z, box } : null, this.interaction.miningProgress, this.interaction.preview, true);
+    this.highlight.update(tg ? { x: tg.x, y: tg.y, z: tg.z, box } : null, this.interaction.miningProgress);
     const held = p.inventory.selectedStack?.id ?? '';
     this.held.setItem(held);
     const br = Math.max(nether ? 0.45 : 0.15, Math.pow(Math.max((light.sky / 15) * this.dayCycle.daylight, light.block / 15), 1.2));
@@ -971,6 +1006,7 @@ export class Session implements GameContext {
 
   private onDeath() {
     const p = this.player;
+    this.lastDeath = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z), dim: this.dimension };
     this.audio.play('hurt', { pitch: 0.7 });
     this.haptic('heavy');
     // perte de l'inventaire (sauf en facile/paisible)
@@ -996,9 +1032,32 @@ export class Session implements GameContext {
     this.game.showDeath();
   }
 
+  /** Feuilles qui tombent des arbres autour du joueur (ambiance). */
+  private fallingLeaves(dt: number) {
+    if (this.dimension !== 'overworld' || this.game.settings.quality === 'LOW' && Math.random() < 0.5) return;
+    const p = this.player, w = this.world;
+    for (let i = 0, n = Math.round(dt * 60); i < n; i++) {
+      const x = Math.floor(p.x + (Math.random() - 0.5) * 24), z = Math.floor(p.z + (Math.random() - 0.5) * 24);
+      const y = Math.floor(p.y + Math.random() * 12 - 2);
+      const b = w.getBlock(x, y, z);
+      if (b <= 0 || !BlockRegistry.get(b).key.endsWith('leaves') || w.getBlock(x, y - 1, z) !== 0) continue;
+      if (Math.random() > 0.6) continue;
+      const k = BlockRegistry.get(b).key;
+      const tint: [number, number, number] | null = /cherry|azalea/.test(k) ? null : k.startsWith('spruce') ? [0.38, 0.6, 0.38] : k.startsWith('birch') ? [0.5, 0.65, 0.33] : [0.47, 0.72, 0.28];
+      this.particles.fallingLeaf(x, y, z, b, tint);
+    }
+  }
+
   respawn() {
     this.player.respawn();
     this.game.input.reset();
+    // notre touche : on retrouve l'endroit de sa mort (message + boussole vers les objets perdus)
+    const d = this.lastDeath;
+    if (d) {
+      const where = d.dim === 'overworld' ? '' : d.dim === 'nether' ? ' (Nether)' : " (l'End)";
+      this.game.chat.add(`Vous êtes mort en ${d.x}, ${d.y}, ${d.z}${where}`, 'info');
+      if (d.dim === 'overworld') this.hud.showCompass(d.x + 0.5, d.z + 0.5, 'death', 300);
+    }
     // le point de réapparition est à la surface
     if (this.dimension !== 'overworld') void this.game.changeDimension('overworld', { x: this.player.x, y: this.player.y, z: this.player.z });
   }

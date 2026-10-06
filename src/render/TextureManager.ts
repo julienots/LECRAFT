@@ -47,6 +47,10 @@ export const SKIN_PATHS: Record<string, string[]> = {
   ghast: ['entity/ghast/ghast.png'],
   magma_cube: ['entity/slime/magmacube.png'],
   blaze: ['entity/blaze.png'],
+  snow_golem: ['entity/snow_golem.png'],
+  wither_skeleton: ['entity/skeleton/wither_skeleton.png'],
+  wither: ['entity/wither/wither.png'],
+  minecart: ['entity/minecart.png'],
   husk: ['entity/zombie/husk.png'],
   drowned: ['entity/zombie/drowned.png'],
   stray: ['entity/skeleton/stray.png'],
@@ -62,6 +66,8 @@ export const SKIN_PATHS: Record<string, string[]> = {
   cave_spider: ['entity/spider/cave_spider.png'],
   slime: ['entity/slime/slime.png'],
 };
+/** Skin générée de remplacement pour une clé sans peintre (entités d'add-ons sur un modèle vanilla). */
+export const SKIN_FALLBACK: Record<string, string> = {};
 /** Textures d'objets aux noms différents dans le jeu vanilla. */
 const ITEM_PATHS: Record<string, string[]> = {
   compass: ['item/compass_16.png', 'item/compass_00.png', 'item/compass.png'],
@@ -119,6 +125,7 @@ export class TextureManager implements SkinProvider {
     ctx.drawImage(fresh, 0, 0);
     this.atlas.needsUpdate = true;
     this.tileCache.clear();
+    this.flatCache.clear();
     this.iconCache.clear();
     this.iconCanvasCache.clear();
     for (const [key, tex] of this.skinCache) {
@@ -173,6 +180,27 @@ export class TextureManager implements SkinProvider {
     return out;
   }
 
+  private flatCache = new Map<number, boolean>();
+  /**
+   * Icône plate (comme les objets du jeu de référence) plutôt qu'un cube : plantes, torches,
+   * échelles, vitres, barreaux, portes, lanternes, lits, et tout bloc à texture surtout transparente.
+   */
+  flatIcon(block: { id: number; render: string; shape: string | null; faceTiles: number[] }): boolean {
+    if (block.render === 'cross') return true;
+    if (block.shape && ['torch', 'ladder', 'door', 'pane', 'lantern', 'bed'].includes(block.shape)) return true;
+    if (block.render !== 'model') return false; // cubes (même transparents : verre, feuilles) en 3D
+    let f = this.flatCache.get(block.id);
+    if (f === undefined) {
+      const c = this.tile(block.faceTiles[0]);
+      const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+      let t = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] < 20) t++;
+      f = t / (d.length / 4) > 0.45;
+      this.flatCache.set(block.id, f);
+    }
+    return f;
+  }
+
   /** Texture de skin d'une créature (pack prioritaire, sinon skin générée). */
   skin(key: string): THREE.Texture {
     let t = this.skinCache.get(key);
@@ -188,7 +216,20 @@ export class TextureManager implements SkinProvider {
   }
 
   private skinCanvas(key: string): HTMLCanvasElement {
-    const img = this.view?.first(...(SKIN_PATHS[key] ?? []));
+    // texture de bloc (entités d'add-ons qui utilisent une texture de bloc du jeu)
+    for (const p of SKIN_PATHS[key] ?? []) {
+      if (!p.startsWith('tile:')) continue;
+      try {
+        const t = this.tile(TileRegistry.index(p.slice(5)));
+        const c = document.createElement('canvas');
+        c.width = c.height = 16;
+        c.getContext('2d')!.drawImage(t, 0, 0, 16, 16);
+        return c;
+      } catch {
+        /* tuile inconnue */
+      }
+    }
+    const img = this.view?.first(...(SKIN_PATHS[key] ?? []).filter((p) => !p.startsWith('tile:')));
     if (img) {
       const c = document.createElement('canvas');
       c.width = img.width;
@@ -196,7 +237,7 @@ export class TextureManager implements SkinProvider {
       c.getContext('2d')!.drawImage(img, 0, 0);
       return c;
     }
-    const painted = paintSkin(key);
+    const painted = paintSkin(SKIN_FALLBACK[key] ?? key);
     if (painted) return painted;
     const c = document.createElement('canvas');
     c.width = 64;
@@ -316,8 +357,8 @@ export class TextureManager implements SkinProvider {
     } else if (def && 'block' in def.icon) {
       const block = BlockRegistry.byName(def.icon.block);
       const tn = (i: number) => TileRegistry.names[i] ?? '';
-      if (block.render === 'cross') {
-        const ti = block.metaTiles ? block.metaTiles[block.metaTiles.length - 1] : block.faceTiles[0];
+      if (this.flatIcon(block)) {
+        const ti = block.metaTiles ? block.metaTiles[block.metaTiles.length - 1] : block.faceTiles[block.shape === 'door' ? 2 : 0];
         ctx.drawImage(this.tile(ti, this.tintFor(block.key, tn(ti))), 0, 0, 32, 32);
       } else {
         const top = block.faceTiles[2], left = block.faceTiles[4], right = block.faceTiles[0];

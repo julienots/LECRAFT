@@ -210,7 +210,7 @@ sided('fletching_table', "Table d'archerie", face('#c8b070', '#8a6236'), wood('#
 sided('smithing_table', 'Table de forgeron', (t) => void paint.mineral(t, '#2a2a30', 'metal'), wood('#5a3e22'), { tool: 'axe' });
 sided('loom', 'Métier à tisser', face('#c8a070', '#e8e0d0'), wood('#a8805a'));
 sided('lectern', 'Pupitre', face('#a07a4a', '#e8e0c8'), wood('#a07a4a'));
-sided('grindstone', 'Meule', (t) => void paint.stone(t, paint.ramp('#8a8a8a', 5, 0.3)), wood('#6a4a2a'), { tool: 'pickaxe', sound: 'stone' });
+sided('grindstone', 'Meule', (t) => void paint.stone(t, paint.ramp('#8a8a8a', 5, 0.3)), wood('#6a4a2a'), { tool: 'pickaxe', sound: 'stone', render: 'cutout' });
 sided('carved_pumpkin', 'Citrouille taillée', (t) => void t.grain(paint.ramp('#e38a1d', 4, 0.2), 0.5, 4), (t) => {
   t.grain(paint.ramp('#e38a1d', 4, 0.2), 0.5, 4);
   t.rect(3, 4, 3, 3, hex('#2a1a00'));
@@ -592,6 +592,16 @@ cube('purpur_pillar', 'Pilier de purpur', (t) => {
   t.vline(1, 0, 15, hex('#8a5e8a'));
   t.vline(14, 0, 15, hex('#8a5e8a'));
 }, { hardness: 1.5, color: '#a77ba7' });
+
+// ---------- Wither : crâne de squelette wither ----------
+tile('wither_skeleton_skull', (t) => {
+  t.grain(['#2a2a2a', '#343434', '#222222', '#3a3a3a'].map(hex), 0.5, 4);
+  t.rect(3, 6, 3, 3, hex('#0a0a0a'));
+  t.rect(10, 6, 3, 3, hex('#0a0a0a'));
+  t.rect(6, 11, 4, 1, hex('#0a0a0a'));
+  t.set(7, 9, hex('#0a0a0a'));
+});
+B.push({ key: 'wither_skeleton_skull', name: 'Crâne de squelette wither', textures: { all: 'wither_skeleton_skull' }, hardness: 1, render: 'model', shape: 'lantern', solid: true, sound: 'stone', color: '#2a2a2a' });
 
 export const EXTRA_BLOCKS: BlockDef[] = B;
 export const EXTRA_ITEMS: ItemDef[] = I;

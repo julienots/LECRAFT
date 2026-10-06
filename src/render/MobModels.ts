@@ -33,6 +33,8 @@ export interface VanillaModel {
   texH: number;
   parts: CubePart[];
   furSkin?: string;
+  /** Entité sans rendu (entités techniques des add-ons). */
+  invisible?: boolean;
 }
 
 const P = (uv: [number, number], box: CubePart['box'], pivot: CubePart['pivot'], extra: Partial<CubePart> = {}): CubePart => ({ uv, box, pivot, ...extra });
@@ -86,6 +88,42 @@ const VANILLA: Record<string, VanillaModel> = {
   skeleton: humanoid('skeleton', 64, 32, 2),
   player: playerModel(),
   zombified_piglin: piglinModel('zombified_piglin'),
+  wither_skeleton: humanoid('wither_skeleton', 64, 32, 2),
+  wither: {
+    skin: 'wither', texW: 64, texH: 64,
+    parts: [
+      P([0, 0], [-4, -4, -4, 8, 8, 8], [0, 0, 0], { anim: 'head' }),
+      P([32, 0], [-4, -4, -4, 6, 6, 6], [-8, 4, 0], { anim: 'witherHeadR' }),
+      P([32, 0], [-4, -4, -4, 6, 6, 6], [10, 4, 0], { anim: 'witherHeadL' }),
+      P([0, 16], [-10, 3.9, -0.5, 20, 3, 3], [0, 0, 0]),
+      P([0, 22], [0, 0, 0, 3, 10, 3], [-2, 6.9, -0.5], {
+        rot: [0.2, 0, 0], anim: 'witherRibs',
+        children: [1.5, 4, 6.5].map((y) => P([24, 22], [-4, y, 0.5, 11, 2, 2], [0, 0, 0])),
+      }),
+      P([12, 22], [0, 0, 0, 3, 6, 3], [-2, 16.5, 1.5], { rot: [0.7, 0, 0], anim: 'tail' }),
+    ],
+  },
+  snow_golem: {
+    skin: 'snow_golem', texW: 64, texH: 64,
+    parts: [
+      P([0, 0], [-4, -8, -4, 8, 8, 8], [0, 4, 0], { anim: 'head', inflate: -0.5 }),
+      P([0, 16], [-5, -10, -5, 10, 10, 10], [0, 13, 0], { inflate: -0.5 }),
+      P([0, 36], [-6, -12, -6, 12, 12, 12], [0, 24, 0], { inflate: -0.5 }),
+      P([32, 0], [-1, 0, -1, 12, 2, 2], [5, 6, 1], { rot: [0, 0, 1], anim: 'armL' }),
+      P([32, 0], [-1, 0, -1, 12, 2, 2], [-5, 6, -1], { rot: [0, Math.PI, -1], anim: 'armR' }),
+    ],
+  },
+  minecart: {
+    skin: 'minecart', texW: 64, texH: 32,
+    parts: [
+      P([0, 10], [-10, -8, -1, 20, 16, 2], [0, 20, 0], { rot: [HALF_PI, 0, 0] }),
+      P([0, 0], [-8, -9, -1, 16, 8, 2], [-9, 19, 0], { rot: [0, HALF_PI * 3, 0] }),
+      P([0, 0], [-8, -9, -1, 16, 8, 2], [9, 19, 0], { rot: [0, HALF_PI, 0] }),
+      P([0, 0], [-8, -9, -1, 16, 8, 2], [0, 19, -7], { rot: [0, Math.PI, 0] }),
+      P([0, 0], [-8, -9, -1, 16, 8, 2], [0, 19, 7]),
+    ],
+  },
+  invisible: { skin: 'pig', texW: 64, texH: 32, parts: [], invisible: true },
   husk: humanoid('husk', 64, 64, 4),
   drowned: humanoid('drowned', 64, 64, 4),
   stray: humanoid('stray', 64, 32, 2),
@@ -207,7 +245,7 @@ function playerModel(): VanillaModel {
     skin: 'player', texW: 64, texH: 64,
     parts: [
       P([0, 0], [-4, -8, -4, 8, 8, 8], [0, 0, 0], { anim: 'head', children: [o([32, 0], [-4, -8, -4, 8, 8, 8], 0.5)] }),
-      P([16, 16], [-4, 0, -2, 8, 12, 4], [0, 0, 0], { children: [o([16, 32], [-4, 0, -2, 8, 12, 4], 0.25)] }),
+      P([16, 16], [-4, 0, -2, 8, 12, 4], [0, 0, 0], { anim: 'body', children: [o([16, 32], [-4, 0, -2, 8, 12, 4], 0.25)] }),
       P([40, 16], [-3, -2, -2, 4, 12, 4], [-5, 2, 0], { anim: 'armR', children: [o([40, 32], [-3, -2, -2, 4, 12, 4], 0.25)] }),
       P([32, 48], [-1, -2, -2, 4, 12, 4], [5, 2, 0], { anim: 'armL', children: [o([48, 48], [-1, -2, -2, 4, 12, 4], 0.25)] }),
       P([0, 16], limb, [-1.9, 12, 0], { anim: 'legR', children: [o([0, 32], limb, 0.25)] }),
@@ -348,7 +386,7 @@ function cubeGeometry(part: CubePart, texW: number, texH: number): THREE.BufferG
 }
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
-function cachedCube(part: CubePart, texW: number, texH: number) {
+export function cachedCube(part: CubePart, texW: number, texH: number) {
   const k = `${part.uv}|${part.box}|${part.inflate ?? 0}|${part.mirror ? 1 : 0}|${texW}x${texH}|${part.faceUV ? JSON.stringify(part.faceUV) : ''}`;
   let g = geoCache.get(k);
   if (!g) {
@@ -394,7 +432,7 @@ export class MobModel {
       this.group.add(build(voxel(), this.parts, this.material));
     }
     this.group.scale.setScalar(scale);
-    if (shadowTex) {
+    if (shadowTex && !def?.invisible) {
       this.shadow = new THREE.Mesh(SHADOW_GEO, new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: 0.5 }));
       this.shadow.rotation.x = -Math.PI / 2;
       this.shadow.position.y = 0.02;
@@ -466,6 +504,9 @@ export class MobModel {
       this.rot(`spiderR${i}`, (b, o) => (o.rotation.y = b.y + sw));
       this.rot(`spiderL${i}`, (b, o) => (o.rotation.y = b.y - sw));
     }
+    this.rot('witherHeadR', (b, o) => (o.rotation.y = b.y + Math.sin(t * 1.3) * 0.4));
+    this.rot('witherHeadL', (b, o) => (o.rotation.y = b.y + Math.sin(t * 1.1 + 2) * 0.4));
+    this.rot('witherRibs', (b, o) => (o.rotation.x = b.x + (0.065 + 0.05 * Math.cos(t * 2)) * Math.PI));
     this.rot('tail', (b, o) => (o.rotation.z = b.z + Math.sin(t * 3) * 0.1 * (1 + amp)));
     this.rot('tentacle', (b, o) => (o.rotation.x = b.x + 0.15 + Math.sin(t * 2.2 + o.position.x * 3 + o.position.z * 5) * 0.25));
     for (let r = 0; r < 3; r++) this.rot(`spin${r}`, (b, o) => (o.rotation.y = b.y + t * (r === 1 ? -1.4 : 1.1 + r * 0.3)));
@@ -473,6 +514,29 @@ export class MobModel {
       const k = 1 + Math.sin(t * 6) * 0.06 * (0.3 + amp);
       o.scale.set(1 / Math.sqrt(k), k, 1 / Math.sqrt(k));
     });
+  }
+
+  private basePos = new Map<THREE.Object3D, THREE.Vector3>();
+
+  /**
+   * Pose accroupie du modèle humanoïde (comme le modèle vanilla) : buste penché de 0,5 rad,
+   * tête et bras abaissés de 4,2/3,2 px, jambes reculées de 4 px. À appeler après animate().
+   */
+  crouch(on: boolean) {
+    const move = (name: string, dy: number, dz: number) =>
+      this.rot(name, (_b, o) => {
+        let p = this.basePos.get(o);
+        if (!p) this.basePos.set(o, (p = o.position.clone()));
+        o.position.set(p.x, p.y - (on ? dy : 0) / 16, p.z - (on ? dz : 0) / 16);
+      });
+    move('head', 4.2, 0);
+    move('body', 3.2, 0);
+    move('armR', 3.2, 0);
+    move('armL', 3.2, 0);
+    move('legR', 0.2, 4);
+    move('legL', 0.2, 4);
+    this.rot('body', (b, o) => (o.rotation.x = b.x + (on ? 0.5 : 0)));
+    if (on) for (const k of ['armR', 'armL']) this.rot(k, (_b, o) => (o.rotation.x += 0.4));
   }
 
   /** Applique des poses d'animation Bedrock (degrés et pixels, repère Bedrock) aux os. */

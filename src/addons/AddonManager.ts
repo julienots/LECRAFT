@@ -22,7 +22,35 @@ import type { CraftingRecipe, SmeltingRecipe } from '../crafting/Recipe';
 import { MOB_BY_KEY, registerMob, type MobDef } from '../data/mobs';
 import { BIOME_DEFS } from '../data/biomes';
 import { VANILLA_MODELS } from '../render/MobModels';
-import { SKIN_PATHS } from '../render/TextureManager';
+import { SKIN_PATHS, SKIN_FALLBACK } from '../render/TextureManager';
+
+/** Géométries vanilla (référencées par les entités clientes sans être fournies) → modèle du jeu. */
+const VANILLA_GEOMETRY: [RegExp, string][] = [
+  [/humanoid\.custom|geometry\.player|humanoid\.customslim/, 'player'],
+  [/zombie\.husk|geometry\.husk/, 'husk'],
+  [/drowned/, 'drowned'],
+  [/zombie|humanoid/, 'zombie'],
+  [/stray/, 'stray'],
+  [/skeleton/, 'skeleton'],
+  [/creeper/, 'creeper'],
+  [/cave_spider/, 'cave_spider'],
+  [/spider/, 'spider'],
+  [/snowgolem|snow_golem/, 'snow_golem'],
+  [/minecart/, 'minecart'],
+  [/enderman/, 'enderman'],
+  [/witch/, 'witch'],
+  [/villager|evoker|vindicator|pillager|illager|wandering_trader/, 'villager'],
+  [/sheep/, 'sheep'],
+  [/cow|mooshroom/, 'cow'],
+  [/chicken/, 'chicken'],
+  [/pig/, 'pig'],
+  [/wolf/, 'wolf'],
+  [/squid/, 'squid'],
+  [/blaze/, 'blaze'],
+  [/ghast/, 'ghast'],
+  [/magmacube|magma_cube/, 'magma_cube'],
+  [/slime/, 'slime'],
+];
 import { extract, readEntries } from '../render/ResourcePack';
 import { TileRegistry } from '../render/TileRegistry';
 import { ADDON_BLOCKS, ADDON_TILES, addonTile, registerAddonBlocks, LOOT_TABLES, PLAYER_PROPERTIES, STRUCTURES } from './AddonRegistry';
@@ -1157,15 +1185,41 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
     const ce = clientEntities.get(e.id);
     const geo = ce?.geometry ? geos.get(ce.geometry) ?? geos.get(ce.geometry.split(':')[0]) : undefined;
     const tex = await addonImage(ce?.texture);
-    if (geo && tex) {
+    // texture : celle de l'add-on, sinon une texture du jeu (pack de ressources ou texture générée)
+    const vanillaTex = (p: string | undefined): string[] => {
+      if (!p) return [];
+      const rel = p.replace(/\.(png|tga)$/i, '');
+      const blk = /^textures\/blocks?\/(.+)$/.exec(rel);
+      if (blk) return [`block/${blk[1]}.png`, `tile:${blk[1]}`];
+      const ent = /^textures\/entity\/(.+)$/.exec(rel);
+      if (ent) return [`entity/${ent[1]}.png`];
+      return [];
+    };
+    // géométrie vanilla référencée (non fournie par l'add-on) → modèle équivalent du jeu
+    const vanillaGeo = ce?.geometry && !geo ? VANILLA_GEOMETRY.find(([re]) => re.test(ce.geometry!))?.[1] : undefined;
+    const runtime = String(e.desc.runtime_identifier ?? '').replace(/^minecraft:/, '');
+    const texPaths = tex ? [tex] : vanillaTex(ce?.texture);
+    if (geo) {
       VANILLA_MODELS[e.id] = geometryToModel(geo, e.id);
-      SKIN_PATHS[e.id] = [tex];
+      SKIN_PATHS[e.id] = texPaths;
+      if (!texPaths.length) result.report.push(`Entité « ${e.id} » : texture introuvable.`);
+    } else if (vanillaGeo && VANILLA_MODELS[vanillaGeo]) {
+      VANILLA_MODELS[e.id] = { ...VANILLA_MODELS[vanillaGeo], skin: e.id };
+      SKIN_PATHS[e.id] = [...texPaths, ...(SKIN_PATHS[vanillaGeo] ?? [])];
+      SKIN_FALLBACK[e.id] = vanillaGeo;
+    } else if (!ce) {
+      // sans entité cliente : invisible dans le jeu de référence (entités techniques)
+      const rt = VANILLA_MODELS[runtime] && !/arrow|snowball|egg|potion/.test(runtime) ? runtime : null;
+      VANILLA_MODELS[e.id] = rt ? { ...VANILLA_MODELS[rt] } : { ...VANILLA_MODELS.invisible };
     } else {
-      const base = hostile ? 'zombie' : 'pig';
-      VANILLA_MODELS[e.id] = { ...VANILLA_MODELS[base] };
-      if (tex && !geo) SKIN_PATHS[e.id] = [tex];
-      else VANILLA_MODELS[e.id] = { ...VANILLA_MODELS[base], skin: base };
-      result.report.push(`Entité « ${e.id} » : ${geo ? 'texture' : 'géométrie'} introuvable, modèle de remplacement.`);
+      // géométrie inconnue : modèle du jeu le plus proche de l'identifiant d'exécution, sinon invisible
+      const rt = VANILLA_MODELS[runtime] ? runtime : null;
+      VANILLA_MODELS[e.id] = rt ? { ...VANILLA_MODELS[rt], skin: e.id } : { ...VANILLA_MODELS.invisible };
+      if (rt) {
+        SKIN_PATHS[e.id] = [...texPaths, ...(SKIN_PATHS[rt] ?? [])];
+        SKIN_FALLBACK[e.id] = rt;
+      }
+      result.report.push(`Entité « ${e.id} » : géométrie « ${ce.geometry} » introuvable${rt ? `, modèle de ${rt}` : ', invisible'}.`);
     }
     registerMob(def);
     if (def.spawn) for (const b of BIOME_DEFS) if (biomes.includes(b.key)) {

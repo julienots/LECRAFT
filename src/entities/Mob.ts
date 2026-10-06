@@ -97,6 +97,8 @@ export class Mob extends Entity {
     if (dealt > 0 && this.has('poison') && p.difficulty !== 'easy') p.poisonTimer = Math.max(p.poisonTimer, p.difficulty === 'hard' ? 15 : 7);
     // zombie momifié : inflige la faim
     if (dealt > 0 && this.def.key === 'husk') p.effects.add('hunger', 140, 0, true, p.effectTarget);
+    // squelette wither : effet wither
+    if (dealt > 0 && this.def.key === 'wither_skeleton') p.effects.add('wither', 200, 0, true, p.effectTarget);
     if (dealt > 0) {
       ctx.audio.play('hurt', { volume: 0.9 });
       ctx.haptic('medium');
