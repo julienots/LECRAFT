@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { clamp, lerp, smoothstep } from '../util/math';
 
-const C = (h: string) => new THREE.Color(h);
-const DAY_ZENITH = C('#3f86ee');
-const DAY_HORIZON = C('#a9d2ff');
+// couleurs prises telles quelles (sans conversion sRGB → linéaire, le rendu est en sortie directe)
+const C = (h: string) => new THREE.Color().setHex(parseInt(h.slice(1), 16), THREE.LinearSRGBColorSpace);
+const DAY_ZENITH = C('#78a7ff');
+const DAY_HORIZON = C('#c0d8ff');
 const SUNSET_HORIZON = C('#f28c4c');
 const SUNSET_ZENITH = C('#3a58a0');
 const NIGHT_ZENITH = C('#03060f');
@@ -61,7 +62,7 @@ export class Sky {
       vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position,1.0); }`,
       fragmentShader: `uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSunDir; uniform vec3 uSunGlow; varying vec3 vDir;
         void main(){ float h = clamp(vDir.y, -0.2, 1.0); float t = pow(clamp(h,0.0,1.0), 0.55);
-          vec3 c = mix(uHorizon, uZenith, t); if (h < 0.0) c = mix(uHorizon, uHorizon*0.6, -h*4.0);
+          vec3 c = mix(uHorizon, uZenith, t); if (h < 0.0) c = mix(uHorizon, uHorizon*0.7, clamp(-h*1.2, 0.0, 1.0));
           float g = pow(max(dot(normalize(vDir), uSunDir), 0.0), 8.0); c += uSunGlow * g * 0.5;
           gl_FragColor = vec4(c, 1.0); }`,
       side: THREE.BackSide,

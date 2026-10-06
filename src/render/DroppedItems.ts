@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BlockRegistry } from '../blocks/BlockRegistry';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { TextureManager } from './TextureManager';
+import { extrudeIcon } from './ItemExtrude';
 
 /**
  * Modèles 3D des objets tombés au sol, comme dans l'édition Java : les blocs pleins sont de petits
@@ -43,9 +44,12 @@ export class DroppedItemModels {
         });
         c = { geo: new THREE.BoxGeometry(0.25, 0.25, 0.25), mat: mats, half: 0.125 };
       } else {
-        const m = new THREE.MeshBasicMaterial({ map: this.icon(id), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
+        // objet : modèle extrudé d'un pixel (comme l'édition Java), demi-bloc de côté
+        const m = new THREE.MeshBasicMaterial({ map: this.icon(id), alphaTest: 0.1 });
         this.mats.push(m);
-        c = { geo: new THREE.PlaneGeometry(0.5, 0.5), mat: m, half: 0.25 };
+        const geo = extrudeIcon(this.tm.iconCanvas(id));
+        geo.scale(0.5, 0.5, 0.5);
+        c = { geo, mat: m, half: 0.25 };
       }
       this.cache.set(id, c);
     }

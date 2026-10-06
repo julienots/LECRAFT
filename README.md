@@ -141,7 +141,12 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
 - **Placement comme le jeu original** : plus de bloc fantôme, seulement le contour noir et les fissures.
 - **Icônes plates** dans l'inventaire et en main pour les fleurs, torches, vitres, barreaux, portes,
   échelles, lanternes… (plus de « cube » pour ces objets).
-- **Bras du joueur** en 1re personne (skin du pack), **pose accroupie** du modèle vanilla en vue 3e personne.
+- **Bras du joueur** en 1re personne (skin du pack, ombré, position calculée comme le jeu original),
+  **pose accroupie** du modèle vanilla en vue 3e personne.
+- **Objets en main en 3D** : modèle extrudé d'un pixel (épée, outils, nourriture…) avec la pose
+  « première personne » du jeu original (épée en diagonale, face visible ; bloc tourné de 45°) et son
+  animation de coup ; aussi en 3D au sol et dans la main de l'avatar en vue 3e personne.
+- **Ciel** aux couleurs du jeu original (bleu clair #78A7FF, horizon #C0D8FF).
 - **Entités d'add-ons** : les géométries vanilla référencées (golem de neige, minecart, villageois…)
   et les textures de blocs du jeu sont reconnues ; les entités « techniques » sans rendu sont invisibles.
 - **Comme l'édition Java** : objets au sol en 3D (petit cube pour un bloc, icône plate sinon) qui

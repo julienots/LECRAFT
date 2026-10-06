@@ -197,11 +197,11 @@ try {
     s.entities.spawnItem('stone', 1, p.x + 2, p.y + 1, p.z);
     s.entities.spawnItem('diamond', 1, p.x - 2, p.y + 1, p.z);
     const items = s.entities.entities.filter((e) => e.kind === 'item').slice(-2);
-    const r = items.map((e) => e.object3d.children[0].geometry.type);
+    const r = items.map((e) => { const g = e.object3d.children[0].geometry; return g.type === 'BoxGeometry' ? 'cube' : g.getAttribute('position').count > 8 ? 'extrudé' : 'plat'; });
     items.forEach((e) => (e.removed = true));
     return r;
   });
-  check('Objets au sol en 3D : cube pour un bloc, icône plate pour un objet', drops[0] === 'BoxGeometry' && drops[1] === 'PlaneGeometry', JSON.stringify(drops));
+  check('Objets au sol en 3D : cube pour un bloc, modèle extrudé pour un objet', drops[0] === 'cube' && drops[1] === 'extrudé', JSON.stringify(drops));
   const pick = await G(async () => {
     const s = window.__lecraft.session, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     p.gameMode = 'survival';

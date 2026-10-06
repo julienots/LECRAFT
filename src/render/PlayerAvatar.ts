@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MobModel, type SkinProvider } from './MobModels';
+import { extrudeIcon } from './ItemExtrude';
 
 /** Échelle du modèle (32 px de haut → 1,8 bloc). */
 const SCALE = 0.9;
@@ -57,6 +58,14 @@ export class PlayerAvatar {
       m.map = o.held ? this.icon(o.held) : null;
       m.needsUpdate = true;
       this.item.visible = !!o.held;
+      // objet en 3D (extrudé d'un pixel), comme dans le jeu original
+      if (o.held && m.map?.image instanceof HTMLCanvasElement) {
+        this.item.geometry.dispose();
+        this.item.geometry = extrudeIcon(m.map.image).scale(0.5, 0.5, 0.5);
+        m.side = THREE.FrontSide;
+        m.transparent = false;
+        m.alphaTest = 0.1;
+      }
     }
     const b = o.light;
     if (o.hurt) this.model.setTint(1, 0.35, 0.35);

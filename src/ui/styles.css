@@ -374,4 +374,4 @@ html.gamepad .touch-layer, html.gamepad .btn-pause, html.gamepad .btn-chat, html
 .trade-icon { width: 20px; height: 20px; image-rendering: pixelated; }
 
 /* shaders : vignette douce autour de l'écran de jeu */
-html.shaders-on #app::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, 0.3) 100%); }
+html.shaders-on #app::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.16) 100%); }
