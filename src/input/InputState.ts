@@ -15,6 +15,13 @@ export class InputState {
   private queue: string[] = [];
   /** Source de la dernière entrée (pour l'interface). */
   mode: 'touch' | 'keyboard' | 'gamepad' = 'touch';
+  /**
+   * Visée au doigt (commandes tactiles classiques de l'édition mobile), en coordonnées normalisées
+   * de l'écran (−1..1) : `tapAim` pour un toucher bref (utiliser / poser), `holdAim` pendant un appui
+   * long (miner / frapper). null = viser au centre (viseur).
+   */
+  tapAim: { x: number; y: number } | null = null;
+  holdAim: { x: number; y: number } | null = null;
 
   push(ev: 'use' | 'attackTap' | 'inventory' | 'pause' | 'drop' | 'debug' | `slot:${number}` | 'slotNext' | 'slotPrev' | 'chat' | 'command' | 'perspective') {
     this.queue.push(ev);

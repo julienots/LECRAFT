@@ -23,6 +23,8 @@ export interface Settings {
   leftHanded: boolean;
   /** Schéma tactile : joystick ou croix directionnelle classique. */
   controlScheme: 'joystick' | 'dpad';
+  /** Visée tactile : au doigt (on pose/casse là où on touche) ou au viseur (centre de l'écran). */
+  touchAim: 'finger' | 'crosshair';
   autoJump: boolean;
   layout: ControlLayout;
   musicVolume: number;
@@ -57,6 +59,7 @@ export function defaultSettings(q: QualityLevel = 'MEDIUM'): Settings {
     invertY: false,
     leftHanded: false,
     controlScheme: 'joystick',
+    touchAim: 'finger',
     autoJump: true,
     layout: {},
     musicVolume: 0.5,

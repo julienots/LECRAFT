@@ -102,6 +102,7 @@ function controlsScreen(game: Game): Screen {
     body: [
       mcGrid(
         mcCycle('Commandes tactiles', [['joystick', 'Joystick'], ['dpad', 'Croix (classique)']], s.controlScheme ?? 'joystick', (v) => ((s.controlScheme = v as typeof s.controlScheme), apply())),
+        mcCycle('Visée tactile', [['finger', 'Au doigt'], ['crosshair', 'Au viseur']], s.touchAim ?? 'finger', (v) => ((s.touchAim = v as typeof s.touchAim), apply())),
         mcSlider((v) => `Sensibilité : ${Math.round(v * 50)} %`, 0.2, 3, 0.05, s.sensitivity, (v) => ((s.sensitivity = v), apply())),
         mcToggle('Inverser la souris', s.invertY, (v) => ((s.invertY = v), apply())),
         mcSlider((v) => `Joystick : ${v} px`, 80, 200, 5, s.joystickSize, (v) => ((s.joystickSize = v), apply())),

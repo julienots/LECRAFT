@@ -47,6 +47,8 @@ export interface InteractionHost {
   trade?(v: Villager): void;
   /** Œil de l'Ender lancé vers le fort le plus proche. */
   throwEye?(): void;
+  /** Champ de vision vertical (degrés) et rapport largeur/hauteur de la caméra (visée au doigt). */
+  view?(): { fov: number; aspect: number };
   /** Bouton enfoncé : relâché après `seconds` (1 s pierre, 1,5 s bois). */
   pressButton?(x: number, y: number, z: number, seconds: number): void;
 }
@@ -82,10 +84,31 @@ export class PlayerInteraction {
     return this.ctx.player.creative ? 6 : 5;
   }
 
-  eye(): [number, number, number, number, number, number] {
+  eye(aim: { x: number; y: number } | null = null): [number, number, number, number, number, number] {
     const p = this.ctx.player;
-    const cp = Math.cos(p.pitch);
-    return [p.x, p.y + p.eyeHeight, p.z, -Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp];
+    const cp = Math.cos(p.pitch), sp = Math.sin(p.pitch), cy = Math.cos(p.yaw), sy = Math.sin(p.yaw);
+    const fx = -sy * cp, fy = sp, fz = -cy * cp;
+    const v = aim ? this.host.view?.() : undefined;
+    if (!aim || !v) return [p.x, p.y + p.eyeHeight, p.z, fx, fy, fz];
+    // rayon passant par le point touché : avant + droite·x·tan(fov/2)·aspect + haut·y·tan(fov/2)
+    const t = Math.tan((v.fov * Math.PI) / 360);
+    const ax = aim.x * t * v.aspect, ay = aim.y * t;
+    const rx = cy, rz = -sy; // droite
+    const ux = sy * sp, uy = cp, uz = cy * sp; // haut
+    let dx = fx + rx * ax + ux * ay, dy = fy + uy * ay, dz = fz + rz * ax + uz * ay;
+    const n = Math.hypot(dx, dy, dz);
+    dx /= n;
+    dy /= n;
+    dz /= n;
+    return [p.x, p.y + p.eyeHeight, p.z, dx, dy, dz];
+  }
+
+  /** Bloc et créature visés le long d'un rayon. */
+  private aimTargets(aim: { x: number; y: number } | null) {
+    const [ox, oy, oz, dx, dy, dz] = this.eye(aim);
+    this.target = raycastBlocks(this.ctx.world, ox, oy, oz, dx, dy, dz, this.reach);
+    const mobHit = this.entities.raycast(ox, oy, oz, dx, dy, dz, this.reach);
+    this.targetMob = mobHit && (!this.target || mobHit.distance < this.target.distance) ? mobHit.mob : null;
   }
 
   update(dt: number, events: string[]) {
@@ -101,10 +124,10 @@ export class PlayerInteraction {
       this.miningProgress = 0;
       return;
     }
-    const [ox, oy, oz, dx, dy, dz] = this.eye();
-    this.target = raycastBlocks(ctx.world, ox, oy, oz, dx, dy, dz, this.reach);
-    const mobHit = this.entities.raycast(ox, oy, oz, dx, dy, dz, this.reach);
-    this.targetMob = mobHit && (!this.target || mobHit.distance < this.target.distance) ? mobHit.mob : null;
+    // visée : au doigt pendant un appui long (miner), sinon au viseur ; un toucher bref vise son point
+    const tap = events.includes('use') ? this.input.tapAim : null;
+    this.aimTargets(tap ?? this.input.holdAim);
+    this.input.tapAim = null;
     const held = inv.selectedStack;
     const heldDef = held ? ItemRegistry.get(held.id) : undefined;
 

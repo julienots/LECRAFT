@@ -198,6 +198,12 @@ export class TouchController {
     return this.settings.leftHanded ? x > w * 0.6 : x < w * 0.4;
   }
 
+  /** Position du doigt en coordonnées normalisées (null en visée au viseur). */
+  private aimAt(x: number, y: number): { x: number; y: number } | null {
+    if (this.settings.touchAim === 'crosshair') return null;
+    return { x: (x / window.innerWidth) * 2 - 1, y: 1 - (y / window.innerHeight) * 2 };
+  }
+
   private onDown(e: PointerEvent) {
     if (!this.enabled || this.editMode || e.pointerType === 'mouse') return;
     e.preventDefault();
@@ -211,6 +217,7 @@ export class TouchController {
       if (Math.hypot(entry.x - entry.sx, entry.y - entry.sy) < TAP_MOVE_PX * 2) {
         entry.long = true;
         this.input.attack = true;
+        this.input.holdAim = this.aimAt(entry.x, entry.y);
       }
     }, LONG_PRESS_MS);
     this.look.set(e.pointerId, entry);
@@ -230,6 +237,7 @@ export class TouchController {
     this.input.lookDY += (e.clientY - l.y) * k * (this.settings.invertY ? -1 : 1);
     l.x = e.clientX;
     l.y = e.clientY;
+    if (l.long) this.input.holdAim = this.aimAt(l.x, l.y);
   }
 
   private onUp(e: PointerEvent) {
@@ -243,8 +251,15 @@ export class TouchController {
     clearTimeout(l.timer);
     this.look.delete(e.pointerId);
     if (l.long) {
-      if (![...this.look.values()].some((o) => o.long)) this.input.attack = false;
-    } else if (performance.now() - l.t < LONG_PRESS_MS && Math.hypot(l.x - l.sx, l.y - l.sy) < TAP_MOVE_PX) this.input.push('use');
+      if (![...this.look.values()].some((o) => o.long)) {
+        this.input.attack = false;
+        this.input.holdAim = null;
+      }
+    } else if (performance.now() - l.t < LONG_PRESS_MS && Math.hypot(l.x - l.sx, l.y - l.sy) < TAP_MOVE_PX) {
+      // toucher bref : utiliser / poser là où le doigt a touché
+      this.input.tapAim = this.aimAt(l.sx, l.sy);
+      this.input.push('use');
+    }
   }
 
   setVisible(v: boolean) {
@@ -258,6 +273,7 @@ export class TouchController {
     for (const l of this.look.values()) clearTimeout(l.timer);
     this.look.clear();
     this.input.attack = this.input.jump = this.input.useHeld = false;
+    this.input.holdAim = this.input.tapAim = null;
     this.input.moveX = this.input.moveY = 0;
     this.buttons.forEach((b) => b.classList.remove('pressed'));
   }

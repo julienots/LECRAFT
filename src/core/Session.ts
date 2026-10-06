@@ -225,6 +225,7 @@ export class Session implements GameContext {
       trade: (v) => openTrades(game, this, v),
       throwEye: () => void this.throwEye(),
       pressButton: (x, y, z, seconds) => this.buttons.push({ x, y, z, t: seconds }),
+      view: () => ({ fov: game.renderer.camera.fov, aspect: game.renderer.camera.aspect }),
     });
     this.fovCurrent = game.settings.fov;
     // événements joueur

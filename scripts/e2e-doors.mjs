@@ -11,6 +11,8 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const G = (f, a) => page.evaluate(f, a);
+const cdp = await page.context().newCDPSession(page);
+const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y, id]) => ({ x, y, id })) });
 const wait = (ms) => page.waitForTimeout(ms);
 
 try {
@@ -122,6 +124,40 @@ try {
     return { on, off };
   });
   check('Plaque de pression : le joueur dessus ouvre la porte, en partant elle se referme', plate.on && plate.off, JSON.stringify(plate));
+  // ---------- visée au doigt (commandes tactiles classiques) ----------
+  const aim = await G(() => {
+    const s = window.__lecraft.session, p = s.player, a = window.__a;
+    s.runCommand(`/fill ${a.x - 10} ${a.y} ${a.z - 10} ${a.x + 10} ${a.y + 6} ${a.z + 10} air`);
+    p.body.setPos(a.x + 0.5, a.y, a.z + 0.5);
+    p.body.vx = p.body.vy = p.body.vz = 0;
+    p.yaw = 0; p.pitch = -0.6;
+    p.inventory.clear();
+    p.inventory.add({ id: 'oak_planks', count: 8 });
+    p.inventory.selected = 0;
+    return true;
+  });
+  await wait(400);
+  const before = await G(() => {
+    const s = window.__lecraft.session, it = s.interaction;
+    const W = window.innerWidth, H = window.innerHeight, sx = W * 0.72, sy = H * 0.6;
+    const center = it.target ? [it.target.x, it.target.y, it.target.z] : null;
+    // bloc que le rayon passant par le point touché doit atteindre
+    const [ox, oy, oz, dx, dy, dz] = it.eye({ x: (sx / W) * 2 - 1, y: 1 - (sy / H) * 2 });
+    let hit = null;
+    for (let t = 0; t < 6 && !hit; t += 0.02) { const x = Math.floor(ox + dx * t), y = Math.floor(oy + dy * t), z = Math.floor(oz + dz * t); if (s.world.getBlock(x, y, z) > 0) hit = [x, y + 1, z]; }
+    return { sx, sy, center, expect: hit };
+  });
+  await touch('touchStart', [[before.sx, before.sy, 21]]);
+  await wait(60);
+  await touch('touchEnd', []);
+  await wait(400);
+  const after = await G((b) => {
+    const s = window.__lecraft.session, w = s.world, P = window.I('oak_planks');
+    const atTap = b.expect && w.getBlock(b.expect[0], b.expect[1], b.expect[2]) === P;
+    const atCenter = b.center && w.getBlock(b.center[0], b.center[1] + 1, b.center[2]) === P;
+    return { atTap, atCenter };
+  }, before);
+  check('Visée au doigt : le bloc est posé là où on touche (pas au viseur)', !!after.atTap && !after.atCenter, JSON.stringify({ before, after }));
   await G(() => { const p = window.__lecraft.session.player, a = window.__a; p.body.setPos(a.x + 0.5, a.y, a.z + 2.5); p.yaw = 0; p.pitch = -0.15; p.inventory.clear(); });
   await wait(800);
   await page.screenshot({ path: `${OUT}/doors-01.png` });

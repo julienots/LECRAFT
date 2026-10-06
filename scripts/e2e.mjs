@@ -142,7 +142,7 @@ try {
   await wait(600);
   const aimed = await G(() => { const t = window.__lecraft.session.interaction.target; return t ? `${t.x},${t.y},${t.z}` : null; });
   check('Visée d’un bloc (raycast)', aimed === `${target.x},${target.y},${target.z}`, `visé ${aimed}`);
-  await touch('touchStart', [[700, 180, 4]]);
+  await touch('touchStart', [[457, 206, 4]]);
   await wait(2200);
   await shot('e2e-03-mining');
   await touch('touchEnd', []);
@@ -173,7 +173,7 @@ try {
   await wait(400);
   const pv = await G(() => window.__lecraft.session.interaction.preview);
   check('Prévisualisation de pose (valide)', !!pv && pv.valid, JSON.stringify(pv));
-  await tapAt(700, 200, 5);
+  await tapAt(457, 206, 5);
   await wait(300);
   const placed = pv ? await G((v) => window.__lecraft.session.world.getBlock(v.x, v.y, v.z), pv) : -1;
   const dirtId = await G(() => window.__lecraft.debug.blockId('dirt'));
@@ -238,9 +238,9 @@ try {
     p.yaw = Math.PI; p.pitch = -0.6;
   });
   await wait(400);
-  await tapAt(700, 200, 9);
+  await tapAt(457, 206, 9);
   await wait(300);
-  await tapAt(700, 200, 10);
+  await tapAt(457, 206, 10);
   await wait(400);
   check('Établi posé puis ouvert (grille 3x3)', (await page.locator('.gui .gslot').count()) === 46);
   await tap(page.locator('.brecipe[data-item=wooden_pickaxe]'));
