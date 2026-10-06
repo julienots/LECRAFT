@@ -146,7 +146,9 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
 - **Objets en main en 3D** : modèle extrudé d'un pixel (épée, outils, nourriture…) avec la pose
   « première personne » du jeu original (épée en diagonale, face visible ; bloc tourné de 45°) et son
   animation de coup ; aussi en 3D au sol et dans la main de l'avatar en vue 3e personne.
-- **Ciel** aux couleurs du jeu original (bleu clair #78A7FF, horizon #C0D8FF).
+- **Ciel** aux couleurs du jeu original (bleu clair #78A7FF, horizon #C0D8FF) et **nuages en 3D** :
+  chaque pixel de `clouds.png` devient un nuage de 12 × 4 × 12 blocs (faces ombrées, sans faces
+  internes), qui défile vers l'est et s'estompe au loin.
 - **Entités d'add-ons** : les géométries vanilla référencées (golem de neige, minecart, villageois…)
   et les textures de blocs du jeu sont reconnues ; les entités « techniques » sans rendu sont invisibles.
 - **Comme l'édition Java** : objets au sol en 3D (petit cube pour un bloc, icône plate sinon) qui

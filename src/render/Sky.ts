@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clamp, lerp, smoothstep } from '../util/math';
+import { Clouds3D } from './Clouds';
 
 // couleurs prises telles quelles (sans conversion sRGB → linéaire, le rendu est en sortie directe)
 const C = (h: string) => new THREE.Color().setHex(parseInt(h.slice(1), 16), THREE.LinearSRGBColorSpace);
@@ -32,7 +33,9 @@ export class Sky {
   private sun: THREE.Mesh;
   private moon: THREE.Mesh;
   private stars: THREE.Points;
-  private clouds: THREE.Mesh;
+  /** Nuages en 3D (comme le jeu original). */
+  private clouds3d = new Clouds3D();
+  private clouds: THREE.Group;
   private cloudTex: THREE.Texture;
   readonly horizon = new THREE.Color();
   readonly zenith = new THREE.Color();
@@ -43,16 +46,17 @@ export class Sky {
   readonly sunGlow = new THREE.Color(0, 0, 0);
   private disposables: { dispose(): void }[] = [];
   private tmp = new THREE.Vector3();
+  private tmpColor = new THREE.Color();
   private defaultSun!: THREE.Texture;
   private defaultMoon!: THREE.Texture;
   private packTex: THREE.Texture[] = [];
   private packMoon = false;
+  /** Les nuages viennent-ils du pack (clouds.png) ? */
+  packClouds = false;
   private defaultClouds!: HTMLCanvasElement;
   /** Ciel de l'End : cube texturé (end_sky.png répété 16 fois par face, assombri comme le jeu original). */
   private endBox: THREE.Mesh;
   private defaultEnd: THREE.Texture;
-  /** Largeur (en blocs) d'une répétition de la texture des nuages. */
-  private cloudSpan = 1536 / 6;
   /** Phase de la lune (0 = pleine lune), comme le jeu original : jour % 8. */
   moonPhase = 0;
 
@@ -144,13 +148,9 @@ export class Sky {
     this.endBox.visible = false;
     this.group.add(this.endBox);
     this.disposables.push(this.defaultEnd, this.endBox.geometry, em);
-    this.cloudTex.wrapS = this.cloudTex.wrapT = THREE.RepeatWrapping;
-    this.cloudTex.repeat.set(6, 6);
-    const cm = new THREE.MeshBasicMaterial({ map: this.cloudTex, transparent: true, opacity: 0.82, depthWrite: false, side: THREE.DoubleSide, fog: false });
-    this.clouds = new THREE.Mesh(new THREE.PlaneGeometry(1536, 1536), cm);
-    this.clouds.rotation.x = -Math.PI / 2;
-    this.clouds.renderOrder = 2;
-    this.disposables.push(this.dome.geometry, this.domeMat, sg, this.stars.material as THREE.Material, this.cloudTex, this.clouds.geometry, cm);
+    this.clouds = this.clouds3d.group;
+    this.clouds3d.setImage(this.defaultClouds);
+    this.disposables.push(this.dome.geometry, this.domeMat, sg, this.stars.material as THREE.Material, this.cloudTex, this.clouds3d);
   }
 
   get cloudMesh() {
@@ -180,29 +180,15 @@ export class Sky {
    * rendus en mélange additif (le fond noir disparaît) à la taille du jeu original.
    */
   usePack(sun?: ImageBitmap | HTMLCanvasElement, moon?: ImageBitmap | HTMLCanvasElement, clouds?: ImageBitmap | HTMLCanvasElement, endSky?: ImageBitmap | HTMLCanvasElement) {
-    // nuages : clouds.png du jeu original, 1 pixel = 12 blocs (nouvelle texture : la taille change)
-    let img: HTMLCanvasElement = this.defaultClouds;
+    // nuages : forme tirée de clouds.png du pack (1 pixel = 12 × 12 blocs), sinon image générée
     if (clouds) {
-      img = document.createElement('canvas');
-      img.width = clouds.width;
-      img.height = clouds.height;
-      img.getContext('2d')!.drawImage(clouds, 0, 0);
-    }
-    if (this.cloudTex.image !== img) {
-      if (this.cloudTex.image !== this.defaultClouds || clouds) {
-        const t = new THREE.CanvasTexture(img);
-        t.magFilter = t.minFilter = THREE.NearestFilter;
-        t.generateMipmaps = false;
-        t.colorSpace = THREE.NoColorSpace;
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        if (!this.disposables.includes(this.cloudTex)) this.cloudTex.dispose();
-        this.cloudTex = t;
-        (this.clouds.material as THREE.MeshBasicMaterial).map = t;
-        (this.clouds.material as THREE.MeshBasicMaterial).needsUpdate = true;
-      }
-    }
-    this.cloudSpan = clouds ? clouds.width * 12 : 1536 / 6;
-    this.cloudTex.repeat.set(1536 / this.cloudSpan, 1536 / this.cloudSpan);
+      const c = document.createElement('canvas');
+      c.width = clouds.width;
+      c.height = clouds.height;
+      c.getContext('2d')!.drawImage(clouds, 0, 0);
+      this.clouds3d.setImage(c);
+    } else this.clouds3d.setImage(this.defaultClouds);
+    this.packClouds = !!clouds;
     this.packTex.forEach((t) => t.dispose());
     this.packTex = [];
     const tex = (img: ImageBitmap | HTMLCanvasElement) => {
@@ -307,16 +293,9 @@ export class Sky {
     }
     (this.stars.material as THREE.PointsMaterial).opacity = clamp((1 - day) * 1.2 - rain, 0, 1);
     this.stars.rotation.z = ang * 0.2;
-    // nuages : suivent la caméra, défilent lentement
+    // nuages 3D : suivent la caméra, défilent vers l'est, assombris la nuit et sous la pluie
     this.clouds.visible = cloudsVisible;
-    if (cloudsVisible) {
-      this.clouds.position.set(camPos.x, 118, camPos.z);
-      const span = this.cloudSpan;
-      this.cloudTex.offset.set((camPos.x + elapsed * 1.2) / span, -camPos.z / span);
-      const cm = this.clouds.material as THREE.MeshBasicMaterial;
-      cm.color.setRGB(1, 1, 1).multiplyScalar(lerp(0.25, 1, day) * lerp(1, 0.6, rain));
-      cm.opacity = lerp(0.8, 0.95, rain);
-    }
+    if (cloudsVisible) this.clouds3d.update(camPos, elapsed, this.tmpColor.setRGB(1, 1, 1).multiplyScalar(lerp(0.25, 1, day) * lerp(1, 0.6, rain)), lerp(0.8, 0.95, rain));
   }
 
   dispose() {

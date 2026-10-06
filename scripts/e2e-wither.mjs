@@ -248,15 +248,17 @@ try {
   const sky = await G(async () => {
     const g = window.__lecraft, s = g.session, sk = g.renderer.sky, p = s.player;
     const hasPack = !!g.textures.packImage('environment/clouds.png');
+    g.settings.clouds = true; // désactivés en qualité basse
+    await new Promise((r) => setTimeout(r, 400));
     p.gameMode = 'survival';
     p.invulnerable = 0;
     p.health = 20;
     let roll = 0;
     p.damage(2, 'mob');
     for (let i = 0; i < 12; i++) { await new Promise((r) => requestAnimationFrame(r)); roll = Math.max(roll, Math.abs(g.renderer.camera.rotation.z)); }
-    return { hasPack, packMoon: sk.packMoon, span: sk.cloudSpan, roll };
+    return { hasPack, packMoon: sk.packMoon, packClouds: sk.packClouds, clouds3d: sk.clouds3d.geo.getAttribute('position')?.count > 0, roll };
   });
-  check('Ciel : soleil, phases de la lune et nuages du pack (sinon ceux du jeu)', sky.hasPack ? sky.packMoon && sky.span === 3072 : !sky.packMoon, JSON.stringify(sky));
+  check('Ciel : soleil, phases de la lune et nuages 3D du pack (sinon ceux du jeu)', (sky.hasPack ? sky.packMoon && sky.packClouds : !sky.packMoon) && sky.clouds3d, JSON.stringify(sky));
   check('Caméra inclinée quand le joueur est blessé', sky.roll > 0.05 && sky.roll < 0.26, JSON.stringify(sky));
   const fx = await G(async () => {
     const s = window.__lecraft.session, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
