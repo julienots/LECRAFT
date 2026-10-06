@@ -187,6 +187,15 @@ export class Session implements GameContext {
       game.hud.toast('Erreur du générateur (voir console)', 'warn');
     };
     this.particles = new ParticleSystem(QUALITY_PROFILES.HIGH.maxParticles, game.textures);
+    // les fragments de blocs sont éclairés comme le monde (sombres la nuit et sous terre)
+    this.weatherFx.heightAt = (x, z) => this.world.heightAt(x, z);
+    this.weatherFx.lightAt = (x, y, z) => this.particles.lightAt!(x, y, z);
+    this.weatherFx.usePack(game.textures.packImage('environment/rain.png'), game.textures.packImage('environment/snow.png'));
+    this.particles.lightAt = (x, y, z) => {
+      const l = this.world.getLight(Math.floor(x), Math.floor(y), Math.floor(z));
+      const sky = (l.sky / 15) * (this.dimension === 'overworld' ? this.dayCycle.daylight : 0), blk = l.block / 15;
+      return Math.max(this.dimension === 'overworld' ? 0.12 : 0.45, Math.pow(Math.max(sky, blk), 1.3));
+    };
     this.particles.limit = this.particleLimit();
     this.highlight = new BlockHighlight(game.textures);
     this.held = new HeldItem(game.textures);
@@ -420,6 +429,7 @@ export class Session implements GameContext {
   }
 
   clearIconCache() {
+    this.weatherFx.usePack(this.game.textures.packImage('environment/rain.png'), this.game.textures.packImage('environment/snow.png'));
     this.iconTex.forEach((t) => t.dispose());
     this.iconTex.clear();
     // les objets déjà au sol gardent leurs matériaux ; les nouveaux utilisent les textures du pack
@@ -974,7 +984,14 @@ export class Session implements GameContext {
     // météo
     const light = this.world.getLight(Math.floor(p.x), Math.floor(p.y + 1.6), Math.floor(p.z));
     const sheltered = light.sky < 12;
-    this.weatherFx.update(this.elapsed, cam.position, rain, this.biomeWeather() === 'snow', sheltered);
+    const snowing = this.biomeWeather() === 'snow';
+    this.weatherFx.update(this.elapsed, cam.position, rain, snowing, sheltered);
+    // gouttes de pluie qui rebondissent sur les blocs mouillés (comme le jeu original)
+    const wet = this.weatherFx.wet;
+    if (!snowing && wet.length) for (let i = 0, n = Math.round(rain * 40 * dt + Math.random()); i < n; i++) {
+      const c = wet[Math.floor(Math.random() * wet.length)];
+      this.particles.burst('rain', c.x + Math.random(), c.y + 0.02, c.z + Math.random(), 1);
+    }
     // surbrillance & objet en main
     const tg = this.interaction.target;
     let box: [number, number, number, number, number, number] | undefined;

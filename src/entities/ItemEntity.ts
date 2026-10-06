@@ -108,10 +108,11 @@ export class ItemEntity extends Entity {
       return;
     }
     const b = this.body;
-    if (b.onGround) {
-      b.vx *= 0.8;
-      b.vz *= 0.8;
-    }
+    // frottements du jeu original, par tick (indépendants du nombre d'images par seconde) :
+    // 0,98 dans l'air, 0,6 × 0,98 au sol
+    const f = Math.pow(b.onGround ? 0.588 : 0.98, dt * 20);
+    b.vx *= f;
+    b.vz *= f;
     b.step(ctx.world, dt);
     // lumière du monde (comme les créatures)
     const l = ctx.world.getLight(Math.floor(b.x), Math.floor(b.y + 0.2), Math.floor(b.z));

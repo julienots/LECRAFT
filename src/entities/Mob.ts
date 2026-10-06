@@ -229,16 +229,27 @@ export class Mob extends Entity {
     s.t -= dt;
     if (s.t <= 0 || Math.hypot(s.x - this.x, s.y - this.y, s.z - this.z) < 1) {
       s.t = 3 + Math.random() * 4;
-      s.x = this.x + (Math.random() - 0.5) * 12;
-      s.y = this.y + (Math.random() - 0.5) * 6;
-      s.z = this.z + (Math.random() - 0.5) * 12;
-      if (ctx.world.getBlock(Math.floor(s.x), Math.floor(s.y), Math.floor(s.z)) !== B.WATER) s.y = this.y - 1;
+      // destination dans l'eau uniquement (quelques essais, sinon on reste sur place)
+      s.x = this.x;
+      s.y = this.y;
+      s.z = this.z;
+      for (let i = 0; i < 6; i++) {
+        const x = this.x + (Math.random() - 0.5) * 12, y = this.y + (Math.random() - 0.5) * 6, z = this.z + (Math.random() - 0.5) * 12;
+        if (ctx.world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z)) === B.WATER && ctx.world.getBlock(Math.floor(x), Math.floor(y + 1), Math.floor(z)) === B.WATER) {
+          s.x = x;
+          s.y = y;
+          s.z = z;
+          break;
+        }
+      }
     }
     const dx = s.x - this.x, dy = s.y - this.y, dz = s.z - this.z, d = Math.hypot(dx, dy, dz) || 1;
     const sp = this.def.speed;
     b.vx += ((dx / d) * sp - b.vx) * Math.min(1, dt * 2);
     b.vz += ((dz / d) * sp - b.vz) * Math.min(1, dt * 2);
     b.vy += ((dy / d) * sp * 0.6 + 0.3 - b.vy) * Math.min(1, dt * 2); // compense la gravité dans l'eau
+    // ne jaillit pas hors de l'eau : sous la surface, la remontée est bloquée
+    if (b.vy > 0 && ctx.world.getBlock(Math.floor(this.x), Math.floor(this.y + b.height + 0.2), Math.floor(this.z)) !== B.WATER) b.vy = 0;
     this.yaw = Math.atan2(b.vx, b.vz);
   }
   private airTime = 0;

@@ -256,6 +256,31 @@ try {
   });
   check('Ciel : soleil, phases de la lune et nuages du pack (sinon ceux du jeu)', sky.hasPack ? sky.packMoon && sky.span === 3072 : !sky.packMoon, JSON.stringify(sky));
   check('Caméra inclinée quand le joueur est blessé', sky.roll > 0.05 && sky.roll < 0.26, JSON.stringify(sky));
+  const fx = await G(async () => {
+    const s = window.__lecraft.session, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const x = Math.floor(p.x) + 20, y = 112, z = Math.floor(p.z);
+    s.runCommand(`/fill ${x - 9} ${y - 1} ${z - 9} ${x + 9} ${y - 1} ${z + 9} stone`);
+    s.runCommand(`/fill ${x - 9} ${y} ${z - 9} ${x + 9} ${y + 12} ${z + 9} air`);
+    p.body.setPos(x + 0.5, y, z + 0.5);
+    p.body.flying = false;
+    await sleep(300);
+    // fragments de bloc texturés
+    s.particles.clear();
+    s.particles.blockBreak(x + 2, y, z, window.__lecraft.debug.blockId('stone'));
+    const n = s.particles.active, textured = Array.from(s.particles.tile.slice(0, n * 4)).filter((v, i) => i % 4 === 3 && v === 1).length;
+    // pluie : un toit au-dessus d'une colonne l'abrite
+    s.runCommand(`/fill ${x + 3} ${y + 4} ${z + 3} ${x + 3} ${y + 4} ${z + 3} oak_planks`);
+    s.runCommand('/weather rain');
+    await sleep(2500);
+    const wet = s.weatherFx.wet;
+    const under = wet.find((c) => c.x === x + 3 && c.z === z + 3);
+    const open = wet.find((c) => c.x === x + 1 && c.z === z + 1);
+    const r = { n, textured, visible: s.weatherFx.mesh.visible, underY: under?.y, openY: open?.y, ground: y, wetN: wet.length, inten: s.weather.intensity, h: s.world.heightAt(x + 1, z + 1), py: p.y, dead: p.dead, state: window.__lecraft.state, ui: document.querySelector('.mc-screen')?.textContent?.slice(0, 40), bl: s.world.getBlock(x, y - 1, z) };
+    s.runCommand('/weather clear');
+    return r;
+  });
+  check('Blocs cassés : fragments de leur texture (64)', fx.n === 64 && fx.textured === 64, JSON.stringify(fx));
+  check('Pluie en rideaux par colonne, arrêtée par les blocs (toit)', fx.visible && fx.openY === fx.ground && (fx.underY === undefined || fx.underY > fx.ground + 4), JSON.stringify(fx));
   check('Yeux lumineux (araignée, dragon)', dragon.glow && dragon.spiderGlow, JSON.stringify(dragon));
   check('Mort d’un mob : bascule sur le côté pendant 1 s puis disparaît', dragon.midPresent && dragon.midAngle > 0.8 && dragon.midAngle <= Math.PI / 2 + 1e-6 && dragon.gone, JSON.stringify(dragon));
   check('Mort : position mémorisée, message et boussole vers le lieu de la mort', death.last && death.last.x === death.at.x && death.compass === 'Lieu de votre mort' && death.msg, JSON.stringify(death));

@@ -150,7 +150,13 @@ try {
   const mined = await G((t) => window.__lecraft.session.world.getBlock(t.x, t.y, t.z), target);
   check('Minage par appui long', mined === 0, `bloc après minage : ${mined}`);
   // ramassage
-  await G(() => { const p = window.__lecraft.session.player; p.body.setPos(p.x, p.y, p.z - 1.2); });
+  // le joueur marche jusqu'à l'objet (pas d'aimant, comme le jeu original : ramassage à ~1 bloc)
+  await G(() => {
+    const s = window.__lecraft.session, p = s.player;
+    const it = s.entities.entities.find((e) => e.kind === 'item' && e.itemId === 'dirt');
+    if (it) p.body.setPos(it.body.x, p.y, it.body.z + 0.6);
+    else p.body.setPos(p.x, p.y, p.z - 1.2);
+  });
   await wait(1500);
   const dirt = await G(() => window.__lecraft.session.player.inventory.count('dirt'));
   check('Drop et ramassage de l’objet', dirt >= 1, `terre en inventaire : ${dirt}`);
