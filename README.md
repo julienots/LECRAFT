@@ -166,6 +166,11 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   brouillard éclairé par le couchant, couleurs plus riches et vignette ; *Ultra* ajoute de vraies
   **ombres projetées** (carte d'ombres du soleil, filtrée, découpe des feuilles et herbes respectée) ;
   *NON* revient au rendu classique.
+- **Portes, trappes et portillons** des 12 essences de bois (chêne, sapin, bouleau, acajou, acacia,
+  chêne noir, cerisier, palétuvier, chêne pâle, carmin, biscornu, bambou) avec leurs recettes ;
+  **porte et trappe en fer** qui ne s'ouvrent qu'avec la redstone : **levier**, **boutons** (pierre et
+  bois, relâchés après 1 / 1,5 s) et **plaques de pression** (joueur et créatures ; objets aussi sur
+  le bois) alimentent les ouvrants dans un rayon d'un bloc.
 - **Liquides et blocs** : surface de l'eau et de la lave en pente comme le jeu original (hauteur de
   chaque coin moyennée, plus de trous entre niveaux), animation à 16 images (8 images/s) issue du pack,
   surfaces translucides sans « parois fantômes », glace et verre sans double face contre l'eau ;
@@ -688,6 +693,8 @@ npm run e2e:movement             # 8 vérifications : sprint au double appui, sa
 npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 12 cadres, ouverture,
                                  # arrivée, cristaux et dragon, soin et cristal détruit, vide, victoire
                                  # (portail de sortie, œuf), retour à la surface
+npm run e2e:doors                # 7 vérifications : portes des 12 essences, trappe, portillon,
+                                 # porte en fer (pas à la main), levier, bouton, plaque de pression
 npm run e2e:wither               # 26 vérifications : pas de bloc fantôme, icônes plates, squelette
                                  # wither, invocation, charge, crânes, armure, étoile du Nether, bras
                                  # en 1re personne, pose accroupie, feuilles qui tombent, objets au sol

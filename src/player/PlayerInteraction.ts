@@ -1,3 +1,4 @@
+import { setOpen, updatePowerAround } from '../world/Redstone';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
 import { breakTime, getDrops, blockXp, hasSupport, rollLoot } from '../blocks/BlockBehaviors';
 import type { GameContext } from '../core/GameContext';
@@ -46,6 +47,8 @@ export interface InteractionHost {
   trade?(v: Villager): void;
   /** Œil de l'Ender lancé vers le fort le plus proche. */
   throwEye?(): void;
+  /** Bouton enfoncé : relâché après `seconds` (1 s pierre, 1,5 s bois). */
+  pressButton?(x: number, y: number, z: number, seconds: number): void;
 }
 
 /** Index d'orientation correspondant à une direction horizontale (dx, dz). */
@@ -299,7 +302,14 @@ export class PlayerInteraction {
       const b = BlockRegistry.get(t.block);
       if (b.interact === 'crafting') return this.host.openStation('crafting', t.x, t.y, t.z);
       if (b.interact === 'furnace') return this.host.openStation('furnace', t.x, t.y, t.z);
-      if (b.interact === 'door') return this.toggleDoor(t.x, t.y, t.z);
+      if (b.interact === 'door') {
+        // portes et trappes en fer : seulement avec la redstone (le jeu original ne les ouvre pas à la main)
+        if (b.def.redstoneOnly) return;
+        if (b.shape === 'door') return this.toggleDoor(t.x, t.y, t.z);
+        return this.toggleOpenable(t.x, t.y, t.z);
+      }
+      if (b.interact === 'lever') return this.toggleLever(t.x, t.y, t.z);
+      if (b.interact === 'button') return this.pressButton(t.x, t.y, t.z, b.sound === 'wood' ? 1.5 : 1);
       if (b.interact === 'bed') return this.host.sleep(t.x, t.y, t.z);
       if (b.interact === 'tnt' && held && (held.id === 'flint_and_steel' || held.id === 'fire_charge')) {
         this.host.primeTnt(t.x, t.y, t.z);
@@ -410,6 +420,18 @@ export class PlayerInteraction {
       const upside = t.ny === -1 || (t.ny === 0 && fy > 0.5);
       return this.validate(mk(x, y, z, look | (upside ? 4 : 0)));
     }
+    if (b.shape === 'trapdoor') {
+      // posée sur le côté d'un bloc : charnière contre ce bloc ; dessus/dessous : selon le regard
+      const top = t.ny === -1 || (t.ny === 0 && fy > 0.5);
+      const f = t.ny === 0 && !replace ? facingOf(t.nx, t.nz) : look;
+      return this.validate(mk(x, y, z, f | (top ? 8 : 0)));
+    }
+    if (b.shape === 'fence_gate') return this.validate(mk(x, y, z, look));
+    if (b.shape === 'lever' || b.shape === 'button') {
+      if (t.ny === 1 || replace) return this.validate(mk(x, y, z, 0));
+      if (t.ny === -1) return { ...mk(x, y, z, 0), valid: false };
+      return this.validate(mk(x, y, z, facingOf(-t.nx, -t.nz) + 1));
+    }
     if (b.shape === 'torch') {
       if (t.ny === 1 || replace) return this.validate(mk(x, y, z, 0));
       if (t.ny === -1) return { ...mk(x, y, z, 0), valid: false };
@@ -485,7 +507,7 @@ export class PlayerInteraction {
     const hw = pb.halfWidth;
     if (pb.x + hw > x && pb.x - hw < x + 1 && pb.y + pb.height > y && pb.y < y + 1 && pb.z + hw > z && pb.z - hw < z + 1) {
       const sh = BlockRegistry.get(block).shape;
-      if (!(sh === 'torch' || sh === 'ladder' || sh === 'plate')) return false;
+      if (!(sh === 'torch' || sh === 'ladder' || sh === 'plate' || sh === 'lever' || sh === 'button')) return false;
     }
     return !this.entities.occupies(x, y, z);
   }
@@ -504,6 +526,37 @@ export class PlayerInteraction {
     this.ctx.audio.play(open ? 'door_open' : 'door_close', { x: x + 0.5, y: by + 1, z: z + 0.5 });
     this.entities.combat.swing = 0.7;
   }
+  /** Trappe ou portillon : ouvert / fermé. */
+  private toggleOpenable(x: number, y: number, z: number) {
+    const w = this.ctx.world;
+    const open = !(w.getMeta(x, y, z) & 4);
+    setOpen(w, x, y, z, open);
+    this.ctx.audio.play(open ? 'door_open' : 'door_close', { x: x + 0.5, y: y + 0.5, z: z + 0.5, pitch: 1.15 });
+    this.entities.combat.swing = 0.7;
+  }
+
+  /** Levier : bascule et alimente les ouvrants voisins. */
+  private toggleLever(x: number, y: number, z: number) {
+    const w = this.ctx.world;
+    const id = w.getBlock(x, y, z), m = w.getMeta(x, y, z);
+    w.setBlock(x, y, z, id, m ^ 8, false);
+    this.ctx.audio.play('click', { x: x + 0.5, y: y + 0.5, z: z + 0.5, pitch: m & 8 ? 0.5 : 0.6 });
+    updatePowerAround(w, x, y, z, (ox, oy, oz, open) => this.ctx.audio.play(open ? 'door_open' : 'door_close', { x: ox + 0.5, y: oy + 0.5, z: oz + 0.5 }));
+    this.entities.combat.swing = 0.7;
+  }
+
+  /** Bouton : enfoncé un instant, alimente les ouvrants voisins. */
+  private pressButton(x: number, y: number, z: number, seconds: number) {
+    const w = this.ctx.world;
+    const id = w.getBlock(x, y, z), m = w.getMeta(x, y, z);
+    if (m & 8) return;
+    w.setBlock(x, y, z, id, m | 8, false);
+    this.ctx.audio.play('click', { x: x + 0.5, y: y + 0.5, z: z + 0.5, pitch: 0.6 });
+    updatePowerAround(w, x, y, z, (ox, oy, oz, open) => this.ctx.audio.play(open ? 'door_open' : 'door_close', { x: ox + 0.5, y: oy + 0.5, z: oz + 0.5 }));
+    this.host.pressButton?.(x, y, z, seconds);
+    this.entities.combat.swing = 0.7;
+  }
+
 
   /** Seaux, lait, poudre d'os, cisailles, briquet. Retourne vrai si l'action a eu lieu. */
   private useSpecial(use: string | undefined, itemId: string): boolean {

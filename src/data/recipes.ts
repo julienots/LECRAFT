@@ -32,7 +32,7 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
   shaped('furnace', 1, ['###', '# #', '###'], { '#': 'cobblestone' }),
   shaped('chest', 1, ['###', '# #', '###'], { '#': 'tag:planks' }),
   shaped('ladder', 3, ['S S', 'SSS', 'S S'], { S: 'stick' }),
-  shaped('oak_door', 3, ['##', '##', '##'], { '#': 'tag:planks' }),
+  shaped('oak_door', 3, ['##', '##', '##'], { '#': 'oak_planks' }),
   shaped('oak_fence', 3, ['#S#', '#S#'], { '#': 'oak_planks', S: 'stick' }),
   shaped('oak_slab', 6, ['###'], { '#': 'oak_planks' }),
   shaped('oak_stairs', 4, ['#  ', '## ', '###'], { '#': 'oak_planks' }),

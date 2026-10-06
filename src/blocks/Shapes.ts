@@ -42,7 +42,7 @@ function connects(id: number, kind: 'fence' | 'pane'): boolean {
   const R = BlockRegistry;
   if (R.opaque[id]) return true;
   const s = R.shape[id];
-  if (kind === 'fence') return s === SHAPES.indexOf('fence') + 1;
+  if (kind === 'fence') return s === SHAPES.indexOf('fence') + 1 || s === SHAPES.indexOf('fence_gate') + 1;
   return s === SHAPES.indexOf('pane') + 1 || R.blocks[id].key === 'glass';
 }
 
@@ -83,7 +83,8 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
     case 'cactus':
       return [[1, 0, 1, 15, 16, 15]];
     case 'plate':
-      return [[1, 0, 1, 15, 1, 15]];
+      // bit 0 : enfoncée (quelqu'un se tient dessus)
+      return [[1, 0, 1, 15, meta & 1 ? 0.5 : 1, 15]];
     case 'lantern':
       return [[5, 0, 5, 11, 7, 11], [6, 7, 6, 10, 9, 10]];
     case 'bed':
@@ -99,6 +100,28 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
     case 'custom': {
       const info = BlockRegistry.get(id).def.bedrock;
       return info?.visuals[meta]?.selection ?? info?.visuals[0]?.selection ?? [FULL];
+    }
+    case 'trapdoor': {
+      // méta : bits 0-1 orientation, bit 2 ouverte, bit 3 moitié haute
+      if (meta & 4) return [rotate([0, 0, 13, 16, 16, 16], f)];
+      return meta & 8 ? [[0, 13, 0, 16, 16, 16]] : [[0, 0, 0, 16, 3, 16]];
+    }
+    case 'fence_gate': {
+      // poteaux aux deux bouts ; fermé : deux traverses ; ouvert : traverses rabattues sur les côtés
+      const posts: Box[] = [[0, 5, 7, 2, 16, 9], [14, 5, 7, 16, 16, 9]];
+      const bars: Box[] = meta & 4 ? [[0, 6, 9, 2, 15, 15], [14, 6, 9, 16, 15, 15]] : [[2, 6, 7, 14, 9, 9], [2, 12, 7, 14, 15, 9], [6, 9, 7, 10, 12, 9]];
+      return [...posts, ...bars].map((b) => rotate(b, f));
+    }
+    case 'lever': {
+      // méta : bits 0-2 support (0 sol, 1-4 mur comme les torches), bit 3 activé
+      const on = (meta & 8) !== 0, att = meta & 7;
+      if (att === 0) return [[5, 0, 4, 11, 3, 12], on ? [7, 3, 9, 9, 11, 11] : [7, 3, 5, 9, 11, 7]];
+      return [rotate([5, 4, 0, 11, 12, 3], (att - 1) & 3), rotate(on ? [7, 3, 3, 9, 7, 11] : [7, 9, 3, 9, 13, 11], (att - 1) & 3)];
+    }
+    case 'button': {
+      const pressed = (meta & 8) !== 0, att = meta & 7, d = pressed ? 1 : 2;
+      if (att === 0) return [[5, 0, 6, 11, d, 10]];
+      return [rotate([5, 6, 0, 11, 10, d], (att - 1) & 3)];
     }
     case 'pane': {
       const out: Box[] = [[7, 0, 7, 9, 16, 9]];
@@ -119,7 +142,12 @@ export function collisionBoxes(id: number, meta: number, nb: NeighborFn): Box[] 
   switch (kind) {
     case 'torch':
     case 'plate':
+    case 'lever':
+    case 'button':
       return [];
+    case 'fence_gate':
+      // fermé : 1,5 bloc de haut comme les barrières ; ouvert : on passe
+      return meta & 4 ? [] : [rotate([0, 0, 6, 16, 24, 10], meta & 3)];
     case 'snow_layer':
       return (meta & 7) === 0 ? [] : [[0, 0, 0, 16, 2 * (meta & 7), 16]];
     case 'cactus':

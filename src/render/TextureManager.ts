@@ -129,6 +129,7 @@ const ITEM_PATHS: Record<string, string[]> = {
   compass_lich: ['item/recovery_compass_16.png', 'item/compass_16.png'],
   bow: ['item/bow.png'],
   clock: ['item/clock_00.png'],
+  lever: ['block/lever.png'],
 };
 
 export class TextureManager implements SkinProvider {
@@ -247,7 +248,7 @@ export class TextureManager implements SkinProvider {
    */
   flatIcon(block: { id: number; render: string; shape: string | null; faceTiles: number[] }): boolean {
     if (block.render === 'cross') return true;
-    if (block.shape && ['torch', 'ladder', 'door', 'pane', 'lantern', 'bed'].includes(block.shape)) return true;
+    if (block.shape && ['torch', 'ladder', 'door', 'pane', 'lantern', 'bed', 'lever'].includes(block.shape)) return true;
     if (block.render !== 'model') return false; // cubes (même transparents : verre, feuilles) en 3D
     let f = this.flatCache.get(block.id);
     if (f === undefined) {

@@ -101,6 +101,13 @@ export function hasSupport(world: World, x: number, y: number, z: number, blockI
   const below = world.getBlock(x, y - 1, z);
   if (below < 0) return true;
   if (b.supportBlocks) return b.supportBlocks.some((k) => BlockRegistry.byName(k).id === below);
+  if (b.shape === 'lever' || b.shape === 'button') {
+    // au sol : bloc plein dessous ; au mur : bloc plein derrière (comme les torches murales)
+    const att = world.getMeta(x, y, z) & 7;
+    if (att === 0) return BlockRegistry.solid[below] === 1;
+    const [dx, dz] = FACING_DIR[(att - 1) & 3];
+    return world.isSolid(x + dx, y, z + dz);
+  }
   if (b.shape === 'torch' || b.shape === 'ladder') {
     const meta = world.getMeta(x, y, z);
     // torche murale / échelle : bloc solide derrière (sens opposé à l'orientation)

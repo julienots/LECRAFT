@@ -17,7 +17,11 @@ export type ShapeKind =
   | 'snow_layer'
   | 'cactus'
   | 'plate'
-  | 'lantern' | 'custom';
+  | 'lantern' | 'custom'
+  | 'trapdoor'
+  | 'fence_gate'
+  | 'lever'
+  | 'button';
 
 export interface DropDef {
   item: string;
@@ -72,7 +76,9 @@ export interface BlockDef {
   /** Glissant (glace). */
   slippery?: boolean;
   /** Interaction (« utiliser ») : interface ou action. */
-  interact?: 'crafting' | 'furnace' | 'chest' | 'door' | 'bed' | 'tnt';
+  interact?: 'crafting' | 'furnace' | 'chest' | 'door' | 'bed' | 'tnt' | 'lever' | 'button';
+  /** Ne s'ouvre pas à la main (portes et trappes en fer : redstone seulement). */
+  redstoneOnly?: boolean;
   /** Doit reposer sur un bloc solide (plantes, torches). */
   needsSupport?: boolean;
   /** Blocs autorisés sous une plante. */

@@ -603,6 +603,72 @@ tile('wither_skeleton_skull', (t) => {
 });
 B.push({ key: 'wither_skeleton_skull', name: 'Crâne de squelette wither', textures: { all: 'wither_skeleton_skull' }, hardness: 1, render: 'model', shape: 'lantern', solid: true, sound: 'stone', color: '#2a2a2a' });
 
+// ---------- portes, trappes, portillons, levier, boutons, plaques (comme le jeu original) ----------
+const ALL_WOODS: [string, string, string][] = [
+  ['oak', 'chêne', '#9c7a4a'], ['spruce', 'sapin', '#7a5a34'], ['birch', 'bouleau', '#d7c185'], ['jungle', 'acajou', '#b4835c'],
+  ['acacia', 'acacia', '#ad5d32'], ['dark_oak', 'chêne noir', '#4a2f17'], ['cherry', 'cerisier', '#e3b3ad'], ['mangrove', 'palétuvier', '#773934'],
+  ['pale_oak', 'chêne pâle', '#e8dcd6'], ['crimson', 'carmin', '#7e3a56'], ['warped', 'biscornu', '#2b6963'], ['bamboo', 'bambou', '#c9b44c'],
+];
+const shade = (c: string, k: number) => '#' + hex(c).slice(0, 3).map((v) => Math.max(0, Math.min(255, Math.round(v * k))).toString(16).padStart(2, '0')).join('');
+const doorTop = (c: string, glass = '#c8e0e8'): P => (t) => {
+  paint.planks(t, c);
+  t.border(hex(shade(c, 0.6)));
+  t.rect(3, 2, 4, 5, hex(glass));
+  t.rect(9, 2, 4, 5, hex(glass));
+  t.rect(3, 9, 10, 1, hex(shade(c, 0.6)));
+};
+const doorBottom = (c: string): P => (t) => {
+  paint.planks(t, c);
+  t.border(hex(shade(c, 0.6)));
+  t.rect(3, 2, 10, 1, hex(shade(c, 0.6)));
+  t.rect(3, 8, 10, 1, hex(shade(c, 0.6)));
+  t.rect(12, 5, 2, 2, hex('#2a2a2a'));
+};
+const trapdoorTile = (c: string): P => (t) => {
+  paint.planks(t, c);
+  t.border(hex(shade(c, 0.6)));
+  for (const [x, y] of [[3, 3], [9, 3], [3, 9], [9, 9]]) t.rect(x, y, 4, 4, hex(shade(c, 0.75)));
+};
+for (const [w, n, c] of ALL_WOODS) {
+  const planks = `${w}_planks`;
+  if (w !== 'oak') {
+    tile(`${w}_door_top`, doorTop(c));
+    tile(`${w}_door_bottom`, doorBottom(c));
+    B.push({ key: `${w}_door`, name: `Porte en ${n}`, textures: { byMeta: [`${w}_door_bottom`, `${w}_door_top`] }, hardness: 3, tool: 'axe', render: 'model', shape: 'door', sound: 'wood', interact: 'door', needsSupport: true, drops: [{ item: `${w}_door` }], color: c });
+    shaped(`${w}_door`, `${w}_door`, 3, ['PP', 'PP', 'PP'], { P: planks });
+  }
+  tile(`${w}_trapdoor`, trapdoorTile(c));
+  B.push({ key: `${w}_trapdoor`, name: `Trappe en ${n}`, textures: { all: `${w}_trapdoor` }, hardness: 3, tool: 'axe', render: 'model', shape: 'trapdoor', sound: 'wood', interact: 'door', color: c });
+  shaped(`${w}_trapdoor`, `${w}_trapdoor`, 2, ['PPP', 'PPP'], { P: planks });
+  B.push({ key: `${w}_fence_gate`, name: `Portillon en ${n}`, textures: { all: planks }, hardness: 2, tool: 'axe', render: 'model', shape: 'fence_gate', sound: 'wood', interact: 'door', color: c });
+  shaped(`${w}_fence_gate`, `${w}_fence_gate`, 1, ['SPS', 'SPS'], { P: planks, S: 'stick' });
+  B.push({ key: `${w}_button`, name: `Bouton en ${n}`, textures: { all: planks }, hardness: 0.5, render: 'model', shape: 'button', sound: 'wood', interact: 'button', needsSupport: true, color: c });
+  shapeless(`${w}_button`, `${w}_button`, 1, [planks]);
+  if (w !== 'oak') {
+    B.push({ key: `${w}_pressure_plate`, name: `Plaque de pression en ${n}`, textures: { all: planks }, hardness: 0.5, tool: 'axe', render: 'model', shape: 'plate', sound: 'wood', needsSupport: true, color: c });
+    shaped(`${w}_pressure_plate`, `${w}_pressure_plate`, 1, ['PP'], { P: planks });
+  }
+}
+B.push({ key: 'oak_pressure_plate', name: 'Plaque de pression en chêne', textures: { all: 'oak_planks' }, hardness: 0.5, tool: 'axe', render: 'model', shape: 'plate', sound: 'wood', needsSupport: true, color: '#9c7a4a' });
+shaped('oak_pressure_plate', 'oak_pressure_plate', 1, ['PP'], { P: 'oak_planks' });
+// fer : ne s'ouvrent qu'avec la redstone (levier, bouton, plaque)
+tile('iron_door_top', (t) => { t.grain(['#d8d8d8', '#c8c8c8', '#e0e0e0'].map(hex), 0.3, 2); t.border(hex('#8a8a8a')); t.rect(3, 2, 4, 5, hex('#9a9a9a')); t.rect(9, 2, 4, 5, hex('#9a9a9a')); });
+tile('iron_door_bottom', (t) => { t.grain(['#d8d8d8', '#c8c8c8', '#e0e0e0'].map(hex), 0.3, 2); t.border(hex('#8a8a8a')); t.rect(3, 4, 10, 1, hex('#8a8a8a')); t.rect(3, 9, 10, 1, hex('#8a8a8a')); });
+B.push({ key: 'iron_door', name: 'Porte en fer', textures: { byMeta: ['iron_door_bottom', 'iron_door_top'] }, hardness: 5, tool: 'pickaxe', minTier: 1, render: 'model', shape: 'door', sound: 'metal', interact: 'door', redstoneOnly: true, needsSupport: true, drops: [{ item: 'iron_door' }], color: '#c8c8c8' });
+shaped('iron_door', 'iron_door', 3, ['II', 'II', 'II'], { I: 'iron_ingot' });
+tile('iron_trapdoor', (t) => { t.grain(['#d8d8d8', '#c8c8c8', '#e0e0e0'].map(hex), 0.3, 2); t.border(hex('#8a8a8a')); for (const [x, y] of [[3, 3], [9, 3], [3, 9], [9, 9]]) t.rect(x, y, 4, 4, hex('#9a9a9a')); });
+B.push({ key: 'iron_trapdoor', name: 'Trappe en fer', textures: { all: 'iron_trapdoor' }, hardness: 5, tool: 'pickaxe', minTier: 1, render: 'model', shape: 'trapdoor', sound: 'metal', interact: 'door', redstoneOnly: true, color: '#c8c8c8' });
+shaped('iron_trapdoor', 'iron_trapdoor', 1, ['II', 'II'], { I: 'iron_ingot' });
+// levier (socle de pierre, manche en bois) et bouton de pierre
+tile('lever_composite', (t) => {
+  t.grain(['#7a7a7a', '#8a8a8a', '#6a6a6a', '#959595'].map(hex), 0.4, 2);
+  for (let y = 0; y < 13; y++) for (let x = 6; x < 10; x++) t.set(x, y, hex(x === 6 || x === 9 ? '#5a4020' : '#8f6d3c'));
+});
+B.push({ key: 'lever', name: 'Levier', textures: { all: 'lever_composite' }, hardness: 0.5, render: 'model', shape: 'lever', sound: 'stone', interact: 'lever', needsSupport: true, color: '#8a8a8a' });
+shaped('lever', 'lever', 1, ['S', 'C'], { S: 'stick', C: 'cobblestone' });
+B.push({ key: 'stone_button', name: 'Bouton de pierre', textures: { all: 'stone' }, hardness: 0.5, render: 'model', shape: 'button', sound: 'stone', interact: 'button', needsSupport: true, color: '#8a8a8a' });
+shapeless('stone_button', 'stone_button', 1, ['stone']);
+
 export const EXTRA_BLOCKS: BlockDef[] = B;
 export const EXTRA_ITEMS: ItemDef[] = I;
 export const EXTRA_RECIPES = R;

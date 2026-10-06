@@ -53,6 +53,7 @@ import { Mob } from '../entities/Mob';
 import { ScriptHost } from '../scripting/ScriptHost';
 import { DroppedItemModels } from '../render/DroppedItems';
 import { ShadowMap } from '../render/ShadowMap';
+import { updatePowerAround } from '../world/Redstone';
 
 export interface WorldState {
   version: number;
@@ -223,6 +224,7 @@ export class Session implements GameContext {
       fireLit: (x, y, z) => this.noteFire(x, y, z),
       trade: (v) => openTrades(game, this, v),
       throwEye: () => void this.throwEye(),
+      pressButton: (x, y, z, seconds) => this.buttons.push({ x, y, z, t: seconds }),
     });
     this.fovCurrent = game.settings.fov;
     // événements joueur
@@ -592,6 +594,7 @@ export class Session implements GameContext {
     }
     if (p.swimming && Math.random() < dt * 12) this.particles.burst('water', p.x, p.y + 0.3, p.z, 1);
     this.fallingLeaves(dt);
+    this.updateRedstone(dt);
     this.interaction.update(dt, remaining);
     // ticks fixes 20 Hz
     this.tickAcc += dt;
@@ -877,7 +880,6 @@ export class Session implements GameContext {
     const x = Math.floor(p.x), y = Math.floor(p.y + 0.05), z = Math.floor(p.z);
     if (this.world.getBlock(x, y, z) !== B.STONE_PRESSURE_PLATE) return;
     this.plateTimer = 1;
-    this.audio.play('click', { x, y, z, pitch: 0.6 });
     for (let dy = -4; dy <= -1; dy++)
       for (let dz = -2; dz <= 2; dz++)
         for (let dx = -2; dx <= 2; dx++) if (this.world.getBlock(x + dx, y + dy, z + dz) === B.TNT) this.explosions.prime(this, x + dx, y + dy, z + dz, 1 + Math.random());
@@ -1077,6 +1079,58 @@ export class Session implements GameContext {
       return;
     }
     this.game.showDeath();
+  }
+
+  /** Boutons enfoncés (relâchés après un délai). */
+  private buttons: { x: number; y: number; z: number; t: number }[] = [];
+  /** Plaques de pression actuellement enfoncées (« x,y,z »). */
+  private platesOn = new Set<string>();
+  private redstoneTimer = 0;
+
+  /** Boutons qui se relâchent et plaques de pression enfoncées par le joueur, les créatures (et les objets sur le bois). */
+  private updateRedstone(dt: number) {
+    const w = this.world;
+    const sound = (x: number, y: number, z: number, open: boolean) => this.audio.play(open ? 'door_open' : 'door_close', { x: x + 0.5, y: y + 0.5, z: z + 0.5 });
+    for (let i = this.buttons.length - 1; i >= 0; i--) {
+      const b = this.buttons[i];
+      b.t -= dt;
+      if (b.t > 0) continue;
+      this.buttons.splice(i, 1);
+      const id = w.getBlock(b.x, b.y, b.z);
+      if (id <= 0 || BlockRegistry.get(id).shape !== 'button') continue;
+      w.setBlock(b.x, b.y, b.z, id, w.getMeta(b.x, b.y, b.z) & ~8, false);
+      this.audio.play('click', { x: b.x + 0.5, y: b.y + 0.5, z: b.z + 0.5, pitch: 0.5 });
+      updatePowerAround(w, b.x, b.y, b.z, sound);
+    }
+    this.redstoneTimer -= dt;
+    if (this.redstoneTimer > 0) return;
+    this.redstoneTimer = 0.1;
+    const on = new Set<string>();
+    const check = (x: number, y: number, z: number, item: boolean) => {
+      const bx = Math.floor(x), by = Math.floor(y + 0.05), bz = Math.floor(z);
+      const id = w.getBlock(bx, by, bz);
+      if (id <= 0) return;
+      const def = BlockRegistry.get(id);
+      if (def.shape !== 'plate' || (item && def.sound !== 'wood')) return;
+      on.add(`${bx},${by},${bz}`);
+    };
+    if (!this.player.dead) check(this.player.x, this.player.y, this.player.z, false);
+    for (const e of this.entities.entities) {
+      if (e.removed || e.distToPlayer > 48) continue;
+      if (e.kind === 'mob') check(e.x, e.y, e.z, false);
+      else if (e.kind === 'item') check(e.x, e.y, e.z, true);
+    }
+    const toggle = (k: string, pressed: boolean) => {
+      const [x, y, z] = k.split(',').map(Number);
+      const id = w.getBlock(x, y, z);
+      if (id <= 0 || BlockRegistry.get(id).shape !== 'plate') return;
+      w.setBlock(x, y, z, id, pressed ? w.getMeta(x, y, z) | 1 : w.getMeta(x, y, z) & ~1, false);
+      this.audio.play('click', { x: x + 0.5, y: y + 0.5, z: z + 0.5, pitch: pressed ? 0.6 : 0.5 });
+      updatePowerAround(w, x, y, z, sound);
+    };
+    for (const k of on) if (!this.platesOn.has(k)) toggle(k, true);
+    for (const k of this.platesOn) if (!on.has(k)) toggle(k, false);
+    this.platesOn = on;
   }
 
   /** Feuilles qui tombent des arbres autour du joueur (ambiance). */

@@ -27,7 +27,8 @@
     "e2e:mobs": "node scripts/e2e-mobs.mjs",
     "e2e:movement": "node scripts/e2e-movement.mjs",
     "e2e:end": "node scripts/e2e-end.mjs",
-    "e2e:wither": "node scripts/e2e-wither.mjs"
+    "e2e:wither": "node scripts/e2e-wither.mjs",
+    "e2e:doors": "node scripts/e2e-doors.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
