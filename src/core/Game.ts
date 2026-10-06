@@ -18,6 +18,7 @@ import { SaveManager, type WorldMeta } from '../save/SaveManager';
 import { InputState } from '../input/InputState';
 import { TouchController } from '../input/TouchController';
 import { KeyboardMouse } from '../input/KeyboardMouse';
+import { GamepadInput } from '../input/Gamepad';
 import { UIManager } from '../ui/UIManager';
 import { HUD } from '../ui/HUD';
 import { Platform } from '../platform/Platform';
@@ -46,6 +47,7 @@ export class Game {
   readonly hud: HUD;
   readonly touch: TouchController;
   readonly keyboard: KeyboardMouse;
+  readonly gamepad: GamepadInput;
   readonly platform = new Platform();
   private loop: GameLoop;
   private adaptive: AdaptiveQuality;
@@ -78,12 +80,18 @@ export class Game {
     this.hud.onPause = () => this.pause();
     this.hud.onInventory = () => this.input.push('inventory');
     this.hud.onChat = () => this.openChat('');
+    this.hud.onView = () => this.input.push('perspective');
     this.chat = new ChatUI(this, this.hud.root);
     this.hud.stats = () => this.debugText();
     this.touch = new TouchController(root.querySelector('#hud') as HTMLElement, this.input, this.settings);
     this.touch.setVisible(false);
     this.keyboard = new KeyboardMouse(canvas, this.input, this.settings);
     this.keyboard.onBack = () => this.back();
+    this.gamepad = new GamepadInput(this.input, this.settings, {
+      inGame: () => this.state === 'playing' && !this.inventoryUI && !this.formScreen && this.ui.size === 0 && !this.chat.isOpen,
+      flying: () => !!this.session?.player.body.flying,
+      back: () => this.back(),
+    });
     this.loop = new GameLoop((dt) => this.frame(dt));
     this.loop.fpsCap = this.settings.fpsCap;
     this.adaptive = new AdaptiveQuality((dir) => this.adjustQuality(dir));
@@ -512,11 +520,12 @@ export class Game {
   }
 
   private frame(dt: number) {
+    this.gamepad.poll(dt);
     if (this.state === 'playing' || this.state === 'paused') {
       const s = this.session!;
       s.update(dt);
       if (this.state === 'playing') {
-        this.renderer.render({ scene: s.held.scene, camera: s.held.camera });
+        this.renderer.render(s.perspective === 0 ? { scene: s.held.scene, camera: s.held.camera } : undefined);
         this.adaptive.update(dt, this.settings.fpsCap);
       }
       // en pause : rendu figé (aucune simulation, aucun rendu → économie batterie)

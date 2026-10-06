@@ -522,14 +522,39 @@ s'accroupir, double appui sur avant = sprint ; on peut glisser d'une flèche à 
 
 **Clavier/souris** : ZQSD/WASD, Espace, Maj (accroupi), Ctrl (sprint), clic gauche (miner/attaquer),
 clic droit (utiliser), molette/1–9 (hotbar), E (inventaire), Q/G (jeter), T ou Entrée (chat),
-/ (commande), F3 (diagnostic), Échap (retour).
+/ (commande), F3 (diagnostic), **F5 (vue)**, Échap (retour).
+
+**Vues (comme le jeu de référence)** : F5, le bouton 👁 en haut à droite ou la croix ↑ de la manette
+font défiler **1re personne → 3e personne de dos → 3e personne de face**. En 3e personne, le modèle
+du joueur est affiché (skin `entity/player/wide/steve.png` du pack de ressources si présent, sinon
+skin générée), avec l'objet tenu ; la caméra se place à 4 blocs et se rapproche devant un mur. Le viseur
+est masqué en vue de face ; les interactions visent toujours depuis les yeux du joueur.
+
+**Manette** (Xbox, PlayStation, manettes Bluetooth Android — API Gamepad, disposition standard) :
+détectée dès le premier appui ; les commandes tactiles disparaissent (elles reviennent au premier
+toucher de l'écran). Disposition de l'édition console/mobile :
+
+| Commande | En jeu | Menus / inventaire |
+|---|---|---|
+| Stick gauche | se déplacer (clic : sprint) | déplacer le curseur |
+| Stick droit | regarder (clic : s'accroupir ; maintenu en vol : descendre) | faire défiler |
+| A | sauter (double appui : voler) | sélectionner / prendre / poser |
+| B | lâcher l'objet | retour / fermer |
+| X | utiliser | prendre la moitié / poser un seul objet |
+| Y | inventaire | déplacement rapide |
+| RT / LT | miner-attaquer / utiliser-poser | — |
+| LB / RB | objet précédent / suivant | onglets (molette) |
+| Croix | ↑ vue, → chat, ↓ lâcher l'objet | déplacement précis du curseur |
+| Start / Select | pause / diagnostic | retour |
+
+La sensibilité et l'inversion de l'axe vertical des Paramètres s'appliquent aussi au stick droit.
 
 ---
 
 ## 14. Tests
 
 ```bash
-npm test                         # 44 tests unitaires : génération déterministe, biomes, grottes,
+npm test                         # 46 tests unitaires : génération déterministe, biomes, grottes,
                                  # mesher/lumière, physique, liquides, inventaire, grilles 2x2/3x3,
                                  # fourneau, formes/orientations, drops, butin, survie, police TrueType,
                                  # sauvegarde/corruption (fake-indexeddb)
@@ -545,6 +570,9 @@ npm run e2e:addons               # 33 vérifications : import d'un .mcaddon gén
                                  # JSON commenté), blocs/objets/recettes/créature/fonctions d'add-on,
                                  # textures remplacées, commandes, chat, triches, croix directionnelle,
                                  # désactivation (identifiants conservés)
+npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
+                                 # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,
+                                 # lâcher), vues 1re/3e personne (F5, croix ↑), caméra contre un mur
 npm run screens                  # captures 16:9, 20:9, petit écran, tablette, portrait
 npm run perf                     # coûts CPU par frame
 ```

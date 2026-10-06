@@ -114,6 +114,18 @@ export const SKINS: Record<string, SkinSpec> = {
   },
   zombie: humanSkin({ skin: ['#4f8a3a', '#5a9a44', '#46803a'], shirt: ['#2f8f8f', '#2a8080', '#349a9a'], pants: ['#3a3a8f', '#34348a', '#40409a'], shoes: '#3a3a3a', eyes: '#1a2a1a', mouth: '#2a4a20' }),
   zombie_chief: humanSkin({ skin: ['#4a7a34', '#56883e', '#406e30'], shirt: ['#8a2a2a', '#7a2424', '#9a3030'], pants: ['#2a2030', '#241c2a', '#30263a'], shoes: '#1a1a1a', eyes: '#ff6020', mouth: '#2a4a20' }),
+  player: {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      humanSkin({ skin: ['#b4846d', '#aa7d66', '#bd8b72'], shirt: ['#00a8a8', '#009c9c', '#00b2b2'], pants: ['#463aa5', '#3f3496', '#4b40ad'], shoes: '#5a5a5a', eyes: '#49377a', mouth: '#8a4c3d' }).paint(ctx, rng);
+      const hair = ['#2f1f0f', '#3b2812', '#28190b'];
+      box(ctx, 0, 0, 8, 8, 8, (f, _x, y) => (f === 'top' || (f !== 'front' && f !== 'bottom' && y < 2) || (f === 'back' && y < 6) || (f === 'front' && y < 2) ? pick(rng, hair) : null));
+      // bras et jambe gauches (disposition 64x64) : copies des côtés droits
+      ctx.drawImage(ctx.canvas, 40, 16, 16, 16, 32, 48, 16, 16);
+      ctx.drawImage(ctx.canvas, 0, 16, 16, 16, 16, 48, 16, 16);
+    },
+  },
   skeleton: {
     w: 64,
     h: 32,

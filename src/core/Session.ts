@@ -28,6 +28,7 @@ import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { WorldMeta } from '../save/SaveManager';
 import type { ItemStack } from '../inventory/Item';
 import { createShadowTexture } from '../render/MobModels';
+import { PlayerAvatar } from '../render/PlayerAvatar';
 import { clamp } from '../util/math';
 import type { Boss } from '../entities/Boss';
 import { Scoreboard, type ScoreboardSnapshot } from '../scripting/Scoreboard';
@@ -78,6 +79,9 @@ export class Session implements GameContext {
   readonly scene: THREE.Scene;
   readonly shadowTexture: THREE.Texture;
   private iconTex = new Map<string, THREE.Texture>();
+  /** Vue : 0 = 1re personne, 1 = 3e personne arrière, 2 = 3e personne avant (F5). */
+  perspective: 0 | 1 | 2 = 0;
+  private avatar: PlayerAvatar | null = null;
   private tickAcc = 0;
   private autosaveTimer = 60;
   private progressTimer = 1;
@@ -455,6 +459,10 @@ export class Session implements GameContext {
       if (ev === 'pause') game.pause();
       else if (ev === 'inventory') game.openInventory('hand');
       else if (ev === 'debug') game.hud.toggleDebug();
+      else if (ev === 'perspective') {
+        this.perspective = ((this.perspective + 1) % 3) as 0 | 1 | 2;
+        document.documentElement.classList.toggle('view-front', this.perspective === 2);
+      }
       else if (ev === 'chat') game.openChat('');
       else if (ev === 'command') game.openChat('/');
       else if (ev === 'drop') this.dropSelected(false);
@@ -651,6 +659,7 @@ export class Session implements GameContext {
     const bob = s.viewBobbing && p.body.onGround ? Math.sin(this.controller.bobPhase * 2) * 0.04 * Math.min(1, Math.hypot(p.body.vx, p.body.vz) / 4) : 0;
     cam.position.set(p.x, p.y + p.eyeHeight + bob - (p.dead ? 1.2 : 0), p.z);
     cam.rotation.set(p.pitch, p.yaw, p.dead ? 0.6 : 0);
+    if (this.perspective && !p.dead) this.placeThirdPersonCamera(cam);
     const targetFov = s.fov + (p.sprinting ? 8 : 0) - (this.interaction.bowCharge > 0 ? this.interaction.bowCharge * 10 : 0);
     this.fovCurrent += (targetFov - this.fovCurrent) * Math.min(1, dt * 8);
     if (Math.abs(cam.fov - this.fovCurrent) > 0.05) {
@@ -693,6 +702,16 @@ export class Session implements GameContext {
     this.held.setItem(held);
     const br = Math.max(0.15, Math.pow(Math.max((light.sky / 15) * this.dayCycle.daylight, light.block / 15), 1.2));
     this.held.update(cam.aspect, this.entities.combat.swing, this.controller.bobPhase * 2, Math.min(1, Math.hypot(p.body.vx, p.body.vz) / 4), br, p.sneaking);
+    // modèle du joueur (vues à la 3e personne)
+    if (this.perspective && !this.avatar) {
+      this.avatar = new PlayerAvatar(this.shadowTexture, this.skins, (id) => this.iconTexture(id));
+      this.scene.add(this.avatar.group);
+    }
+    this.avatar?.update({
+      x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, phase: this.controller.bobPhase, speed: Math.hypot(p.body.vx, p.body.vz),
+      swing: this.entities.combat.swing, sneaking: p.sneaking, held, light: br, hurt: p.hurtFlash > 0,
+      visible: this.perspective !== 0 && !p.dead && !p.effects.level('invisibility'),
+    });
     // audio
     this.audio.setListener(p.x, p.y + p.eyeHeight, p.z, p.yaw);
     const underground = light.sky < 5 && p.y < SEA_LEVEL + 4;
@@ -755,8 +774,37 @@ export class Session implements GameContext {
     this.hud.showCompass(r.x, r.z, target);
   }
 
+  /** Recule (ou avance, vue de face) la caméra de 4 blocs, sans traverser les blocs. */
+  private placeThirdPersonCamera(cam: THREE.PerspectiveCamera) {
+    const p = this.player;
+    const cp = Math.cos(p.pitch);
+    const sign = this.perspective === 1 ? 1 : -1;
+    // direction depuis les yeux vers la caméra (opposée au regard en vue arrière)
+    const dx = Math.sin(p.yaw) * cp * sign, dy = -Math.sin(p.pitch) * sign, dz = Math.cos(p.yaw) * cp * sign;
+    const ox = cam.position.x, oy = cam.position.y, oz = cam.position.z;
+    let d = 4;
+    // plusieurs rayons légèrement décalés (le plan proche de la caméra ne doit pas entrer dans un mur)
+    const w = this.world;
+    const solid = (x: number, y: number, z: number) => BlockRegistry.solid[Math.max(0, w.getBlock(Math.floor(x), Math.floor(y), Math.floor(z)))] === 1;
+    for (let t = 0.3; t <= 4.25; t += 0.05) {
+      const x = ox + dx * t, y = oy + dy * t, z = oz + dz * t;
+      if (solid(x, y, z) || solid(x + 0.12, y + 0.12, z + 0.12) || solid(x - 0.12, y - 0.12, z - 0.12) || solid(x + 0.12, y - 0.12, z - 0.12) || solid(x - 0.12, y + 0.12, z + 0.12)) {
+        d = Math.max(0, t - 0.3);
+        break;
+      }
+    }
+    cam.position.set(ox + dx * d, oy + dy * d, oz + dz * d);
+    if (this.perspective === 2) cam.rotation.set(-p.pitch, p.yaw + Math.PI, 0);
+  }
+
   dispose() {
     this.scripts?.dispose();
+    document.documentElement.classList.remove('view-front');
+    if (this.avatar) {
+      this.scene.remove(this.avatar.group);
+      this.avatar.dispose();
+      this.avatar = null;
+    }
     this.scripts = null;
     this.chunks.dispose();
     this.entities.dispose();

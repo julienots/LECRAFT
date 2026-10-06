@@ -84,6 +84,7 @@ const VANILLA: Record<string, VanillaModel> = {
   zombie: humanoid('zombie', 64, 64, 4),
   zombie_chief: humanoid('zombie_chief', 64, 64, 4),
   skeleton: humanoid('skeleton', 64, 32, 2),
+  player: playerModel(),
   spider: spider('spider'),
   cave_spider: spider('cave_spider'),
   slime: {
@@ -109,6 +110,23 @@ function humanoid(skin: string, texW: number, texH: number, limb: number): Vanil
       P([40, 16], [-1, -2, lo, limb, 12, limb], [5, 2, 0], { anim: 'armL', mirror: true }),
       P([0, 16], [lo, 0, lo, limb, 12, limb], [limb === 4 ? -1.9 : -2, 12, 0], { anim: 'legR' }),
       P([0, 16], [lo, 0, lo, limb, 12, limb], [limb === 4 ? 1.9 : 2, 12, 0], { anim: 'legL', mirror: true }),
+    ],
+  };
+}
+
+/** Joueur (vue à la 3e personne) : skin 64x64 avec bras/jambe gauches distincts et seconde couche. */
+function playerModel(): VanillaModel {
+  const o = (uv: [number, number], box: CubePart['box'], inflate: number) => P(uv, box, [0, 0, 0], { inflate });
+  const limb: CubePart['box'] = [-2, 0, -2, 4, 12, 4];
+  return {
+    skin: 'player', texW: 64, texH: 64,
+    parts: [
+      P([0, 0], [-4, -8, -4, 8, 8, 8], [0, 0, 0], { anim: 'head', children: [o([32, 0], [-4, -8, -4, 8, 8, 8], 0.5)] }),
+      P([16, 16], [-4, 0, -2, 8, 12, 4], [0, 0, 0], { children: [o([16, 32], [-4, 0, -2, 8, 12, 4], 0.25)] }),
+      P([40, 16], [-3, -2, -2, 4, 12, 4], [-5, 2, 0], { anim: 'armR', children: [o([40, 32], [-3, -2, -2, 4, 12, 4], 0.25)] }),
+      P([32, 48], [-1, -2, -2, 4, 12, 4], [5, 2, 0], { anim: 'armL', children: [o([48, 48], [-1, -2, -2, 4, 12, 4], 0.25)] }),
+      P([0, 16], limb, [-1.9, 12, 0], { anim: 'legR', children: [o([0, 32], limb, 0.25)] }),
+      P([16, 48], limb, [1.9, 12, 0], { anim: 'legL', children: [o([0, 48], limb, 0.25)] }),
     ],
   };
 }

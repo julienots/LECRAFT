@@ -60,7 +60,10 @@ export class KeyboardMouse {
       if (code === 'KeyE' || code === 'KeyI') this.input.push('inventory');
       else if (code === 'ShiftLeft' || code === 'ShiftRight') this.input.sneak = true;
       else if (code === 'ControlLeft') this.input.sprint = true;
-      else if (code === 'F3') {
+      else if (code === 'F5') {
+        e.preventDefault();
+        this.input.push('perspective');
+      } else if (code === 'F3') {
         e.preventDefault();
         this.input.push('debug');
       } else if (code === 'KeyG' || code === 'KeyQ') this.input.push('drop');

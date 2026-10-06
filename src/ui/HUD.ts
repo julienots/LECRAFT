@@ -50,6 +50,7 @@ export class HUD implements HudApi {
   onPause: () => void = () => {};
   onInventory: () => void = () => {};
   onChat: () => void = () => {};
+  onView: () => void = () => {};
   private titleEl: HTMLElement;
   private subtitleEl: HTMLElement;
   private actionbarEl: HTMLElement;
@@ -108,6 +109,12 @@ export class HUD implements HudApi {
       e.preventDefault();
       this.onChat();
     });
+    const viewBtn = el('button', { class: 'btn-view', 'aria-label': 'Changer de vue' }, '👁');
+    viewBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.onView();
+    });
     this.titleEl = el('div', { class: 'mc-title-big' });
     this.subtitleEl = el('div', { class: 'mc-subtitle' });
     this.actionbarEl = el('div', { class: 'mc-actionbar' });
@@ -131,6 +138,7 @@ export class HUD implements HudApi {
       this.debug,
       pause,
       chatBtn,
+      viewBtn,
       el('div', { class: 'mc-titles' }, this.titleEl, this.subtitleEl),
       this.actionbarEl,
       this.coordsEl,

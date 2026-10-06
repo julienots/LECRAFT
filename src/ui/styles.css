@@ -333,6 +333,8 @@ html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }
 .chat-sugg-item:first-child { color: #ffff55; }
 .chat-help { color: #a0a0a0; font-size: calc(var(--gs) * 6px); text-shadow: 1px 1px 0 #000; }
 .btn-chat { position: absolute; top: calc(10px + var(--safe-top)); right: calc(68px + var(--safe-right)); width: 48px; height: 48px; border-radius: 10px; background: #0008; border: 2px solid #fff4; pointer-events: auto; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+.btn-view { position: absolute; top: calc(10px + var(--safe-top)); right: calc(124px + var(--safe-right)); width: 48px; height: 48px; border-radius: 10px; background: #0008; border: 2px solid #fff4; pointer-events: auto; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+.view-front .crosshair { display: none; }
 .mc-titles { position: absolute; left: 0; right: 0; top: 30%; text-align: center; pointer-events: none; color: #fff; }
 .mc-title-big { font-size: calc(var(--gs) * 32px); line-height: 1.1; text-shadow: calc(var(--gs) * 4px) calc(var(--gs) * 4px) 0 #3f3f3f; }
 .mc-subtitle { font-size: calc(var(--gs) * 16px); text-shadow: calc(var(--gs) * 2px) calc(var(--gs) * 2px) 0 #3f3f3f; }
@@ -356,3 +358,9 @@ html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }
 .script-form .mc-btn { min-height: calc(var(--gs) * 20px); height: auto; }
 .script-form .mc-body > * { flex-shrink: 0; }
 .script-form .mc-label.left { width: calc(var(--gs) * 260px); }
+
+/* manette : curseur virtuel des menus, commandes tactiles masquées */
+.gp-cursor { position: fixed; left: 0; top: 0; width: 20px; height: 26px; z-index: 10000; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 13' shape-rendering='crispEdges'%3E%3Cpath d='M0 0v11l3-3 2 5 2-1-2-4h4z' fill='%23fff' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") no-repeat 0 0 / contain; }
+.gp-cursor.hidden { display: none; }
+html.gamepad .touch-layer, html.gamepad .btn-pause, html.gamepad .btn-chat, html.gamepad .btn-view, html.gamepad .mc-invbtn { display: none !important; }

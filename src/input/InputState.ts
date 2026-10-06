@@ -14,9 +14,9 @@ export class InputState {
   /** Événements ponctuels (consommés par le jeu). */
   private queue: string[] = [];
   /** Source de la dernière entrée (pour l'interface). */
-  mode: 'touch' | 'keyboard' = 'touch';
+  mode: 'touch' | 'keyboard' | 'gamepad' = 'touch';
 
-  push(ev: 'use' | 'attackTap' | 'inventory' | 'pause' | 'drop' | 'debug' | `slot:${number}` | 'slotNext' | 'slotPrev' | 'chat' | 'command') {
+  push(ev: 'use' | 'attackTap' | 'inventory' | 'pause' | 'drop' | 'debug' | `slot:${number}` | 'slotNext' | 'slotPrev' | 'chat' | 'command' | 'perspective') {
     this.queue.push(ev);
   }
   consume(): string[] {

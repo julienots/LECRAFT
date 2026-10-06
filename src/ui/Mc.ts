@@ -74,7 +74,11 @@ export function mcSlider(label: (v: number) => string, min: number, max: number,
   s.addEventListener('pointerdown', (e) => {
     e.stopPropagation();
     drag = true;
-    s.setPointerCapture(e.pointerId);
+    try {
+      s.setPointerCapture(e.pointerId);
+    } catch {
+      /* pointeur simulé (manette) */
+    }
     s.classList.add('active');
     setFrom(e.clientX);
   });
