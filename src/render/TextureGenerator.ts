@@ -764,3 +764,10 @@ export function drawTiles(): Tile[] {
 export function hasPainter(name: string) {
   return !!painters[name];
 }
+
+/** Ajoute (ou remplace) le dessin d'une tuile (blocs supplémentaires). */
+export function registerPainter(name: string, fn: Painter) {
+  painters[name] = fn;
+}
+/** Outils de dessin réutilisables par les définitions de blocs supplémentaires. */
+export const paint = { stone, planks, logSide, logTop, leaves, ore, mineral, wool, bricksT, cobble, flowerT, sapling, ramp, mix, mul };

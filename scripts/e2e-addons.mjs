@@ -370,7 +370,7 @@ try {
   });
   await page.reload();
   await page.waitForFunction(() => window.__lecraft?.state === 'menu');
-  const off = await G(() => { let ruby = true; try { window.__lecraft.debug.blockId('test:ruby_block'); } catch { ruby = false; } let unknown = false; try { window.__lecraft.debug.blockId(`unknown_block_${131}`); unknown = true; } catch {} return { ruby, unknown }; });
+  const off = await G(() => { let ruby = true; try { window.__lecraft.debug.blockId('test:ruby_block'); } catch { ruby = false; } let unknown = false; try { const rid = JSON.parse(localStorage.getItem('lecraft.addonBlockIds'))['test:ruby_block']; unknown = window.__lecraft.debug.registries.blocks.blocks[rid]?.key === `unknown_block_${rid}`; } catch {} return { ruby, unknown }; });
   check('Add-on désactivé : contenu retiré, identifiant conservé en « bloc inconnu »', !off.ruby && off.unknown, JSON.stringify(off));
 } catch (e) {
   check('Exception', false, String(e?.stack ?? e));

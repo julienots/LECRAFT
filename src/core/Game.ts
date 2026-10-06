@@ -118,7 +118,7 @@ export class Game {
       this.addonResult = addons;
       for (const [k, v] of addons.functions) this.addonFunctions.set(k, v);
       this.addonTickFunctions.push(...addons.tickFunctions);
-      if (pack || addons.images.size) this.textures.applyPack(pack, addons.images);
+      this.textures.applyPack(pack, addons.images);
     } catch (e) {
       console.error('Chargement des add-ons', e);
       if (pack) this.textures.applyPack(pack);

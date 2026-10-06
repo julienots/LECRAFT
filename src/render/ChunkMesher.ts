@@ -219,7 +219,7 @@ export class ChunkMesher {
             else if (packed !== first) uniform = false;
           }
           const tint = this.tintOf(inp, b, x, z);
-          mk[m] = tile | (flags << 8) | (layer << 16) | ((uniform ? 1 : 0) << 17);
+          mk[m] = tile | (flags << 12) | (layer << 20) | ((uniform ? 1 : 0) << 21); // tuile sur 12 bits (atlas 32×32)
           ml[m] = uniform ? first : -2 - m; // valeurs uniques pour empêcher la fusion
           mt[m] = tint;
         }
@@ -233,7 +233,7 @@ export class ChunkMesher {
             continue;
           }
           const light = ml[m], tint = mt[m];
-          const canMerge = (key >> 17) & 1;
+          const canMerge = (key >> 21) & 1;
           let w = 1;
           if (canMerge) while (u + w < U && mk[m + w] === key && ml[m + w] === light && mt[m + w] === tint) w++;
           let h = 1;
@@ -261,9 +261,9 @@ export class ChunkMesher {
   }
 
   private emitFace(d: number, axis: number, uAxis: number, vAxis: number, s: number, u: number, v: number, w: number, h: number, key: number, m: number, tint: number, sign: number) {
-    const tile = key & 255;
-    const flags = (key >> 8) & 255;
-    const layer = (key >> 16) & 1;
+    const tile = key & 4095;
+    const flags = (key >> 12) & 255;
+    const layer = (key >> 20) & 1;
     const builder = layer ? this.trans : this.opaque;
     const mc = this.maskCorner;
     const plane = s + (sign > 0 ? 1 : 0);

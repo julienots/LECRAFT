@@ -6,6 +6,8 @@ import { makeStack } from '../inventory/Inventory';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { MOB_DEFS } from '../data/mobs';
 import { hooks } from '../scripting/Hooks';
+import { TileRegistry } from '../render/TileRegistry';
+import { ADDON_BLOCKS, ADDON_TILES } from '../addons/AddonRegistry';
 
 /**
  * Outils de diagnostic (console / tests automatisés). Exposés sur window.__lecraft.debug.
@@ -55,7 +57,7 @@ export class DebugTools {
 
   /** Accès en lecture aux registres et aux crochets de script (tests automatisés). */
   get registries() {
-    return { blocks: BlockRegistry, items: ItemRegistry, mobs: MOB_DEFS, hooks };
+    return { blocks: BlockRegistry, items: ItemRegistry, mobs: MOB_DEFS, hooks, tiles: TileRegistry, addonBlocks: ADDON_BLOCKS, addonTiles: ADDON_TILES };
   }
 
   setTime(t: number) {

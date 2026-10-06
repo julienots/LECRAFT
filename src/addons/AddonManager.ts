@@ -33,6 +33,7 @@ import { geometryToModel, readGeometries, type BedrockGeo } from './BedrockGeome
 import { resolveItem, LANG } from '../commands/Commands';
 import { PROJECTILE_DEFS } from '../entities/Projectile';
 import { parseMcStructure } from './McStructure';
+import { EXTRA_BLOCKS, EXTRA_ITEMS, EXTRA_RECIPES, EXTRA_SMELTING, EXTRA_TAGS } from '../data/vanillaExtra';
 
 // ---------- stockage ----------
 
@@ -188,6 +189,36 @@ function findPacks(vfs: VFS): Pack[] {
   return packs;
 }
 
+/** Blocs supplémentaires du jeu de référence : identifiants stables (comme les add-ons). */
+function addExtraBlocks(ids: Record<string, number>, byId: Map<number, BlockDef>, next: number): number {
+  for (const d of EXTRA_BLOCKS) {
+    if (ids[d.key] === undefined) {
+      if (next >= MAX_BLOCKS) break;
+      ids[d.key] = next++;
+    }
+    byId.set(ids[d.key], d);
+  }
+  return next;
+}
+
+/** Objets, tags et recettes des blocs/objets supplémentaires (après l'enregistrement des blocs). */
+function registerExtraContent(byId: Map<number, BlockDef>) {
+  for (const d of byId.values()) if (EXTRA_BLOCKS.includes(d) && !ItemRegistry.has(d.key) && BlockRegistry.has(d.key)) ItemRegistry.register({ key: d.key, name: d.name, icon: { block: d.key }, place: d.key, tab: d.render === 'cross' ? 'nature' : 'building' });
+  for (const it of EXTRA_ITEMS) if (!ItemRegistry.has(it.key)) ItemRegistry.register(it);
+  for (const [t, list] of Object.entries(EXTRA_TAGS)) {
+    const cur = (RecipeRegistry.tags as Record<string, string[]>)[t];
+    if (cur) for (const k of list) if (!cur.includes(k) && ItemRegistry.has(k)) cur.push(k);
+  }
+  for (const r of EXTRA_RECIPES) {
+    try {
+      RecipeRegistry.register(r);
+    } catch {
+      /* ingrédient indisponible */
+    }
+  }
+  for (const r of EXTRA_SMELTING) if (!RecipeRegistry.smeltingFor(r.input) && ItemRegistry.has(r.input) && ItemRegistry.has(r.result)) RecipeRegistry.registerSmelting(r);
+}
+
 /** Lit le module de script d'un pack (point d'entrée, fichiers .js, versions des modules). */
 function readScriptPack(vfs: VFS, root: string, name: string): ScriptPack | null {
   const m = vfs.json(root + 'manifest.json') as { modules?: { type?: string; entry?: string }[]; dependencies?: { module_name?: string; version?: string | number[] }[] } | undefined;
@@ -331,10 +362,32 @@ function val(c: unknown, d = 0): number {
 
 const TAG_ALIASES: Record<string, string> = { planks: 'tag:planks', logs: 'tag:logs', wool: 'tag:wool', coals: 'tag:coals', stone_tool_materials: 'tag:stone_tool', stone_crafting_materials: 'tag:stone_tool' };
 
+/** Anciennes valeurs de données des colorants (édition mobile). */
+const DYE_BY_DATA = ['black', 'red', 'green', 'brown', 'blue', 'purple', 'cyan', 'light_gray', 'gray', 'pink', 'lime', 'yellow', 'light_blue', 'magenta', 'orange', 'white'];
+/** Anciens identifiants d'objets → identifiants actuels. */
+const ITEM_ALIASES: Record<string, string> = { netherbrick: 'nether_brick', speckled_melon: 'glistering_melon_slice', melon_block: 'melon', end_bricks: 'end_stone_bricks', snow: 'snow_block', reeds: 'sugar_cane', golden_rail: 'iron_ingot', red_nether_brick: 'red_nether_bricks', quartz_ore: 'quartz', magma_block: 'magma', slime: 'slime_block', web: 'string', noteblock: 'noteblock', carpet: 'white_wool', stained_glass: 'white_stained_glass', concrete: 'white_concrete', stained_hardened_clay: 'white_terracotta', hardened_clay: 'terracotta', fish: 'cooked_beef', lit_pumpkin: 'jack_o_lantern' };
+
+/** Ingrédients introuvables lors du dernier chargement (diagnostic). */
+const missingIngredients = new Map<string, number>();
+
 /** Ingrédient Bedrock → clé d'objet ou tag du jeu (null si inconnu). */
 function ingredient(x: unknown): string | null {
+  const r = ingredient0(x);
+  if (!r && x) {
+    const name = typeof x === 'string' ? x : String((x as { item?: string; tag?: string }).item ?? `#${(x as { tag?: string }).tag}`);
+    missingIngredients.set(name, (missingIngredients.get(name) ?? 0) + 1);
+  }
+  return r;
+}
+
+function ingredient0(x: unknown): string | null {
   if (!x) return null;
-  if (typeof x === 'string') return itemKey(x);
+  if (typeof x === 'string') {
+    // « minecraft:coal:1 » : valeur de données
+    const m = /^(.*?):(\d+)$/.exec(x);
+    if (m) return ingredient0({ item: m[1], data: Number(m[2]) });
+    return itemKey(x);
+  }
   const o = x as Record<string, unknown>;
   if (typeof o.tag === 'string') return TAG_ALIASES[o.tag.replace(/^minecraft:/, '')] ?? null;
   if (typeof o.item === 'string') {
@@ -344,17 +397,22 @@ function ingredient(x: unknown): string | null {
     if (k === 'log' || k === 'log2') return 'tag:logs';
     if (k === 'wool') return 'tag:wool';
     if (k === 'coal') return o.data === 1 ? 'charcoal' : 'coal';
+    if (k === 'dye') return itemKey(`${DYE_BY_DATA[Number(o.data ?? 0)] ?? 'black'}_dye`);
+    if (/^stone_slab\d?$/.test(k)) return itemKey('stone_slab');
+    if (ITEM_ALIASES[k]) return itemKey(ITEM_ALIASES[k]);
     return itemKey(o.item);
   }
   return null;
 }
 
 function itemKey(id: string): string | null {
-  if (!id.startsWith('minecraft:') && id.includes(':')) return ItemRegistry.has(id) ? id : null;
+  if (!id.startsWith('minecraft:') && id.includes(':')) return ItemRegistry.has(id) ? id : ItemRegistry.has(id.toLowerCase()) ? id.toLowerCase() : null;
   try {
     return resolveItem(id);
   } catch {
     const k = id.replace(/^minecraft:/, '');
+    if (ITEM_ALIASES[k] && ItemRegistry.has(ITEM_ALIASES[k])) return ITEM_ALIASES[k];
+    if (/^stone_slab\d$/.test(k)) return 'stone_slab';
     return BEDROCK_ITEM_TEXTURES[k] && ItemRegistry.has(BEDROCK_ITEM_TEXTURES[k]) ? BEDROCK_ITEM_TEXTURES[k] : null;
   }
 }
@@ -474,8 +532,14 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   const result: AddonLoadResult = { images: new Map(), report: [], counts: { blocks: 0, items: 0, recipes: 0, mobs: 0, functions: 0, textures: 0 }, functions: new Map(), tickFunctions: [], scripts: [] };
   const addons = (await listAddons()).filter((a) => a.enabled);
   if (!addons.length) {
-    // aucun add-on actif : les identifiants déjà attribués restent réservés (« bloc inconnu »)
-    reserveBlockIds(new Map());
+    // aucun add-on actif : blocs supplémentaires du jeu de référence ; les identifiants
+    // déjà attribués aux add-ons restent réservés (« bloc inconnu »)
+    const ids = readIds();
+    const byId = new Map<number, BlockDef>();
+    addExtraBlocks(ids, byId, Math.max(VANILLA_BLOCK_COUNT, ...Object.values(ids).map((v) => v + 1)));
+    localStorage.setItem(ID_KEY, JSON.stringify(ids));
+    reserveBlockIds(byId);
+    registerExtraContent(byId);
     return result;
   }
 
@@ -706,6 +770,7 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   const ids = readIds();
   let next = Math.max(VANILLA_BLOCK_COUNT, ...Object.values(ids).map((v) => v + 1));
   const byId = new Map<number, BlockDef>();
+  next = addExtraBlocks(ids, byId, next);
   const lateLoot: [string, unknown][] = [];
   for (const b of blockDefs) {
     if (ids[b.id] === undefined) {
@@ -773,9 +838,12 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
   reserveBlockIds(byId);
   for (const d of byId.values()) {
     if (d.bedrock) result.counts.permutations = (result.counts.permutations ?? 0) + d.bedrock.visuals.length;
+    if (EXTRA_BLOCKS.includes(d)) continue;
     if (!ItemRegistry.has(d.key)) ItemRegistry.register({ key: d.key, name: d.name, icon: { block: d.key }, place: d.key, tab: 'building' });
     result.counts.blocks++;
   }
+
+  registerExtraContent(byId);
 
   // 5) objets
   const SAT: Record<string, number> = { poor: 0.1, low: 0.3, normal: 0.6, good: 0.8, max: 1, supernatural: 1.2 };
@@ -854,6 +922,7 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
 
   // 6) recettes
   let skipped = 0;
+  missingIngredients.clear();
   for (const j of recipes) {
     const o = j as Record<string, Record<string, unknown>>;
     try {
@@ -870,7 +939,10 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
         }
         const res = Array.isArray(r.result) ? r.result[0] : r.result;
         const item = itemKey(typeof res === 'string' ? res : (res as { item: string }).item);
-        if (!item) throw new Error('résultat inconnu');
+        if (!item) {
+          missingIngredients.set(`→${typeof res === 'string' ? res : (res as { item: string }).item}`, (missingIngredients.get(`→${typeof res === 'string' ? res : (res as { item: string }).item}`) ?? 0) + 1);
+          throw new Error('résultat inconnu');
+        }
         const width = Math.max(...pattern.map((p) => p.length));
         const rec: CraftingRecipe = { id: String((r.description as { identifier?: string })?.identifier ?? `addon:${item}`), type: 'shaped', result: { item, count: Number((res as { count?: number }).count ?? 1) }, pattern: pattern.map((p) => p.padEnd(width, ' ')), key, width, height: pattern.length };
         RecipeRegistry.register(rec);
@@ -907,7 +979,10 @@ export async function loadEnabledAddons(): Promise<AddonLoadResult> {
       skipped++;
     }
   }
-  if (skipped) result.report.push(`${skipped} recette(s) ignorée(s) (ingrédients inconnus du jeu).`);
+  if (skipped) {
+    const top = [...missingIngredients.entries()].sort((a, b) => b[1] - a[1]).slice(0, 200).map(([k, n]) => `${k.replace(/^minecraft:/, '')} (${n})`);
+    result.report.push(`${skipped} recette(s) ignorée(s) : ingrédients inconnus du jeu — ${top.join(', ')}${missingIngredients.size > 12 ? '…' : ''}.`);
+  }
 
   // textes traduits (formulaires des scripts, tellraw « translate »)
   for (const [k, v] of lang) if (!LANG.has(k)) LANG.set(k, v);
