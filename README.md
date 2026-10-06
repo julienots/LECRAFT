@@ -74,17 +74,25 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
 ### Commandes (chat)
 
 Bouton 💬 (ou touche **T**, **/** au clavier) : chat avec historique et **autocomplétion**. Syntaxe du
-jeu de référence, identifiants avec ou sans `minecraft:`, coordonnées absolues, relatives `~` et
-locales `^`, sélecteurs `@s @p @a @r @e[type=…,r=…,c=…]` :
+jeu de référence, identifiants avec ou sans `minecraft:`, états de blocs `bloc["etat"=valeur]`,
+coordonnées absolues, relatives `~` et locales `^`, sélecteurs `@s @p @a @r @e @initiator` avec
+filtres `type`, `name`, `tag`, `family`, `r`, `rm`, `c`, `x/y/z`, `dx/dy/dz`, `scores`, `m`, `l/lm`, `hasitem` :
 
-`/help` `/give` `/clear` `/tp` `/time set|add|query` `/weather` `/gamemode` `/difficulty` `/kill`
-`/summon` `/setblock` `/fill` (replace, hollow, outline, keep, destroy) `/effect` `/xp` `/spawnpoint`
-`/setworldspawn` `/seed` `/say` `/me` `/tell` `/list` `/title` `/locate structure` `/gamerule`
-`/function` `/playsound` `/execute as|at … [positioned x y z] run …`.
+`/help` `/give` `/clear` `/tp` (rotation, `facing`) `/time` `/weather` `/toggledownfall` `/gamemode`
+`/difficulty` `/kill` `/summon` `/setblock` `/fill` `/clone` `/effect` (34 effets, `clear`, `infinite`)
+`/xp` `/spawnpoint` `/setworldspawn` `/seed` `/say` `/me` `/tell` `/tellraw` `/title` `/titleraw` `/list`
+`/locate` `/gamerule` `/function` `/playsound` `/particle` `/enchant` `/tag` `/scoreboard`
+(objectives, players set/add/remove/reset/list/test/random/operation, setdisplay) `/scriptevent`
+`/damage` `/camerashake` `/loot` `/replaceitem` `/spreadplayers` `/testfor` `/testforblock`
+`/alwaysday` `/structure load` et **`/execute`** (`as`, `at`, `positioned`, `align`, `anchored`,
+`facing`, `rotated`, `in`, `if|unless entity|block|blocks|score`, `run`, ancienne syntaxe `detect`).
+Acceptées sans effet visible : `/playanimation`, `/camera`, `/ride`, `/inputpermission`, `/event`,
+`/fog`, `/hud`, `/dialogue`, `/stopsound`, `/music`.
 
 Règles (`/gamerule`) : `keepInventory`, `doDaylightCycle`, `doWeatherCycle`, `doMobSpawning`,
-`tntExplodes`, `showCoordinates`, `naturalRegeneration`, `fallDamage`, `doImmediateRespawn`.
-Les commandes de triche suivent l'option **Activer les triches** du monde (création ou « Modifier »).
+`tntExplodes`, `showCoordinates`, `naturalRegeneration`, `fallDamage`, `doImmediateRespawn`
+(les autres règles sont mémorisées pour les scripts). Les commandes de triche suivent l'option
+**Activer les triches** du monde (création ou « Modifier »).
 
 ### Add-ons de l'édition mobile (.mcaddon / .mcpack)
 
@@ -94,19 +102,57 @@ stockés localement ; chaque add-on peut être activé, désactivé ou supprimé
 
 | Pris en charge | Détail |
 |---|---|
-| Packs de ressources | remplacement des textures du jeu (`textures/blocks`, `items`, `entity`, noms Bedrock convertis), `terrain_texture.json`, `item_texture.json`, `blocks.json`, textes `fr_FR.lang` / `en_US.lang`, PNG et TGA |
-| Blocs | identifiant, texture (material_instances, par face), dureté (`destructible_by_mining`), lumière, rendu opaque/alpha_test/blend, collision, friction, table de butin |
-| Objets | icône, nom, taille de pile, nourriture, dégâts, durabilité, outils (`digger`, tags `is_pickaxe`…), armures (`wearable`), combustible, poseur de bloc, onglet créatif |
-| Recettes | `recipe_shaped`, `recipe_shapeless`, `recipe_furnace` (ingrédients vanilla, tags et objets d'add-ons) |
-| Entités | santé, vitesse, attaque, hostilité (famille `monster`, ciblage du joueur), taille, reproduction, butin, vol, brûlure au soleil, attaque à distance ; **géométrie Bedrock** (`*.geo.json`, formats 1.8 et 1.12+, UV par face) et texture de l'entité client ; animations de marche par nom d'os ; **œufs d'apparition** ; règles d'apparition (surface/souterrain, luminosité, troupeau, biomes) |
-| Fonctions | fichiers `.mcfunction` (`/function nom`), `tick.json` exécuté à chaque tick |
+| Packs de ressources | textures (blocs, objets, entités, noms Bedrock convertis), `terrain_texture.json`, `item_texture.json`, `blocks.json`, textes `.lang`, PNG et TGA ; **sons** (`sound_definitions.json`, `.ogg`/`.wav`) et sons des entités (`sounds.json`) |
+| Blocs | identifiant, textures par face, dureté, lumière, rendu, collision/sélection, friction, butin ; **états et permutations** (`states`, `traits` placement_direction / placement_position / connection, conditions Molang), **géométries personnalisées** (`*.geo.json`, os, rotations, UV par face ou « box », visibilité d'os), `transformation` ; jusqu'à 4096 blocs |
+| Objets | icône, nom, pile, nourriture, dégâts, durabilité, outils, armures, combustible, poseur de bloc, temps de recharge, étiquettes |
+| Recettes | `recipe_shaped`, `recipe_shapeless`, `recipe_furnace` (tags, anciens identifiants `dye:N`, objets d'add-ons) ; le rapport liste les ingrédients manquants |
+| Entités | santé, vitesse, attaque, hostilité, taille, reproduction, butin, vol, attaque à distance (`minecraft:shooter`), familles, propriétés d'entité ; **géométrie Bedrock** + texture ; **animations à images clés et contrôleurs d'animation** ; sons ; œufs d'apparition ; règles d'apparition ; **projectiles** (`minecraft:projectile` : dégâts, explosion, effet) |
+| Structures | fichiers **`.mcstructure`** (NBT) : `/structure load`, `world.structureManager` |
+| Fonctions | `.mcfunction` (`/function nom`), `tick.json` |
+| **Scripts** | **`@minecraft/server`** (1.x et 2.x) et **`@minecraft/server-ui`** : voir ci-dessous |
 
-**Non pris en charge** (signalé à l'import) : scripts JavaScript (`@minecraft/server`, `@minecraft/server-ui`),
-animations et contrôleurs Molang (seule la marche est animée), géométries de blocs personnalisées
-(affichées en cube), événements et groupes de composants dynamiques (seuls ceux appliqués à
-l'apparition sont lus), dimensions, biomes et structures personnalisés, packs de skins.
-Les blocs d'add-ons gardent un identifiant stable : si un add-on est retiré, ses blocs deviennent
-des « blocs inconnus » sans corrompre les mondes. Limite : 256 blocs au total (125 pour les add-ons).
+**API de script.** Les fichiers JavaScript du pack sont chargés comme modules ES (imports relatifs,
+avec ou sans `.js`) dans le jeu, sans réseau. Implémentés : `world` (dimensions, joueurs, entités,
+propriétés dynamiques **sauvegardées**, tableau des scores, heure, météo, règles, messages, sons,
+`structureManager`), `system` (`run`, `runTimeout`, `runInterval`, `runJob`, `waitTicks`,
+`sendScriptEvent`), `Dimension` (blocs, `getEntities` avec filtres, `spawnEntity`, `spawnItem`,
+`spawnParticle`, `createExplosion`, `runCommand`, rayons), `Block` / `BlockPermutation` (états,
+étiquettes, inventaire des coffres), `Entity` / `Player` (composants `health`, `inventory`,
+`equippable`, `type_family`, `projectile`, `item`…, effets, étiquettes, téléportation, dégâts,
+impulsions, regard, `runCommand`, `onScreenDisplay`, sons, niveaux), `ItemStack` (description,
+propriétés dynamiques, composants `durability`, `enchantable`, `cooldown`, `food`), `Container` /
+`ContainerSlot`, ~60 événements avant/après (dégâts, mort, apparition, interactions, casse/pose,
+utilisation d'objets, chat, inventaire, météo, mode de jeu, `scriptEventReceive`…), **composants
+personnalisés** de blocs (`onPlayerInteract`, `onTick`, `onRandomTick`, `onPlace`, `onPlayerBreak`,
+`beforeOnPlayerPlace`, `onStepOn/Off`, `onEntityFallOn`) et d'objets (`onUse`, `onUseOn`,
+`onConsume`, `onCompleteUse`, `onHitEntity`, `onMineBlock`, `onBeforeDurabilityDamage`),
+commandes personnalisées, et les formulaires `ActionFormData`, `ModalFormData`, `MessageFormData`
+(affichés avec les boutons et curseurs du jeu, codes couleur `§`). Une erreur de script est
+interceptée et journalisée sans arrêter la partie (les 3 premières sont affichées dans le chat).
+
+**Testé avec 6 add-ons réels** (Vanilla Upgrade, Titans of Extinction, No Limits, The Quartermaster's
+Armory, Nightmare Blade, Morphing Bracelet) : les 5 packs à scripts se chargent et s'exécutent sans
+erreur ; un test automatique place/utilise/casse chacun des 101 blocs et 31 objets à composants
+personnalisés et fait apparaître les 50 créatures sans erreur de script.
+
+**Limites (honnêtement) :** les scripts s'exécutent sans bac à sable (comme tout code d'un add-on
+que l'on choisit d'installer) ; pas de redstone (`onRedstoneUpdate` n'est jamais appelé,
+`getRedstonePower()` vaut 0) ; pas de chevauchement (`rideable.addRider` ne fait rien) ; les
+événements d'entité (`triggerEvent`, groupes de composants dynamiques) n'ont pas d'effet ; pas de
+caméra scriptée ni de HUD personnalisé (`ui/*.json`) ; un seul joueur (`getAllPlayers()` renvoie le
+joueur local) ; les dimensions Nether et End sont vides ; contrôleurs de rendu, particules
+personnalisées et attachables ne sont pas dessinés (les particules utilisent des effets du jeu) ;
+pas de génération de structures/biomes/features d'add-ons dans le monde ; les blocs du jeu de
+référence absents de LeCraft sont remplacés par l'équivalent le plus proche (signalé dans le
+rapport). Les blocs d'add-ons gardent un identifiant stable : un add-on retiré laisse des
+« blocs inconnus » sans corrompre les mondes.
+
+**Palette élargie** : environ 280 blocs et objets supplémentaires du jeu de référence (béton, terre
+cuite, verre teinté, colorants, cerisier, palétuvier, carmin, biscornu, bambou, ardoise des abîmes,
+Nether, End, quartz, cuivre, prismarine, fleurs, torches, tonneau, feu de camp…), aux textures
+générées, avec leurs recettes : ils servent aussi aux recettes et scripts des add-ons
+(251 des 268 recettes des 6 add-ons testés sont chargées ; les autres demandent des composants
+de redstone absents).
 
 ### Packs de ressources
 
@@ -480,7 +526,7 @@ npm run e2e:vanilla              # 26 vérifications : dalles, porte, lit et som
                                  # cisailles, échelle, TNT et explosion, sable qui tombe, décomposition des
                                  # feuilles, flèches récupérées, glisser pour répartir, double porte,
                                  # import/retrait d'un pack de ressources
-npm run e2e:addons               # 26 vérifications : import d'un .mcaddon généré (packs imbriqués,
+npm run e2e:addons               # 33 vérifications : import d'un .mcaddon généré (packs imbriqués,
                                  # JSON commenté), blocs/objets/recettes/créature/fonctions d'add-on,
                                  # textures remplacées, commandes, chat, triches, croix directionnelle,
                                  # désactivation (identifiants conservés)
@@ -526,8 +572,13 @@ Ces éléments ne sont **pas** réalisés (ou partiellement) — ils ne sont pas
 - **TODO — LOD des chunks lointains et instancing** : la distance de rendu + le brouillard en tiennent lieu ;
   les créatures sont peu nombreuses (pool de modèles au lieu d'instancing).
 - **Non reproduits du jeu de référence** (volontairement ou faute de temps) : Creeper et autres créatures
-  à design protégé, Nether, End, circuits de redstone, enchantements, alambics, villageois et commerce,
-  feu qui se propage, mode multijoueur, Realms. Le briquet n'allume que la TNT.
+  à design protégé, Nether, End, circuits de redstone, effets des enchantements (ils sont stockés sur
+  les objets pour les scripts mais n'agissent pas), alambics, villageois et commerce, feu qui se
+  propage, mode multijoueur, Realms. Le briquet n'allume que la TNT. Les blocs de fonction de la
+  palette élargie (tonneau, juke-box, métier à tisser…) sont décoratifs.
+- **Add-ons** : voir la liste des limites de l'API de script et des add-ons ci-dessus (redstone,
+  chevauchement, événements d'entité, structures/biomes générés, contrôleurs de rendu, particules
+  et HUD personnalisés).
 - **TODO** : rendu 3D du coffre et du lit tenus en main, animation d'ouverture du coffre,
   flèches texturées (pavé coloré actuellement).
 - **Mondes de la version 1** : l'identifiant des blocs a changé avec la refonte vanilla ; un ancien
