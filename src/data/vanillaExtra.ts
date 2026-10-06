@@ -460,6 +460,80 @@ smelt('nether_gold_ore', 'gold_ingot');
 smelt('nether_quartz_ore', 'quartz');
 smelt('ancient_debris', 'netherite_scrap');
 
+// ---------- grottes : minerais d'ardoise, spéléothèmes, grottes luxuriantes, géodes ----------
+const DS = ['#3a3a40', '#46464c', '#505056', '#5a5a60'];
+const DEEP_ORES: [string, string, number, { item: string; min?: number; max?: number }[], string[]][] = [
+  ['coal', 'charbon', 0, [{ item: 'coal' }], ['#1a1a1a', '#0c0c0c', '#2e2e2e']],
+  ['copper', 'cuivre', 1, [{ item: 'raw_copper', min: 2, max: 5 }], ['#c56b4b', '#e08b63', '#4f9d82']],
+  ['iron', 'fer', 1, [{ item: 'raw_iron' }], ['#d8af93', '#f0d4b8', '#a0806a']],
+  ['gold', 'or', 2, [{ item: 'raw_gold' }], ['#f2d14a', '#fff58a', '#b58b1c']],
+  ['redstone', 'redstone', 2, [{ item: 'redstone', min: 4, max: 5 }], ['#b0120a', '#ff2a1a', '#6e0703']],
+  ['lapis', 'lapis-lazuli', 1, [{ item: 'lapis_lazuli', min: 4, max: 9 }], ['#1f4ea0', '#4b75d0', '#123673']],
+  ['diamond', 'diamant', 2, [{ item: 'diamond' }], ['#5decf5', '#d8fffd', '#1aa7a0']],
+  ['emerald', 'émeraude', 2, [{ item: 'emerald' }], ['#17dd62', '#9dffb8', '#0b7c34']],
+];
+for (const [k, n, tier, drops, spot] of DEEP_ORES) {
+  cube(`deepslate_${k}_ore`, `Minerai de ${n} des abîmes`, (t) => {
+    t.grain(DS.map(hex), 0.6, 4);
+    const c = spot.map(hex);
+    for (const [x, y] of [[3, 3], [4, 3], [3, 4], [10, 2], [11, 2], [11, 3], [6, 8], [7, 8], [7, 9], [12, 10], [12, 11], [13, 11], [3, 12], [4, 12], [4, 13], [9, 13]]) t.set(x, y, c[(x * 3 + y) % c.length]);
+  }, { hardness: 4.5, minTier: tier, drops, color: '#4d4d52', ...(k === 'redstone' ? { light: 0 } : {}) });
+  smelt(`deepslate_${k}_ore`, k === 'coal' ? 'coal' : k === 'redstone' ? 'redstone' : k === 'lapis' ? 'lapis_lazuli' : k === 'diamond' ? 'diamond' : k === 'emerald' ? 'emerald' : `${k}_ingot`);
+}
+tile('pointed_dripstone', (t) => {
+  t.clear();
+  const c = ['#6a4e3a', '#866a54', '#9e826c'].map(hex);
+  for (let y = 0; y < 16; y++) {
+    const w = Math.max(0, Math.round(3 - y / 5));
+    for (let x = 7 - w; x <= 8 + w; x++) t.set(x, y, c[(x + y) % 3]);
+  }
+});
+B.push({ key: 'pointed_dripstone', name: 'Spéléothème pointu', textures: { all: 'pointed_dripstone' }, hardness: 1.5, tool: 'pickaxe', render: 'cross', solid: false, sound: 'stone', contactDamage: 1, color: '#866a54' });
+for (const [k, n, lit] of [['cave_vines', 'Lianes des grottes', false], ['cave_vines_lit', 'Lianes des grottes à baies', true]] as const) {
+  tile(k, (t) => {
+    t.clear();
+    for (let y = 0; y < 16; y++) {
+      t.set(7 + ((y >> 2) & 1), y, hex(y % 3 ? '#3f7a2a' : '#5a9a3a'));
+      if (y % 4 === 1) t.set(6 - ((y >> 2) & 1), y, hex('#4a8a30'));
+    }
+    if (lit) for (const [x, y] of [[5, 4], [9, 7], [6, 11], [9, 13]]) t.rect(x, y, 2, 2, hex('#ffb020'));
+  });
+  B.push({ key: k, name: n, textures: { all: k }, hardness: 0, render: 'cross', solid: false, replaceable: false, climbable: true, sound: 'grass', light: lit ? 14 : 0, drops: lit ? [{ item: 'glow_berries' }] : [], color: '#4a8a30' });
+}
+tile('spore_blossom', (t) => {
+  t.clear();
+  for (const [x, y] of [[3, 3], [12, 3], [3, 12], [12, 12], [7, 1], [7, 14], [1, 7], [14, 7]]) t.rect(x, y, 2, 2, hex('#d870b0'));
+  t.rect(6, 6, 4, 4, hex('#f0a0d0'));
+  t.rect(7, 7, 2, 2, hex('#5a9a3a'));
+});
+B.push({ key: 'spore_blossom', name: 'Fleur sporifère', textures: { all: 'spore_blossom' }, hardness: 0, render: 'cross', solid: false, sound: 'grass', color: '#d870b0' });
+cube('smooth_basalt', 'Basalte lisse', grainT(['#2a2a2e', '#323236', '#3a3a3e'], 0.5, 4), { hardness: 1.25, color: '#323236' });
+cube('budding_amethyst', 'Améthyste bourgeonnante', (t) => {
+  t.grain(['#6a3fa0', '#8a5ac8', '#a070e0', '#c8a0ff'].map(hex), 0.5, 2);
+  for (const [x, y] of [[4, 4], [11, 5], [6, 11], [12, 12]]) t.rect(x, y, 2, 2, hex('#f0d8ff'));
+}, { hardness: -1, drops: [], sound: 'glass', color: '#8a5ac8' });
+tile('cobweb', (t) => {
+  t.clear();
+  const c = hex('#f0f0f0');
+  for (let i = 0; i < 16; i++) {
+    t.set(i, i, c, 200);
+    t.set(15 - i, i, c, 200);
+    t.set(7, i, c, 180);
+    t.set(i, 7, c, 180);
+  }
+  for (let r = 3; r < 8; r += 2) for (let a = 0; a < 16; a++) t.set(Math.round(7.5 + Math.cos((a / 16) * Math.PI * 2) * r), Math.round(7.5 + Math.sin((a / 16) * Math.PI * 2) * r), c, 160);
+});
+B.push({ key: 'cobweb', name: "Toile d'araignée", textures: { all: 'cobweb' }, hardness: 4, tool: 'sword', render: 'cross', solid: false, sound: 'wool', drops: [{ item: 'string' }], color: '#f0f0f0' });
+tile('hanging_roots', (t) => {
+  t.clear();
+  for (const x of [3, 6, 9, 12]) t.vline(x, 0, 6 + (x % 5) * 2, hex('#a0705a'));
+});
+B.push({ key: 'hanging_roots', name: 'Racines suspendues', textures: { all: 'hanging_roots' }, hardness: 0, render: 'cross', solid: false, replaceable: true, sound: 'grass', drops: [], color: '#a0705a' });
+cube('rooted_dirt', 'Terre racineuse', (t) => {
+  t.grain(['#7a5236', '#8a5e3e', '#6a4a30'].map(hex), 0.5, 4);
+  for (let i = 0; i < 6; i++) t.vline(t.rng.int(1, 14), t.rng.int(0, 8), t.rng.int(8, 15), hex('#b08060'));
+}, { hardness: 0.5, tool: 'shovel', minTier: 0, sound: 'dirt', color: '#7a5236' });
+
 export const EXTRA_BLOCKS: BlockDef[] = B;
 export const EXTRA_ITEMS: ItemDef[] = I;
 export const EXTRA_RECIPES = R;

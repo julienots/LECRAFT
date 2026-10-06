@@ -30,6 +30,8 @@ export function gatherBoxes(world: World, x0: number, y0: number, z0: number, x1
  * Corps physique AABB (position = centre des pieds) avec collisions par boîtes (formes de blocs),
  * balayage par axe façon vanilla et montée automatique des marches (dalles, escaliers).
  */
+let WEB = -1;
+
 export class PhysicsBody {
   x = 0;
   y = 0;
@@ -81,7 +83,11 @@ export class PhysicsBody {
     const lb = world.getBlock(Math.floor(this.x), Math.floor(this.y + 0.2), Math.floor(this.z));
     const lb2 = world.getBlock(Math.floor(this.x), Math.floor(this.y + 1), Math.floor(this.z));
     this.onLadder = (lb > 0 && BlockRegistry.climbable[lb] === 1) || (lb2 > 0 && BlockRegistry.climbable[lb2] === 1);
+    if (WEB < 0 && BlockRegistry.has('cobweb')) WEB = BlockRegistry.byName('cobweb').id;
+    this.inWeb = WEB > 0 && (lb === WEB || lb2 === WEB);
   }
+  /** Dans une toile d'araignée : déplacements fortement ralentis. */
+  inWeb = false;
 
   /** Déplacement balayé par axe ; retourne les déplacements effectifs. */
   private sweep(world: World, dx: number, dy: number, dz: number): [number, number, number] {
@@ -124,7 +130,9 @@ export class PhysicsBody {
         if (this.vy < -78) this.vy = -78;
       }
     }
-    const tdx = this.vx * dt, tdy = this.vy * dt, tdz = this.vz * dt;
+    if (this.inWeb) this.vy = Math.max(-2, Math.min(this.vy, 2));
+    const web = this.inWeb && !this.noClip ? 0.25 : 1;
+    const tdx = this.vx * dt * web, tdy = this.vy * dt * (this.inWeb ? 0.05 : 1), tdz = this.vz * dt * web;
     if (this.noClip) {
       this.x += tdx;
       this.y += tdy;

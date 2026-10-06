@@ -18,27 +18,39 @@ export interface ColumnInfo {
 
 interface OreDef {
   block: number;
+  /** Répartition : uniforme entre minY et maxY, ou triangulaire centrée sur `peak` (± spread). */
   minY: number;
   maxY: number;
+  peak?: number;
+  spread?: number;
   tries: number;
   size: number;
+  /** Variante dans l'ardoise des abîmes. */
+  deep?: string;
 }
+/**
+ * Minerais : distributions triangulaires inspirées de la génération 1.18 du jeu de référence,
+ * ramenées à la hauteur du monde (y 16 ≈ y 0 du jeu de référence, niveau de la mer 52 ≈ 63).
+ */
 const ORES: OreDef[] = [
   { block: B.GRANITE, minY: 5, maxY: 90, tries: 3, size: 28 },
   { block: B.DIORITE, minY: 5, maxY: 90, tries: 3, size: 28 },
   { block: B.ANDESITE, minY: 5, maxY: 90, tries: 3, size: 28 },
   { block: B.DIRT, minY: 5, maxY: 90, tries: 3, size: 24 },
   { block: B.GRAVEL, minY: 5, maxY: 90, tries: 3, size: 24 },
-  { block: B.COAL_ORE, minY: 5, maxY: 110, tries: 18, size: 12 },
-  { block: B.COPPER_ORE, minY: 20, maxY: 80, tries: 8, size: 9 },
-  { block: B.IRON_ORE, minY: 5, maxY: 64, tries: 12, size: 7 },
-  { block: B.LAPIS_ORE, minY: 4, maxY: 32, tries: 2, size: 6 },
-  { block: B.GOLD_ORE, minY: 5, maxY: 32, tries: 3, size: 7 },
-  { block: B.REDSTONE_ORE, minY: 4, maxY: 16, tries: 5, size: 7 },
-  { block: B.DIAMOND_ORE, minY: 4, maxY: 16, tries: 1, size: 6 },
-  { block: B.EMERALD_ORE, minY: 30, maxY: 100, tries: 1, size: 2 },
+  { block: B.COAL_ORE, minY: 20, maxY: 120, peak: 72, spread: 48, tries: 20, size: 12, deep: 'deepslate_coal_ore' },
+  { block: B.COPPER_ORE, minY: 4, maxY: 90, peak: 44, spread: 32, tries: 10, size: 9, deep: 'deepslate_copper_ore' },
+  { block: B.IRON_ORE, minY: 2, maxY: 70, peak: 26, spread: 30, tries: 12, size: 8, deep: 'deepslate_iron_ore' },
+  { block: B.IRON_ORE, minY: 70, maxY: 126, peak: 104, spread: 30, tries: 6, size: 8 },
+  { block: B.LAPIS_ORE, minY: 2, maxY: 40, peak: 16, spread: 18, tries: 3, size: 6, deep: 'deepslate_lapis_ore' },
+  { block: B.GOLD_ORE, minY: 2, maxY: 34, peak: 10, spread: 22, tries: 4, size: 7, deep: 'deepslate_gold_ore' },
+  { block: B.REDSTONE_ORE, minY: 2, maxY: 22, peak: 2, spread: 20, tries: 6, size: 7, deep: 'deepslate_redstone_ore' },
+  { block: B.DIAMOND_ORE, minY: 2, maxY: 20, peak: 2, spread: 18, tries: 3, size: 6, deep: 'deepslate_diamond_ore' },
+  { block: B.EMERALD_ORE, minY: 40, maxY: 126, peak: 100, spread: 40, tries: 3, size: 2, deep: 'deepslate_emerald_ore' },
   { block: B.CLAY, minY: 30, maxY: 60, tries: 2, size: 10 },
 ];
+/** Sommet de la couche d'ardoise des abîmes (transition sur 8 blocs au-dessus). */
+export const DEEPSLATE_Y = 16;
 
 /**
  * Générateur procédural déterministe. Toute la génération dépend uniquement du seed :
@@ -58,8 +70,12 @@ export class WorldGenerator implements TerrainQuery {
   private caves: CaveGenerator;
   readonly structures: StructureGenerator;
   private cache = new Map<number, ColumnInfo>();
+  private deepslate: number;
+  private deepOre = new Map<number, number>();
 
   constructor(seed: number) {
+    this.deepslate = BlockRegistry.has('deepslate') ? BlockRegistry.byName('deepslate').id : B.STONE;
+    for (const o of ORES) if (o.deep && BlockRegistry.has(o.deep)) this.deepOre.set(o.block, BlockRegistry.byName(o.deep).id);
     this.seed = seed | 0;
     this.continental = new SimplexNoise(seed + 1);
     this.erosion = new SimplexNoise(seed + 2);
@@ -184,6 +200,7 @@ export class WorldGenerator implements TerrainQuery {
           if (y === 0 || (y <= 2 && rng.next() < 0.5)) b = B.BEDROCK;
           else if (y === h) b = surface;
           else if (y >= h - underDepth) b = under;
+          else if (y < DEEPSLATE_Y || (y < DEEPSLATE_Y + 8 && (hash3(this.seed, wx, y, wz) & 7) >= y - DEEPSLATE_Y)) b = this.deepslate;
           else b = B.STONE;
           blocks[idx(x, y, z)] = b;
         }
@@ -198,12 +215,16 @@ export class WorldGenerator implements TerrainQuery {
     const centerBiome = BiomeManager.get(c.biomes[8 + 8 * CHUNK_SIZE]).key;
     for (const ore of ORES) {
       if (ore.block === B.EMERALD_ORE && centerBiome !== 'mountain') continue;
+      const deep = this.deepOre.get(ore.block);
       for (let t = 0; t < ore.tries; t++) {
-        let x = rng.int(0, 15), y = rng.int(ore.minY, ore.maxY), z = rng.int(0, 15);
+        let x = rng.int(0, 15), z = rng.int(0, 15);
+        let y = ore.peak !== undefined ? Math.round(ore.peak + (rng.next() - rng.next()) * (ore.spread ?? 16)) : rng.int(ore.minY, ore.maxY);
+        if (y < ore.minY || y > ore.maxY) continue;
         for (let s = 0; s < ore.size; s++) {
           if (x >= 0 && x < 16 && z >= 0 && z < 16 && y > 0 && y < WORLD_HEIGHT) {
             const i = idx(x, y, z);
             if (blocks[i] === B.STONE) blocks[i] = ore.block;
+            else if (blocks[i] === this.deepslate && this.deepslate !== B.STONE) blocks[i] = deep ?? (ore.block === B.GRANITE || ore.block === B.DIORITE || ore.block === B.ANDESITE ? blocks[i] : ore.block);
           }
           x += rng.int(-1, 1);
           y += rng.int(-1, 1);

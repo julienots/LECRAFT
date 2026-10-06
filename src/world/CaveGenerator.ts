@@ -1,5 +1,5 @@
 import { CHUNK_SIZE, WORLD_HEIGHT, SEA_LEVEL } from '../core/Config';
-import { B } from '../blocks/BlockRegistry';
+import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { SimplexNoise } from './Noise';
 import { idx, type ChunkData } from './ChunkData';
 import { hash3, Rng } from '../util/math';
@@ -78,6 +78,8 @@ export class CaveGenerator {
         const wx = bx + x, wz = bz + z;
         const underwater = h < SEA_LEVEL;
         const aq = this.aquifer.noise2(wx / 90, wz / 90) > 0.5;
+        // grottes luxuriantes : mares d'eau au lieu de lave au fond
+        const lushCol = this.lush.noise3(wx / 70, 0, wz / 70) > 0.38;
         // Gouffres
         const rmask = this.ravine.noise2(wx / 500, wz / 500);
         let ravineBottom = 999;
@@ -98,7 +100,7 @@ export class CaveGenerator {
           if (!carve) continue;
           const i = idx(x, y, z);
           if (blocks[i] === B.WATER || blocks[i] === B.BEDROCK) continue;
-          if (y <= 10) blocks[i] = B.LAVA;
+          if (y <= 7) blocks[i] = lushCol ? (y <= 5 ? B.WATER : B.AIR) : B.LAVA;
           else if (aq && y < 30 && depth > 8) blocks[i] = B.WATER;
           else blocks[i] = B.AIR;
         }
@@ -110,37 +112,119 @@ export class CaveGenerator {
     const bx = c.cx * CHUNK_SIZE, bz = c.cz * CHUNK_SIZE;
     const rng = new Rng(hash3(this.seed, c.cx, 77, c.cz));
     const blocks = c.blocks;
+    const I = this.ids();
+    const rock = (b: number) => b === B.STONE || b === I.deepslate || b === B.ANDESITE || b === B.DIORITE || b === B.GRANITE || b === I.tuff;
+    const at = (x: number, y: number, z: number) => (y < 0 || y >= WORLD_HEIGHT ? B.BEDROCK : blocks[idx(x, y, z)]);
     for (let z = 0; z < CHUNK_SIZE; z++)
       for (let x = 0; x < CHUNK_SIZE; x++) {
         const h = heights[x + z * CHUNK_SIZE];
-        const lush = this.lush.noise3((bx + x) / 40, 0, (bz + z) / 40) > 0.45;
+        const wx = bx + x, wz = bz + z;
+        // régions : grottes luxuriantes (humides) et grottes de spéléothèmes (sèches), comme les biomes souterrains
+        const lushV = this.lush.noise3(wx / 70, 0, wz / 70);
+        const dripV = this.lush.noise3(wx / 70 + 300, 5, wz / 70 - 300);
+        const lush = lushV > 0.38, drip = !lush && dripV > 0.38;
         for (let y = 4; y < h - 6; y++) {
           const i = idx(x, y, z);
           if (blocks[i] !== B.AIR) continue;
-          const below = blocks[idx(x, y - 1, z)];
-          if (below === B.STONE) {
-            if (lush) {
-              blocks[idx(x, y - 1, z)] = B.MOSS_BLOCK;
-              if (rng.next() < 0.05) blocks[i] = B.GLOW_LICHEN;
-              else if (rng.next() < 0.03) blocks[i] = B.SHORT_GRASS;
-            } else if (rng.next() < 0.004) blocks[i] = B.GLOW_LICHEN;
-            else if (rng.next() < 0.003) blocks[i] = rng.next() < 0.5 ? B.BROWN_MUSHROOM : B.RED_MUSHROOM;
-          }
-          if (y < 28 && rng.next() < 0.0015) {
-            // Petite géode d'améthyste (structure rare)
-            for (let k = 0; k < 4; k++) {
-              const ox = x + rng.int(-1, 1), oy = y + rng.int(-1, 1), oz = z + rng.int(-1, 1);
-              if (ox >= 0 && ox < 16 && oz >= 0 && oz < 16 && oy > 2) {
-                const j = idx(ox, oy, oz);
-                if (blocks[j] === B.STONE) {
-                  blocks[j] = B.AMETHYST_BLOCK;
-                  const up = idx(ox, oy + 1, oz);
-                  if (oy + 1 < WORLD_HEIGHT && blocks[up] === B.AIR && rng.next() < 0.5) blocks[up] = B.AMETHYST_CLUSTER;
-                }
+          const below = at(x, y - 1, z), above = at(x, y + 1, z);
+          const floor = rock(below), ceil = rock(above);
+          if (lush) {
+            if (floor) {
+              const r = rng.next();
+              if (r < 0.04 && I.clay) blocks[idx(x, y - 1, z)] = B.CLAY;
+              else blocks[idx(x, y - 1, z)] = B.MOSS_BLOCK;
+              const r2 = rng.next();
+              if (r2 < 0.08) blocks[i] = B.SHORT_GRASS;
+              else if (r2 < 0.1 && I.azalea) blocks[i] = I.azalea;
+              else if (r2 < 0.13) blocks[i] = B.GLOW_LICHEN;
+            } else if (ceil) {
+              const r = rng.next();
+              if (r < 0.1 && I.cave_vines) {
+                // lianes pendantes (baies lumineuses sur ~1/3 des segments)
+                const len = 1 + rng.int(0, 5);
+                for (let k = 0; k < len && y - k > 3 && at(x, y - k, z) === B.AIR; k++) blocks[idx(x, y - k, z)] = rng.next() < 0.33 && I.cave_vines_lit ? I.cave_vines_lit : I.cave_vines;
+              } else if (r < 0.11 && I.spore_blossom) blocks[i] = I.spore_blossom;
+              else if (r < 0.14 && I.hanging_roots) blocks[i] = I.hanging_roots;
+              else if (r < 0.3) blocks[idx(x, y + 1, z)] = B.MOSS_BLOCK;
+            }
+          } else if (drip && I.dripstone_block) {
+            // blocs de spéléothème autour des cavités, stalactites et stalagmites
+            if (floor && rng.next() < 0.6) blocks[idx(x, y - 1, z)] = I.dripstone_block;
+            if (ceil && rng.next() < 0.6) blocks[idx(x, y + 1, z)] = I.dripstone_block;
+            if (I.pointed_dripstone) {
+              if (ceil && rng.next() < 0.12) {
+                const len = 1 + rng.int(0, 2);
+                for (let k = 0; k < len && at(x, y - k, z) === B.AIR; k++) blocks[idx(x, y - k, z)] = I.pointed_dripstone;
+              } else if (floor && rng.next() < 0.08) {
+                const len = 1 + rng.int(0, 2);
+                for (let k = 0; k < len && at(x, y + k, z) === B.AIR; k++) blocks[idx(x, y + k, z)] = I.pointed_dripstone;
               }
             }
+          } else if (floor) {
+            const r = rng.next();
+            if (r < 0.004) blocks[i] = B.GLOW_LICHEN;
+            else if (r < 0.007) blocks[i] = rng.next() < 0.5 ? B.BROWN_MUSHROOM : B.RED_MUSHROOM;
           }
         }
+      }
+    this.geodes(c);
+  }
+
+  private _ids: Record<string, number> | null = null;
+  /** Identifiants des blocs supplémentaires (0 si absents : la décoration correspondante est omise). */
+  private ids(): Record<string, number> {
+    if (this._ids) return this._ids;
+    const get = (k: string) => (BlockRegistry.has(k) ? BlockRegistry.byName(k).id : 0);
+    this._ids = Object.fromEntries(['deepslate', 'tuff', 'clay', 'azalea', 'cave_vines', 'cave_vines_lit', 'spore_blossom', 'hanging_roots', 'dripstone_block', 'pointed_dripstone', 'smooth_basalt', 'calcite', 'budding_amethyst'].map((k) => [k, get(k)]));
+    return this._ids;
+  }
+
+  /**
+   * Géodes d'améthyste : sphères creuses (basalte lisse, calcite, améthyste, améthyste
+   * bourgeonnante et grappes vers l'intérieur). Une géode peut déborder sur les chunks voisins :
+   * chaque chunk examine les centres des chunks alentour.
+   */
+  private geodes(c: ChunkData) {
+    const I = this.ids();
+    if (!I.calcite || !I.smooth_basalt) return;
+    const blocks = c.blocks;
+    const bx = c.cx * CHUNK_SIZE, bz = c.cz * CHUNK_SIZE;
+    for (let dcx = -1; dcx <= 1; dcx++)
+      for (let dcz = -1; dcz <= 1; dcz++) {
+        const gcx = c.cx + dcx, gcz = c.cz + dcz;
+        const h = hash3(this.seed + 404, gcx, 9, gcz);
+        if (h % 24 !== 0) continue; // ~1 chunk sur 24
+        const r = new Rng(h);
+        const cx = gcx * CHUNK_SIZE + r.int(4, 11), cy = r.int(8, 40), cz = gcz * CHUNK_SIZE + r.int(4, 11);
+        const R = 4 + r.next() * 1.5;
+        for (let z = 0; z < CHUNK_SIZE; z++)
+          for (let x = 0; x < CHUNK_SIZE; x++) {
+            const ddx = bx + x - cx, ddz = bz + z - cz;
+            if (Math.abs(ddx) > R + 2 || Math.abs(ddz) > R + 2) continue;
+            for (let y = Math.max(2, Math.floor(cy - R - 2)); y <= Math.min(WORLD_HEIGHT - 2, cy + R + 2); y++) {
+              const d = Math.hypot(ddx, (y - cy) * 1.1, ddz) + (hash3(this.seed, bx + x, y, bz + z) & 255) / 512;
+              if (d > R + 1) continue;
+              const i = idx(x, y, z);
+              if (blocks[i] === B.BEDROCK) continue;
+              let b: number;
+              if (d > R) b = I.smooth_basalt;
+              else if (d > R - 0.8) b = I.calcite;
+              else if (d > R - 1.7) b = I.budding_amethyst && (hash3(this.seed + 5, bx + x, y, bz + z) & 15) === 0 ? I.budding_amethyst : B.AMETHYST_BLOCK;
+              else b = B.AIR;
+              if (blocks[i] === B.AIR && b !== B.AIR) continue; // ne bouche pas les grottes
+              blocks[i] = b;
+            }
+          }
+        // grappes d'améthyste sur les blocs bourgeonnants (vers l'intérieur)
+        for (let z = 0; z < CHUNK_SIZE; z++)
+          for (let x = 0; x < CHUNK_SIZE; x++)
+            for (let y = Math.max(3, Math.floor(cy - R)); y <= Math.min(WORLD_HEIGHT - 3, cy + R); y++) {
+              if (blocks[idx(x, y, z)] !== B.AIR) continue;
+              const ddx = bx + x - cx, ddz = bz + z - cz;
+              if (Math.hypot(ddx, (y - cy) * 1.1, ddz) > R - 1.2) continue;
+              const nb = [blocks[idx(x, y - 1, z)], blocks[idx(x, y + 1, z)]];
+              if (nb.includes(I.budding_amethyst) && (hash3(this.seed + 6, bx + x, y, bz + z) & 1) === 0) blocks[idx(x, y, z)] = B.AMETHYST_CLUSTER;
+            }
       }
   }
 }

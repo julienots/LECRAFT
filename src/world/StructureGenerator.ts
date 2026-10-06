@@ -8,7 +8,7 @@
  * que les blocs appartenant au chunk (écriture « clippée »). Le résultat est donc identique
  * quel que soit l'ordre de génération des chunks.
  */
-import { B } from '../blocks/BlockRegistry';
+import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT } from '../core/Config';
 import { hash3, Rng } from '../util/math';
 import { BiomeManager } from './BiomeManager';
@@ -388,6 +388,8 @@ const TYPES: StructureType[] = [
             if (rng.next() < 0.35) w.set(x + px, y, z + pz, B.TORCH);
           }
           if (rng.next() < 0.015) w.set(x - px, y, z - pz, B.CHEST, chestMeta(LOOT.MINE));
+          // toiles d'araignée dans les coins du plafond (mines abandonnées)
+          if (rng.next() < 0.08 && BlockRegistry.has('cobweb')) w.set(x + px * (rng.next() < 0.5 ? -1 : 1), y + 2, z + pz * (rng.next() < 0.5 ? -1 : 1), BlockRegistry.byName('cobweb').id);
           if (rng.next() < 0.004) spawner(w, x, y, z, MOB_INDEX.cave_spider);
         }
       }

@@ -71,6 +71,21 @@ complet piloté par de vrais événements tactiles dans Chromium (même moteur q
 
 Les éléments **non réalisés** sont listés honnêtement dans [Limites connues / TODO](#16-limites-connues--todo).
 
+### Grottes et sous-sol
+
+- **Ardoise des abîmes** sous y = 16 (transition irrégulière sur 8 blocs) avec ses 8 minerais
+  (charbon, cuivre, fer, or, redstone, lapis, diamant, émeraude des abîmes).
+- **Minerais répartis selon l'altitude** comme en 1.18 (distributions triangulaires ramenées à la
+  hauteur du monde) : diamant et redstone tout au fond, or et lapis bas, fer à mi-hauteur et dans
+  les montagnes, cuivre au milieu, charbon en hauteur, émeraude dans les montagnes.
+- Grottes « fromage », « spaghetti » et « nouilles », gouffres, nappes d'eau, **lacs de lave au fond**.
+- **Grottes luxuriantes** : mousse, argile, herbe, azalées, lichen lumineux, **lianes à baies
+  lumineuses** (éclairent, donnent des baies), fleurs sporifères, racines suspendues, mares d'eau.
+- **Grottes de spéléothèmes** : blocs de spéléothème, **stalactites et stalagmites** (blessent).
+- **Géodes d'améthyste** : sphères creuses de basalte lisse, calcite, améthyste et améthyste
+  bourgeonnante, grappes vers l'intérieur.
+- Mines abandonnées avec **toiles d'araignée** (ralentissent fortement), donjons à cages.
+
 ### Le Nether
 
 - **Portail** : cadre d'obsidienne rectangulaire (intérieur de 2×3 à 21×21, coins facultatifs, vertical
@@ -580,7 +595,7 @@ La sensibilité et l'inversion de l'axe vertical des Paramètres s'appliquent au
 ## 14. Tests
 
 ```bash
-npm test                         # 48 tests unitaires : génération déterministe, biomes, grottes,
+npm test                         # 51 tests unitaires : génération déterministe, biomes, grottes,
                                  # mesher/lumière, physique, liquides, inventaire, grilles 2x2/3x3,
                                  # fourneau, formes/orientations, drops, butin, survie, police TrueType,
                                  # sauvegarde/corruption (fake-indexeddb)
