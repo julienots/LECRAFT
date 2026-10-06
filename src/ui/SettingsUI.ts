@@ -4,7 +4,7 @@ import type { QualityLevel, Difficulty } from '../core/Config';
 import type { Screen } from './UIManager';
 import { button, el } from './dom';
 import { mcButton, mcCycle, mcGrid, mcLabel, mcRow, mcScreen, mcSlider, mcToggle } from './Mc';
-import { importPack, loadInstalledPack, removePack } from '../render/ResourcePack';
+import { importPack, loadInstalledPack, removePack, declineBundledPack } from '../render/ResourcePack';
 import { importAddon, listAddons, removeAddon, setAddonEnabled } from '../addons/AddonManager';
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
@@ -174,6 +174,7 @@ function packsScreen(game: Game): Screen {
   });
   const remove = mcButton('Retirer le pack', async () => {
     await removePack();
+    declineBundledPack();
     game.applyPack(null);
     status.textContent = 'Textures par défaut rétablies.';
     show();

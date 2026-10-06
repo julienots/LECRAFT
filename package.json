@@ -20,7 +20,8 @@
     "e2e:addons": "node scripts/e2e-addons.mjs",
     "perf": "node scripts/perf.mjs",
     "screens": "node scripts/screens.mjs",
-    "tour": "node scripts/tour.mjs"
+    "tour": "node scripts/tour.mjs",
+    "pack:embed": "node scripts/embed-pack.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

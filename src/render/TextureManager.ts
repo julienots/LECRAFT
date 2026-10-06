@@ -17,10 +17,18 @@ const DEFAULT_FOLIAGE = hex('#5fa83a');
  * localement : aucun téléchargement.
  */
 /** Tuiles en niveaux de gris teintées par le biome dans le jeu vanilla. */
-const GRAY_TINTED = /^(grass_block_top|short_grass|fern|sugar_cane|.*_leaves)$/;
+const GRAY_TINTED = /^(grass_block_top|short_grass|fern|sugar_cane|(?!cherry|azalea|flowering_azalea|pale_oak)\w*_leaves)$/;
 /** Tuiles sans équivalent direct dans un pack (dessinées par le jeu). */
 const PACK_SKIP = new Set(['missing', 'altar_top', 'altar_side', 'chest_top', 'chest_side', 'chest_front', 'bed_foot', 'bed_side', 'bed_head']);
-const PACK_RENAME: Record<string, string> = { water: 'water_still', lava: 'lava_still' };
+const PACK_RENAME: Record<string, string> = {
+  water: 'water_still', lava: 'lava_still',
+  // blocs de la palette élargie : noms des fichiers du pack
+  cherry_log_side: 'cherry_log', mangrove_log_side: 'mangrove_log', pale_oak_log_side: 'pale_oak_log', crimson_stem_side: 'crimson_stem', warped_stem_side: 'warped_stem',
+  bamboo_block_side: 'bamboo_block', basalt: 'basalt_side', quartz_block: 'quartz_block_side', smooth_quartz: 'quartz_block_bottom', bone_block: 'bone_block_side',
+  noteblock_top: 'note_block', noteblock_side: 'note_block', cartography_table_side: 'cartography_table_side1', lectern_side: 'lectern_sides', grindstone_top: 'grindstone_side',
+  carved_pumpkin_top: 'pumpkin_top', carved_pumpkin_side: 'carved_pumpkin', jack_o_lantern_top: 'pumpkin_top', jack_o_lantern_side: 'jack_o_lantern',
+  campfire_top: 'campfire_log_lit', campfire_side: 'campfire_log_lit', azalea: 'azalea_top',
+};
 const WATER_TINT = hex('#3f76e4');
 
 /** Chemins des skins des créatures dans un pack (plusieurs versions du jeu). */
@@ -43,6 +51,7 @@ const ITEM_PATHS: Record<string, string[]> = {
   compass_golem: ['item/recovery_compass_16.png', 'item/compass_16.png'],
   compass_lich: ['item/recovery_compass_16.png', 'item/compass_16.png'],
   bow: ['item/bow.png'],
+  clock: ['item/clock_00.png'],
 };
 
 export class TextureManager implements SkinProvider {

@@ -74,7 +74,12 @@ export interface PackInfo {
 /** Importe un pack : extrait les PNG utiles et les enregistre localement. */
 export async function importPack(file: File, onProgress?: (f: number) => void): Promise<PackInfo> {
   const buf = await file.arrayBuffer();
-  const entries = readEntries(buf).filter((e) => WANTED.test(e.name));
+  // le pack peut être rangé dans un dossier (« MonPack/assets/minecraft/… ») : préfixe retiré
+  const all = readEntries(buf).map((e) => {
+    const i = e.name.indexOf('assets/minecraft/textures/');
+    return i > 0 ? { ...e, name: e.name.slice(i) } : e;
+  });
+  const entries = all.filter((e) => WANTED.test(e.name));
   if (!entries.length) throw new Error('Aucune texture trouvée (dossier assets/minecraft/textures attendu)');
   const db = await openDb();
   await new Promise<void>((res, rej) => {
@@ -180,5 +185,36 @@ export async function loadInstalledPack(): Promise<LoadedPack | null> {
   } catch (e) {
     console.warn('Pack de ressources illisible', e);
     return null;
+  }
+}
+
+const BUNDLED_OFF = 'lecraft.bundledPackOff';
+
+/**
+ * Pack par défaut intégré à SA PROPRE copie de l'application (fichier `public/default-pack.zip`,
+ * ajouté localement par `npm run pack:embed`, jamais versionné) : importé au premier lancement
+ * si aucun pack n'est installé et que l'utilisateur ne l'a pas retiré.
+ */
+export async function loadBundledPack(): Promise<LoadedPack | null> {
+  try {
+    if (localStorage.getItem(BUNDLED_OFF)) return null;
+    const r = await fetch('default-pack.zip');
+    if (!r.ok) return null;
+    const buf = await r.arrayBuffer();
+    const b = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
+    if (b[0] !== 0x50 || b[1] !== 0x4b) return null; // pas un ZIP (fichier absent)
+    await importPack(new File([buf], 'Pack par défaut'));
+    return await loadInstalledPack();
+  } catch {
+    return null;
+  }
+}
+
+/** L'utilisateur a retiré le pack : le pack intégré n'est plus réimporté. */
+export function declineBundledPack() {
+  try {
+    localStorage.setItem(BUNDLED_OFF, '1');
+  } catch {
+    /* stockage indisponible */
   }
 }

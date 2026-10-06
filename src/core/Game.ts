@@ -4,7 +4,7 @@ import { applyQuality, loadSettings, saveSettings, type Settings } from './Setti
 import { GameLoop } from './GameLoop';
 import { Session, type WorldState } from './Session';
 import { TextureManager } from '../render/TextureManager';
-import { loadInstalledPack, type LoadedPack } from '../render/ResourcePack';
+import { loadInstalledPack, loadBundledPack, type LoadedPack } from '../render/ResourcePack';
 import { installPixelFont } from '../ui/FontBuilder';
 import { applyTheme } from '../ui/Theme';
 import { setWidgetClick } from '../ui/Mc';
@@ -50,7 +50,7 @@ export class Game {
   private loop: GameLoop;
   private adaptive: AdaptiveQuality;
   session: Session | null = null;
-  state: GameState = 'menu';
+  state: GameState = 'loading';
   lastThumbnail: string | null = null;
   private inventoryUI: InventoryUI | null = null;
   private panorama: MenuPanorama | null = null;
@@ -111,7 +111,7 @@ export class Game {
     await installPixelFont();
     setWidgetClick(() => this.audio.play('click', { volume: 0.5 }));
     // pack de ressources importé par l'utilisateur (stocké localement)
-    const pack = await loadInstalledPack();
+    const pack = (await loadInstalledPack()) ?? (await loadBundledPack());
     // add-ons Bedrock activés : enregistrés avant toute création de monde
     try {
       const addons = await loadEnabledAddons();

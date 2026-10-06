@@ -113,7 +113,7 @@ for (const [w, n, plank, bark, leaf] of WOODS2) {
         t.data[i * 4 + 3] = 255;
       }
     });
-    B.push({ key: `${w}_leaves`, name: `Feuilles de ${n}`, textures: { all: `${w}_leaves` }, hardness: 0.2, tool: 'shears', render: 'cutout', flammable: true, sound: 'leaves', lightFilter: 1, sway: true, drops: [{ item: 'stick', chance: 0.05 }], color: leaf });
+    B.push({ key: `${w}_leaves`, name: `Feuilles de ${n}`, textures: { all: `${w}_leaves` }, hardness: 0.2, tool: 'shears', render: 'cutout', flammable: true, sound: 'leaves', lightFilter: 1, sway: true, drops: [{ item: 'stick', chance: 0.05 }], color: leaf, ...(w === 'mangrove' ? { tint: 'foliage' } : {}) });
   }
 }
 for (const [k, n, c] of [['azalea_leaves', "Feuilles d'azalée", '#5a8a2a'], ['flowering_azalea_leaves', "Feuilles d'azalée fleurie", '#6a8a3a']] as const) {

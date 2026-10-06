@@ -169,6 +169,21 @@ les fonds des interfaces (`gui/container/*.png`), les sprites du HUD et des bout
 (`gui/sprites/hud`, `gui/sprites/widget`, ou les anciens `gui/icons.png` / `gui/widgets.png`).
 Les textures sans équivalent (coffre et lit en entité, boss) gardent le dessin du jeu.
 « Retirer le pack » rétablit les textures d'origine. Le logo du jeu n'est jamais importé.
+Les archives dont le dossier racine précède `assets/` (ex. `Default-Java-1.21.11/assets/…`) sont acceptées.
+
+**Pack par défaut dans votre propre build.** Pour que votre copie de l'application démarre
+directement avec un pack (sans import manuel) :
+
+```bash
+npm run pack:embed -- /chemin/vers/MonPack.zip   # copie dans public/default-pack.zip (ignoré par git)
+npm run build && npx cap sync android && (cd android && ./gradlew assembleDebug)
+npm run pack:embed -- --remove                   # retire le pack intégré
+```
+
+Au premier lancement, s'il n'y a aucun pack installé, ce fichier est importé automatiquement.
+« Retirer le pack » le désactive définitivement sur l'appareil. **Ce fichier n'est jamais
+versionné** : n'intégrez que des textures que vous avez le droit d'utiliser, et ne publiez pas un
+APK qui contient des textures sous droits d'auteur.
 
 ---
 
