@@ -29,6 +29,20 @@ import type { WorldMeta } from '../save/SaveManager';
 import type { ItemStack } from '../inventory/Item';
 import { createShadowTexture } from '../render/MobModels';
 import { PlayerAvatar } from '../render/PlayerAvatar';
+import * as Portals from '../world/Portals';
+import type { Dimension } from '../world/Portals';
+import { NETHER_LAVA_LEVEL } from '../world/NetherGenerator';
+
+/** Couleur du brouillard des biomes du Nether (valeurs du jeu de référence). */
+const NETHER_FOG: Record<string, number> = { nether_wastes: 0x330808, crimson_forest: 0x330303, warped_forest: 0x1a051a, soul_sand_valley: 0x1b4745, basalt_deltas: 0x685f70 };
+
+/** Données propres à une dimension (l'autre dimension est conservée telle quelle dans la sauvegarde). */
+export interface DimState {
+  chests: WorldState['chests'];
+  spawners: Record<string, number>;
+  furnaces?: Record<string, FurnaceState>;
+  mobs: SavedMob[];
+}
 import { clamp } from '../util/math';
 import type { Boss } from '../entities/Boss';
 import { Scoreboard, type ScoreboardSnapshot } from '../scripting/Scoreboard';
@@ -48,6 +62,14 @@ export interface WorldState {
   gamerules?: Partial<GameRules>;
   furnaces?: Record<string, FurnaceState>;
   mobs: SavedMob[];
+  /** Dimension où se trouve le joueur (les champs coffres/fourneaux/créatures la concernent). */
+  dimension?: Dimension;
+  /** États des autres dimensions. */
+  dims?: Partial<Record<Dimension, DimState>>;
+  /** Registre des portails connus par dimension (blocs de portail). */
+  portals?: Partial<Record<Dimension, { x: number; y: number; z: number }[]>>;
+  /** Arrivée par un portail : position visée (coordonnées converties). */
+  arrival?: { x: number; y: number; z: number };
   /** Données des scripts d'add-ons : propriétés dynamiques du monde, tableau des scores, règles. */
   scripting?: { dynProps?: Record<string, unknown>; scoreboard?: ScoreboardSnapshot; extraRules?: Record<string, string> };
 }
@@ -79,6 +101,14 @@ export class Session implements GameContext {
   readonly scene: THREE.Scene;
   readonly shadowTexture: THREE.Texture;
   private iconTex = new Map<string, THREE.Texture>();
+  /** Dimension de cette partie (un changement de dimension recrée la session). */
+  readonly dimension: Dimension;
+  private dims: Partial<Record<Dimension, DimState>> = {};
+  readonly portals: Record<Dimension, { x: number; y: number; z: number }[]> = { overworld: [], nether: [] };
+  private arrival: { x: number; y: number; z: number } | null = null;
+  /** Temps passé dans un portail (s) ; le joueur doit en sortir avant de pouvoir repartir. */
+  portalTime = 0;
+  private portalBlocked = true;
   /** Vue : 0 = 1re personne, 1 = 3e personne arrière, 2 = 3e personne avant (F5). */
   perspective: 0 | 1 | 2 = 0;
   private avatar: PlayerAvatar | null = null;
@@ -112,6 +142,7 @@ export class Session implements GameContext {
   constructor(readonly game: Game, readonly meta: WorldMeta, state: WorldState | null) {
     const r = game.renderer;
     this.scene = r.scene;
+    this.dimension = state?.dimension ?? 'overworld';
     this.world = new World(meta.seed);
     this.player = new Player(meta.gameMode, meta.difficulty);
     this.functions = game.addonFunctions;
@@ -122,11 +153,12 @@ export class Session implements GameContext {
     this.entities.ctx = this;
     this.ticker = new WorldTicker(this.entities);
     this.world.events.on('blockChanged', (e) => this.ticker.blockChanged(e, this.world));
-    this.chunks = new ChunkManager(this.world, r.materials, game.saves, meta.id, {
+    this.chunks = new ChunkManager(this.world, r.materials, game.saves, this.chunkPrefix, {
       renderDistance: game.settings.renderDistance,
       jobsInFlight: this.profile.workerJobsInFlight,
       meshUploadsPerFrame: this.profile.chunkBudgetPerFrame,
-    });
+    }, this.dimension);
+    this.world.events.on('blockChanged', (e) => Portals.onBlockChanged(this.world, e.x, e.y, e.z));
     this.chunks.onSpecials = (list) => {
       this.entities.registerSpecials(this, list);
       for (const s of list) {
@@ -160,6 +192,8 @@ export class Session implements GameContext {
       sleep: (x, y, z) => this.trySleep(x, y, z),
       growSapling: (x, y, z, id) => this.ticker.growSapling(this, x, y, z, id),
       spawnCompass: () => this.hud.showCompass(this.player.spawn[0], this.player.spawn[2], 'spawn'),
+      portalLit: (pos) => this.registerPortal(pos),
+      fireLit: (x, y, z) => this.noteFire(x, y, z),
     });
     this.fovCurrent = game.settings.fov;
     // événements joueur
@@ -313,7 +347,11 @@ export class Session implements GameContext {
       step();
     });
     const p = this.player;
-    if (this.isNew) {
+    if (this.arrival) {
+      const a = this.arrival;
+      this.arrival = null;
+      this.arrive(a);
+    } else if (this.isNew) {
       // nouveau monde : colonne de sol naturel (pas sur un arbre ni dans l'eau) proche du point prévu
       const spot = this.findGroundSpot(Math.floor(p.x), Math.floor(p.z));
       p.body.setPos(spot.x + 0.5, spot.y, spot.z + 0.5);
@@ -395,6 +433,14 @@ export class Session implements GameContext {
     for (const [k, v] of Object.entries(s.scripting?.dynProps ?? {})) this.worldProps.set(k, v);
     this.scoreboard.load(s.scripting?.scoreboard);
     for (const [k, v] of Object.entries(s.scripting?.extraRules ?? {})) this.extraRules.set(k, v);
+    this.dims = s.dims ?? {};
+    for (const d of ['overworld', 'nether'] as const) this.portals[d] = s.portals?.[d] ?? [];
+    this.arrival = s.arrival ?? null;
+  }
+
+  /** Préfixe des chunks sauvegardés de la dimension. */
+  get chunkPrefix() {
+    return this.dimension === 'nether' ? `${this.meta.id}:nether` : this.meta.id;
   }
   private pendingMobs: SavedMob[] | null = null;
 
@@ -416,6 +462,9 @@ export class Session implements GameContext {
       gamerules: { ...this.gamerules },
       mobs: this.entities.serialize(),
       scripting: { dynProps: Object.fromEntries(this.worldProps), scoreboard: this.scoreboard.serialize(), extraRules: Object.fromEntries(this.extraRules) },
+      dimension: this.dimension,
+      dims: this.dims,
+      portals: this.portals,
     };
   }
 
@@ -437,7 +486,7 @@ export class Session implements GameContext {
     } else if (withThumbnail && this.game.lastThumbnail) meta.thumbnail = this.game.lastThumbnail;
     this.meta.thumbnail = meta.thumbnail;
     this.saving = this.game.saves
-      .save(meta, state, chunks)
+      .save(meta, state, chunks, this.chunkPrefix)
       .then(() => this.chunks.markSaved(list, versions))
       .catch((e) => {
         console.error('Sauvegarde échouée', e);
@@ -474,6 +523,8 @@ export class Session implements GameContext {
     const p = this.player;
     this.controller.look();
     this.controller.update(this.world, dt);
+    this.updatePortal(dt);
+    this.updateFires();
     this.interaction.update(dt, remaining);
     // ticks fixes 20 Hz
     this.tickAcc += dt;
@@ -503,6 +554,69 @@ export class Session implements GameContext {
       }
     }
     this.updateView(dt);
+  }
+
+  /** Portail : 4 s dedans (1 s en créatif) pour changer de dimension ; il faut en sortir pour repartir. */
+  private updatePortal(dt: number) {
+    const p = this.player;
+    const inside = !p.dead && Portals.touchesPortal(this.world, p.x, p.y, p.z, p.body.halfWidth, p.body.height);
+    if (!inside) {
+      this.portalBlocked = false;
+      this.portalTime = Math.max(0, this.portalTime - dt * 2);
+    } else if (!this.portalBlocked) {
+      if (this.portalTime === 0) this.audio.play('portal', { volume: 0.8 });
+      this.portalTime += dt;
+      if (this.portalTime >= (p.creative ? 1 : 4)) {
+        this.portalBlocked = true;
+        this.portalTime = 0;
+        void this.game.changeDimension(this.dimension === 'nether' ? 'overworld' : 'nether');
+      }
+    }
+    this.hud.setPortal(this.portalTime / (p.creative ? 1 : 4));
+  }
+
+  /** Feux posés hors du Nether : s'éteignent au bout de quelques secondes (sauf sur netherrack / magma). */
+  private fires = new Map<string, number>();
+  private updateFires() {
+    if (!this.fires.size) return;
+    const now = this.elapsed;
+    const fire = BlockRegistry.has('fire') ? BlockRegistry.byName('fire').id : -1;
+    for (const [k, t] of this.fires) {
+      if (now < t) continue;
+      this.fires.delete(k);
+      const [x, y, z] = k.split(',').map(Number);
+      if (this.world.getBlock(x, y, z) === fire) this.world.setBlock(x, y, z, B.AIR);
+    }
+  }
+
+  /** Arrivée par un portail : portail existant proche (registre), sinon nouveau portail. */
+  private arrive(a: { x: number; y: number; z: number }) {
+    const w = this.world, p = this.player;
+    const nether = this.dimension === 'nether';
+    let spot = Portals.findNearbyPortal(w, a.x, a.z, nether ? 16 : 128, this.portals[this.dimension]);
+    if (!spot) {
+      const tx = Math.floor(a.x), tz = Math.floor(a.z);
+      const prefer = nether ? clamp(Math.round(a.y), NETHER_LAVA_LEVEL + 8, 100) : w.surfaceBelow(tx, WORLD_HEIGHT - 2, tz) + 1;
+      spot = Portals.buildArrivalPortal(w, tx, tz, this.dimension, prefer);
+      this.portals[this.dimension].push(spot);
+    }
+    p.body.setPos(spot.x + 0.5, spot.y, spot.z + 0.5);
+    p.body.vx = p.body.vy = p.body.vz = 0;
+    p.body.fallDistance = 0;
+    this.portalBlocked = true;
+  }
+
+  /** Portail allumé par le joueur : mémorisé pour relier les dimensions. */
+  registerPortal(pos: { x: number; y: number; z: number }) {
+    const list = this.portals[this.dimension];
+    if (!list.some((q) => Math.abs(q.x - pos.x) < 3 && Math.abs(q.y - pos.y) < 4 && Math.abs(q.z - pos.z) < 3)) list.push(pos);
+  }
+
+  /** Feu posé (briquet) : éphémère hors netherrack. */
+  noteFire(x: number, y: number, z: number) {
+    const below = this.world.getBlock(x, y - 1, z);
+    const eternal = (BlockRegistry.has('netherrack') && below === BlockRegistry.byName('netherrack').id) || (BlockRegistry.has('magma') && below === BlockRegistry.byName('magma').id);
+    if (!eternal) this.fires.set(`${x},${y},${z}`, this.elapsed + 4 + Math.random() * 4);
   }
 
   private selectSlot(i: number) {
@@ -605,6 +719,13 @@ export class Session implements GameContext {
   /** Lit : dormir la nuit (passe au matin) et définir le point de réapparition. */
   private trySleep(x: number, y: number, z: number) {
     const w = this.world;
+    if (this.dimension === 'nether') {
+      // comme dans le jeu de référence : un lit explose dans le Nether
+      w.setBlock(x, y, z, B.AIR);
+      this.explosions.explode(this, this.entities, x + 0.5, y + 0.5, z + 0.5, 5);
+      this.shake(1);
+      return;
+    }
     const meta = w.getMeta(x, y, z);
     // coordonnées de la tête du lit
     let hx = x, hz = z;
@@ -669,11 +790,15 @@ export class Session implements GameContext {
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2);
     r.shake = this.shakeAmt;
     // ciel, brouillard, lumière
-    const rain = this.biomeWeather() === 'none' ? 0 : this.weather.intensity;
-    r.sky.update(this.dayCycle.time, cam.position, rain, this.weather.flash, this.elapsed, s.clouds);
+    const nether = this.dimension === 'nether';
+    const rain = nether || this.biomeWeather() === 'none' ? 0 : this.weather.intensity;
+    const netherFog = nether ? new THREE.Color(NETHER_FOG[this.world.biomeAt(Math.floor(p.x), Math.floor(p.z)).key] ?? 0x330808) : null;
+    if (netherFog) r.sky.updateNether(cam.position, netherFog);
+    else r.sky.update(this.dayCycle.time, cam.position, rain, this.weather.flash, this.elapsed, s.clouds);
     const u = r.materials.uniforms;
     u.uTime.value = this.elapsed;
-    u.uDaylight.value = Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
+    u.uDaylight.value = nether ? 0 : Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
+    u.uAmbient.value = nether ? 0.3 : 0.035;
     u.uSkyColor.value.copy(r.sky.skyLightColor);
     u.uSway.value = this.profile.foliageAnimation ? 1 : 0;
     u.uWaterAnim.value = s.waterQuality === 'animated' ? 1 : 0;
@@ -684,6 +809,7 @@ export class Session implements GameContext {
     const far = Math.max(24, s.renderDistance * CHUNK_SIZE - 6);
     if (underwater) r.setFog(1, 18, new THREE.Color(0.12, 0.25, 0.55).multiplyScalar(Math.max(0.3, this.dayCycle.daylight)));
     else if (inLava) r.setFog(0.2, 3, new THREE.Color(0.9, 0.35, 0.05));
+    else if (netherFog) r.setFog(Math.min(far, 64) * 0.1, Math.min(far, 64), netherFog);
     else r.setFog(far * (rain > 0.3 ? 0.35 : 0.6), far, r.sky.horizon);
     game.hud.setOverlays(underwater, inLava);
     // météo
@@ -700,7 +826,7 @@ export class Session implements GameContext {
     this.highlight.update(tg ? { x: tg.x, y: tg.y, z: tg.z, box } : null, this.interaction.miningProgress, this.interaction.preview, true);
     const held = p.inventory.selectedStack?.id ?? '';
     this.held.setItem(held);
-    const br = Math.max(0.15, Math.pow(Math.max((light.sky / 15) * this.dayCycle.daylight, light.block / 15), 1.2));
+    const br = Math.max(nether ? 0.45 : 0.15, Math.pow(Math.max((light.sky / 15) * this.dayCycle.daylight, light.block / 15), 1.2));
     this.held.update(cam.aspect, this.entities.combat.swing, this.controller.bobPhase * 2, Math.min(1, Math.hypot(p.body.vx, p.body.vz) / 4), br, p.sneaking);
     // modèle du joueur (vues à la 3e personne)
     if (this.perspective && !this.avatar) {
@@ -761,6 +887,8 @@ export class Session implements GameContext {
   respawn() {
     this.player.respawn();
     this.game.input.reset();
+    // le point de réapparition est à la surface
+    if (this.dimension === 'nether') void this.game.changeDimension('overworld', { x: this.player.x, y: this.player.y, z: this.player.z });
   }
 
   private async useCompass(target: string) {

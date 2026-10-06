@@ -22,9 +22,9 @@ export interface MobDef {
   food?: string[];
   ranged?: { projectile: 'arrow' | 'ice' | 'crystal' | 'boulder'; range: number; damage: number; speed: number; /** Projectile d'add-on (minecraft:shooter). */ customId?: string };
   /** Comportements spéciaux. */
-  traits?: ('burnsInSun' | 'climbs' | 'hops' | 'flies' | 'splits' | 'knockbackResist' | 'aquatic' | 'poison' | 'neutralInDay' | 'shearable' | 'laysEggs' | 'milkable')[];
+  traits?: ('fireImmune' | 'groupAnger' | 'burnsInSun' | 'climbs' | 'hops' | 'flies' | 'splits' | 'knockbackResist' | 'aquatic' | 'poison' | 'neutralInDay' | 'shearable' | 'laysEggs' | 'milkable')[];
   /** Conditions d'apparition naturelle. */
-  spawn?: { where: 'surface' | 'cave'; light: 'day' | 'dark' | 'any'; group: [number, number]; weight: number; minY?: number; maxY?: number };
+  spawn?: { where: 'surface' | 'cave' | 'nether'; light: 'day' | 'dark' | 'any'; group: [number, number]; weight: number; minY?: number; maxY?: number };
   sounds: { idle: string; hurt: string; death: string };
   /** Multiplicateurs de dégâts reçus selon le type d'outil (faiblesses). */
   weakness?: Partial<Record<'pickaxe' | 'axe' | 'sword' | 'shovel' | 'gold' | 'fire', number>>;
@@ -41,7 +41,7 @@ export interface MobDef {
 
 const VANILLA_FAMILIES: Record<string, string[]> = {
   zombie: ['zombie', 'undead', 'monster'], skeleton: ['skeleton', 'undead', 'monster'], spider: ['spider', 'arthropod', 'monster'],
-  cave_spider: ['cave_spider', 'arthropod', 'monster'], creeper: ['creeper', 'monster'], slime: ['slime', 'monster'], zombie_chief: ['zombie', 'undead', 'monster'],
+  cave_spider: ['cave_spider', 'arthropod', 'monster'], creeper: ['creeper', 'monster'], zombified_piglin: ['zombified_piglin', 'piglin', 'undead', 'monster'], ghast: ['ghast', 'monster'], magma_cube: ['magma_cube', 'monster'], blaze: ['blaze', 'monster'], slime: ['slime', 'monster'], zombie_chief: ['zombie', 'undead', 'monster'],
   cow: ['cow'], sheep: ['sheep'], pig: ['pig'], chicken: ['chicken'], golem: ['irongolem'], liche: ['undead', 'monster'],
 };
 
@@ -66,6 +66,10 @@ export const MOB_DEFS: MobDef[] = [
   { key: 'golem', name: 'Golem des profondeurs', category: 'boss', health: 320, damage: 9, speed: 2.2, detectionRange: 32, attackRange: 3, attackCooldown: 1.8, width: 1.6, height: 3.2, drops: [{ item: 'golem_core', min: 1, max: 1 }, { item: 'diamond', min: 2, max: 4 }, { item: 'iron_block', min: 1, max: 2 }], xp: 120, traits: ['knockbackResist'], weakness: { pickaxe: 2, sword: 0.7 }, sounds: { idle: 'golem_idle', hurt: 'stone_hit', death: 'golem_death' } },
   { key: 'liche', name: 'Liche de givre', category: 'boss', health: 240, damage: 7, speed: 2.4, detectionRange: 32, attackRange: 16, attackCooldown: 1.6, width: 0.9, height: 2.6, drops: [{ item: 'frost_heart', min: 1, max: 1 }, { item: 'frost_scepter', min: 1, max: 1 }, { item: 'emerald', min: 4, max: 8 }], xp: 150, ranged: { projectile: 'ice', range: 18, damage: 5, speed: 16 }, traits: ['flies', 'knockbackResist'], weakness: { gold: 2, fire: 2 }, sounds: { idle: 'lich_idle', hurt: 'glass_hit', death: 'lich_death' } },
   { key: 'creeper', name: 'Creeper', category: 'hostile', health: 20, damage: 0, speed: 2.1, detectionRange: 16, attackRange: 3, attackCooldown: 1, width: 0.6, height: 1.7, drops: [{ item: 'gunpowder', min: 0, max: 2 }], xp: 5, spawn: { where: 'surface', light: 'dark', group: [1, 1], weight: 100 }, sounds: { idle: '', hurt: 'hurt', death: 'hurt' } },
+  { key: 'zombified_piglin', name: 'Piglin zombifié', category: 'neutral', health: 20, damage: 8, speed: 2.4, detectionRange: 35, attackRange: 1.6, attackCooldown: 1, width: 0.6, height: 1.95, drops: [{ item: 'rotten_flesh', min: 0, max: 1 }, { item: 'gold_nugget', min: 0, max: 1 }, { item: 'gold_ingot', min: 1, max: 1, chance: 0.025 }], xp: 5, traits: ['fireImmune', 'groupAnger'], spawn: { where: 'nether', light: 'any', group: [2, 4], weight: 100 }, sounds: { idle: 'grunt', hurt: 'grunt_hurt', death: 'grunt_hurt' } },
+  { key: 'ghast', name: 'Ghast', category: 'hostile', health: 10, damage: 0, speed: 1.6, detectionRange: 64, attackRange: 0, attackCooldown: 3, width: 4, height: 4, scale: 4.5, ranged: { projectile: 'crystal', range: 64, damage: 6, speed: 12, customId: 'minecraft:fireball' }, drops: [{ item: 'ghast_tear', min: 0, max: 1 }, { item: 'gunpowder', min: 0, max: 2 }], xp: 5, traits: ['fireImmune', 'flies'], spawn: { where: 'nether', light: 'any', group: [1, 1], weight: 50 }, sounds: { idle: 'ghast_moan', hurt: 'ghast_hurt', death: 'ghast_hurt' } },
+  { key: 'magma_cube', name: 'Cube de magma', category: 'hostile', health: 16, damage: 6, speed: 2, detectionRange: 16, attackRange: 1.6, attackCooldown: 1, width: 2, height: 2, scale: 4, drops: [{ item: 'magma_cream', min: 0, max: 1 }], xp: 4, traits: ['fireImmune', 'hops', 'splits'], spawn: { where: 'nether', light: 'any', group: [1, 3], weight: 30 }, sounds: { idle: 'squish', hurt: 'squish', death: 'squish' } },
+  { key: 'blaze', name: 'Blaze', category: 'hostile', health: 20, damage: 6, speed: 2.3, detectionRange: 48, attackRange: 1.6, attackCooldown: 2.5, width: 0.6, height: 1.8, ranged: { projectile: 'crystal', range: 32, damage: 5, speed: 16, customId: 'minecraft:small_fireball' }, drops: [{ item: 'blaze_rod', min: 0, max: 1 }], xp: 10, traits: ['fireImmune', 'flies'], sounds: { idle: 'blaze_breath', hurt: 'blaze_hurt', death: 'blaze_hurt' } },
 ];
 
 export const MOB_BY_KEY = new Map(MOB_DEFS.map((m, i) => [m.key, { def: m, index: i }]));

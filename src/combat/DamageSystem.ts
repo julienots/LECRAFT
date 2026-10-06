@@ -33,6 +33,8 @@ export class DamageSystem {
   damageMob(m: Mob, amount: number, src: DamageInfo): number {
     const ctx = this.ctx();
     if (m.dead || (m.iframes > 0 && src.kind !== 'environment')) return 0;
+    // créatures du Nether : insensibles au feu et à la lave
+    if (src.fire && src.kind === 'environment' && m.has('fireImmune')) return 0;
     let dmg = amount * this.multiplier(m, src) * m.effects.damageMul(!!src.fire);
     const ev = this.eventOf(src);
     if (hooks.beforeHurt) {
@@ -51,7 +53,18 @@ export class DamageSystem {
     ctx.particles.burst('damage', m.x, m.y + m.body.height * 0.7, m.z, Math.min(10, 3 + Math.round(dmg)));
     if (src.fromPlayer || src.kind === 'player') {
       if (m.def.category === 'passive') m.fleeTimer = 5;
-      else if (m.def.category === 'neutral') m.anger = 30;
+      else if (m.def.category === 'neutral') {
+        m.anger = 30;
+        // piglins zombifiés : toute la bande alentour devient hostile
+        if (m.has('groupAnger'))
+          for (const o of (this.spawner as unknown as { mobs: Mob[] }).mobs ?? [])
+            if (o !== m && !o.dead && o.def.key === m.def.key && Math.hypot(o.x - m.x, o.y - m.y, o.z - m.z) < 24) {
+              o.anger = 30;
+              o.ai.lastSeenX = ctx.player.x;
+              o.ai.lastSeenZ = ctx.player.z;
+              o.ai.fsm.set(AIState.CHASE);
+            }
+      }
       if (m.def.category !== 'passive') {
         m.ai.lastSeenX = ctx.player.x;
         m.ai.lastSeenZ = ctx.player.z;

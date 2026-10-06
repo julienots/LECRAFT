@@ -7,6 +7,7 @@
 import { CHUNK_SIZE, LIGHT_PADDING, WORLD_HEIGHT } from '../core/Config';
 import { chunkKey } from '../util/math';
 import { WorldGenerator, scanSpecials } from '../world/WorldGenerator';
+import { NetherGenerator } from '../world/NetherGenerator';
 import { computeHeights, createChunkData, idx, type ChunkData } from '../world/ChunkData';
 import { ChunkMesher, PADDED_W, PADDED_AREA } from '../render/ChunkMesher';
 import { LightVolume } from '../render/Lighting';
@@ -16,7 +17,7 @@ import type { FromWorker, ToWorker } from './protocol';
 import { registerAddonBlocks } from '../addons/AddonRegistry';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
-let gen: WorldGenerator | null = null;
+let gen: WorldGenerator | NetherGenerator | null = null;
 const chunks = new Map<string, ChunkData>();
 const mesher = new ChunkMesher();
 const light = new LightVolume(PADDED_W);
@@ -125,7 +126,7 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
     switch (m.type) {
       case 'init':
         if (m.addonBlocks?.length) registerAddonBlocks(m.addonBlocks, m.addonTiles ?? []);
-        gen = new WorldGenerator(m.seed);
+        gen = m.dimension === 'nether' ? new NetherGenerator(m.seed) : new WorldGenerator(m.seed);
         chunks.clear();
         break;
       case 'load':

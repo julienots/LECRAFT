@@ -126,6 +126,63 @@ export const SKINS: Record<string, SkinSpec> = {
       ctx.drawImage(ctx.canvas, 0, 16, 16, 16, 16, 48, 16, 16);
     },
   },
+  zombified_piglin: {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      const pink = ['#e8a0a0', '#d88e8e', '#f0b0aa'], rot = ['#7aa060', '#6a9050', '#8ab070'];
+      const skin = () => (rng.next() < 0.3 ? pick(rng, rot) : pick(rng, pink));
+      box(ctx, 0, 0, 10, 8, 8, (f, x, y) => (f === 'front' && y === 3 && (x === 2 || x === 7) ? '#1a1a1a' : f === 'front' && y === 3 && (x === 3 || x === 6) ? '#f0f0f0' : skin()));
+      box(ctx, 31, 1, 4, 4, 1, (f, x, y) => (f === 'front' && y === 2 && (x === 1 || x === 2) ? '#8a4a4a' : '#e89a9a'));
+      box(ctx, 2, 4, 1, 2, 1, () => '#f0ecd8');
+      box(ctx, 2, 0, 1, 2, 1, () => '#f0ecd8');
+      box(ctx, 51, 6, 1, 5, 4, () => pick(rng, pink));
+      box(ctx, 39, 6, 1, 5, 4, () => pick(rng, pink));
+      box(ctx, 16, 16, 8, 12, 4, (f, x, y) => (f === 'front' && y > 2 && y < 8 && (x === 2 || x === 5) && y % 2 === 0 ? '#e8e0d0' : y > 8 ? '#6a4a2a' : skin()));
+      box(ctx, 40, 16, 4, 12, 4, () => skin());
+      box(ctx, 32, 48, 4, 12, 4, () => skin());
+      box(ctx, 0, 16, 4, 12, 4, (_f, _x, y) => (y < 6 ? '#6a4a2a' : skin()));
+      box(ctx, 16, 48, 4, 12, 4, (_f, _x, y) => (y < 6 ? '#6a4a2a' : skin()));
+    },
+  },
+  ghast: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const w = ['#f0f0f0', '#e4e4e4', '#d8d8d8', '#fafafa'];
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(0, 0, 16, 16);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) px(ctx, x, y, pick(rng, ['#dcdcdc', '#e8e8e8', '#cfcfcf']));
+      box(ctx, 0, 0, 16, 16, 16, (f, x, y) => {
+        if (f === 'front') {
+          if ((y === 4 || y === 5) && ((x >= 2 && x <= 4) || (x >= 10 && x <= 12))) return '#2a2a2a';
+          if (y >= 9 && y <= 10 && x >= 5 && x <= 10) return '#3a3a3a';
+          if (y === 6 && (x === 3 || x === 11)) return '#9ab0c0';
+        }
+        return pick(rng, w);
+      });
+    },
+  },
+  magma_cube: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const dark = ['#3a1408', '#4a1a0a', '#2a0e06'], hot = ['#f08a20', '#ffb030', '#e05010'];
+      for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) px(ctx, x, y, rng.next() < 0.18 ? pick(rng, hot) : pick(rng, dark));
+      box(ctx, 0, 16, 4, 4, 4, () => pick(rng, ['#ffd040', '#ffb020', '#ffe080']));
+      // yeux sur la face avant de la tranche 4
+      for (const x of [2, 3, 12, 13]) px(ctx, 8 + (x - 8 + 8) % 8, 4 + 8, '#ffe040');
+    },
+  },
+  blaze: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const y1 = ['#f0c020', '#e8a818', '#ffd840', '#d89010'];
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && y === 3 && (x === 1 || x === 2 || x === 5 || x === 6) ? '#2a1a0a' : f === 'front' && y === 5 && x >= 2 && x <= 5 ? '#5a3a0a' : pick(rng, y1)));
+      box(ctx, 0, 16, 2, 8, 2, () => pick(rng, ['#f0a020', '#ffc040', '#d87810']));
+    },
+  },
   creeper: {
     w: 64,
     h: 32,

@@ -56,7 +56,7 @@ complet piloté par de vrais événements tactiles dans Chromium (même moteur q
 | Inventaire | Interfaces classiques au pixel près (176×166, cases de 18 px) : objet tenu au **curseur**, toucher = prendre/poser/échanger, appui long = moitié/un seul, double toucher = transfert rapide, toucher hors de la fenêtre = jeter ; armure, coffre 27 cases, info-bulles ; **inventaire créatif** par onglets |
 | Fabrication | **Grille 2×2** (inventaire) et **3×3** (table de fabrication) avec motifs vanilla (position libre, miroir, recettes sans forme, tags de bois), **livre de recettes** qui remplit la grille ; **fourneau** à cases (entrée/combustible/résultat, flamme et flèche de progression, 10 s par objet, durées de combustion vanilla, XP) — 116 recettes + 21 cuissons, 228 objets ; outils bois/pierre/cuivre/fer/or/diamant et armures cuir/fer/or/diamant aux valeurs vanilla |
 | Combat | Cadence d'attaque, dégâts par arme, critiques en chute, recul, invincibilité temporaire, armure, faiblesses des boss, projectiles |
-| Créatures (13) | vache (lait), mouton (laine colorée, tonte, repousse), cochon, poule (œufs), zombie, squelette (arc), creeper (mèche de 1,5 s, explosion qui creuse le terrain, poudre à canon), araignée (neutre le jour), araignée venimeuse, slime (se divise), chef zombie (mini-boss), 2 boss — modèles aux proportions et disposition UV vanilla (compatibles avec les skins d'un pack) |
+| Créatures (17) | vache (lait), mouton (laine colorée, tonte, repousse), cochon, poule (œufs), zombie, squelette (arc), creeper (mèche de 1,5 s, explosion qui creuse le terrain, poudre à canon), piglin zombifié, ghast, cube de magma, blaze (Nether), araignée (neutre le jour), araignée venimeuse, slime (se divise), chef zombie (mini-boss), 2 boss — modèles aux proportions et disposition UV vanilla (compatibles avec les skins d'un pack) |
 | IA | Entity → AIController → StateMachine (IDLE, WANDER, FOLLOW, CHASE, ATTACK, FLEE, SEARCH, RETURN, DEAD), ligne de vue, évitement des falaises et de la lave, LOD de simulation |
 | Boss | **Golem des profondeurs** (3 phases : coups, bond + onde de choc, rochers, invocations ; faible aux pioches) ; **Liche de givre** (3 phases : éclats de glace ralentissants, téléportation, anneau de projectiles, pics de glace, spectres ; faible à l'or) — arènes dédiées, barre de vie, butin unique |
 | Structures | villages, maisons abandonnées, ruines, tours (escalier), temples (piège + salle cachée), sanctuaire de givre, camps, mines, donjons (salles, couloirs, pièges, cages, coffres, chef), repaire du golem |
@@ -70,6 +70,32 @@ complet piloté par de vrais événements tactiles dans Chromium (même moteur q
 | Performance | Détection LOW/MEDIUM/HIGH (GPU, cœurs, mémoire, écran), ajustement dynamique de la résolution puis de la distance, limitation 30/45/60 FPS, pools (modèles, particules), libération des ressources WebGL |
 
 Les éléments **non réalisés** sont listés honnêtement dans [Limites connues / TODO](#16-limites-connues--todo).
+
+### Le Nether
+
+- **Portail** : cadre d'obsidienne rectangulaire (intérieur de 2×3 à 21×21, coins facultatifs, vertical
+  dans un plan X ou Z) allumé au **briquet** ; casser le cadre éteint le portail. Le briquet pose
+  aussi du **feu** (éternel sur netherrack/magma, éphémère ailleurs).
+- **Passage** : 4 s dans le portail (1 s en créatif), voile violet ondulant et bourdonnement ; il
+  faut sortir du portail pour repartir. Coordonnées **÷ 8** vers le Nether, **× 8** vers la surface ;
+  un portail existant proche est réutilisé (registre des portails), sinon un nouveau portail est
+  construit sur un emplacement dégagé (plateforme d'obsidienne au besoin).
+- **Génération** (`NetherGenerator`) : grandes cavernes de netherrack (bruit 3D), bedrock en haut
+  et en bas, **océan de lave à y = 31**, 5 biomes (désolation, forêts carmin et biscornue avec
+  champignons géants et champilampes, vallée des âmes avec piliers de basalte et feu des âmes,
+  deltas de basalte avec magma), minerais de quartz et d'or du Nether, débris antiques, grappes de
+  pierre lumineuse au plafond, gravier et sable des âmes près de la lave.
+- **Forteresses** : ponts couverts de briques du Nether en croix (piliers jusqu'au sol, fenêtres en
+  barrières), salle centrale avec **générateur de blazes**, sable des âmes et coffres (butin de
+  forteresse). `/locate fortress` et la boussole les trouvent.
+- **Créatures** : piglin zombifié (neutre, toute la bande attaque si on en frappe un), ghast (vol,
+  boules de feu explosives), cube de magma (saute, se divise), blaze (vol, boules de feu) — toutes
+  insensibles au feu et à la lave. Modèles et UV du jeu de référence (skins d'un pack Java).
+- **Règles** : pas de jour/nuit ni de météo, brouillard teinté par biome, l'**eau s'évapore**, un
+  **lit explose** ; mourir dans le Nether ramène au point d'apparition de la surface.
+- **Sauvegarde** : chunks séparés (`<monde>:nether:x:z`), coffres/fourneaux/créatures de chaque
+  dimension conservés. `/execute in minecraft:the_nether run tp @s x y z` (et `in minecraft:overworld`)
+  fait voyager directement.
 
 ### Commandes (chat)
 
@@ -554,7 +580,7 @@ La sensibilité et l'inversion de l'axe vertical des Paramètres s'appliquent au
 ## 14. Tests
 
 ```bash
-npm test                         # 46 tests unitaires : génération déterministe, biomes, grottes,
+npm test                         # 48 tests unitaires : génération déterministe, biomes, grottes,
                                  # mesher/lumière, physique, liquides, inventaire, grilles 2x2/3x3,
                                  # fourneau, formes/orientations, drops, butin, survie, police TrueType,
                                  # sauvegarde/corruption (fake-indexeddb)
@@ -570,6 +596,9 @@ npm run e2e:addons               # 33 vérifications : import d'un .mcaddon gén
                                  # JSON commenté), blocs/objets/recettes/créature/fonctions d'add-on,
                                  # textures remplacées, commandes, chat, triches, croix directionnelle,
                                  # désactivation (identifiants conservés)
+npm run e2e:nether               # 18 vérifications : portail (allumage, cadre cassé), passage, génération,
+                                 # ambiance, eau, lit, créatures et colère des piglins, forteresse, retour
+                                 # par le portail relié, persistance des blocs du Nether
 npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
                                  # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,
                                  # lâcher), vues 1re/3e personne (F5, croix ↑), caméra contre un mur

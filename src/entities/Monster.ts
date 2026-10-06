@@ -13,6 +13,8 @@ export class Monster extends Mob {
   fuse = 0;
   constructor(def: MobDef, index: number, x: number, y: number, z: number, spawner: EntitySpawner) {
     super(def, index, x, y, z, spawner);
+    if (def.key === 'ghast') this.hoverHeight = 7;
+    else if (def.key === 'blaze') this.hoverHeight = 1.5;
   }
 
   /** Le creeper n'attaque pas : il allume sa mèche (voir customUpdate). */

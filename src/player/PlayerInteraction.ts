@@ -13,6 +13,7 @@ import { FACING_DIR, facingFromYaw, opposite } from '../blocks/Shapes';
 import { encodeStates, type BedrockBlockInfo } from '../addons/BedrockBlocks';
 import { connectionStates } from '../addons/BlockRuntime';
 import { hooks } from '../scripting/Hooks';
+import { tryLight } from '../world/Portals';
 
 /** Face moteur (0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z) d'une normale. */
 const faceOf = (t: RayHit) => (t.nx > 0 ? 0 : t.nx < 0 ? 1 : t.ny > 0 ? 2 : t.ny < 0 ? 3 : t.nz > 0 ? 4 : 5);
@@ -36,6 +37,10 @@ export interface InteractionHost {
   sleep(x: number, y: number, z: number): void;
   growSapling(x: number, y: number, z: number, id: number): boolean;
   spawnCompass(): void;
+  /** Portail du Nether allumé (registre des portails). */
+  portalLit?(pos: { x: number; y: number; z: number }): void;
+  /** Feu posé au briquet. */
+  fireLit?(x: number, y: number, z: number): void;
 }
 
 /** Index d'orientation correspondant à une direction horizontale (dx, dz). */
@@ -517,7 +522,11 @@ export class PlayerInteraction {
         const [x, y, z] = tb.replaceable ? [t.x, t.y, t.z] : [t.x + t.nx, t.y + t.ny, t.z + t.nz];
         const cur = w.getBlock(x, y, z);
         if (cur < 0 || !BlockRegistry.replaceable[cur]) return false;
-        w.setBlock(x, y, z, use === 'water_bucket' ? B.WATER : B.LAVA, 0);
+        if (use === 'water_bucket' && ctx.dimension === 'nether') {
+          // l'eau s'évapore instantanément dans le Nether
+          ctx.audio.play('extinguish', { x, y, z });
+          ctx.particles.burst('smoke', x + 0.5, y + 0.5, z + 0.5, 12);
+        } else w.setBlock(x, y, z, use === 'water_bucket' ? B.WATER : B.LAVA, 0);
         ctx.audio.play('bucket_empty', { x, y, z });
         if (!p.creative) {
           inv.slots[inv.selected] = { id: 'bucket', count: 1 };
@@ -583,9 +592,24 @@ export class PlayerInteraction {
         if (m && !p.creative) inv.takeFromSlot(inv.selected, 1);
         return !!m;
       }
-      case 'ignite':
-        // le briquet n'a d'effet que sur la TNT (pas de feu dans cette version)
-        return false;
+      case 'ignite': {
+        // briquet : allume un portail dans un cadre d'obsidienne, sinon pose du feu
+        if (!t) return false;
+        const x = t.x + t.nx, y = t.y + t.ny, z = t.z + t.nz;
+        if (w.getBlock(x, y, z) !== B.AIR) return false;
+        const lit = tryLight(w, x, y, z);
+        if (lit) {
+          this.host.portalLit?.(lit);
+          ctx.audio.play('portal', { x, y, z, volume: 0.7 });
+        } else {
+          if (!BlockRegistry.has('fire') || !BlockRegistry.solid[t.block]) return false;
+          w.setBlock(x, y, z, BlockRegistry.byName('fire').id, 0);
+          this.host.fireLit?.(x, y, z);
+        }
+        ctx.audio.play('ignite', { x, y, z });
+        if (!p.creative) inv.damageSelected(1);
+        return true;
+      }
       default:
         void itemId;
         return false;

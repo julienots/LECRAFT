@@ -85,6 +85,40 @@ const VANILLA: Record<string, VanillaModel> = {
   zombie_chief: humanoid('zombie_chief', 64, 64, 4),
   skeleton: humanoid('skeleton', 64, 32, 2),
   player: playerModel(),
+  zombified_piglin: piglinModel('zombified_piglin'),
+  ghast: {
+    skin: 'ghast', texW: 64, texH: 32,
+    parts: [
+      P([0, 0], [-8, -8, -8, 16, 16, 16], [0, 16, 0]),
+      ...[9, 12, 10, 13, 8, 11, 10, 9, 12].map((len, i) => {
+        const fx = ((i % 3) - (Math.floor(i / 3) % 2) * 0.5 + 0.25 - 1) * 5;
+        const fz = (Math.floor(i / 3) - 1) * 5;
+        return P([0, 0], [-1, 0, -1, 2, len, 2], [fx, 24, fz], { anim: 'tentacle' });
+      }),
+    ],
+  },
+  magma_cube: {
+    skin: 'magma_cube', texW: 64, texH: 32,
+    parts: [
+      ...Array.from({ length: 8 }, (_, i) => P(i === 2 ? [24, 10] : i === 3 ? [24, 19] : [0, i], [-4, 16 + i, -4, 8, 1, 8], [0, 0, 0], { anim: 'squash' })),
+      P([0, 16], [-2, 18, -2, 4, 4, 4], [0, 0, 0], { anim: 'squash' }),
+    ],
+  },
+  blaze: {
+    skin: 'blaze', texW: 64, texH: 32,
+    parts: [
+      P([0, 0], [-4, -4, -4, 8, 8, 8], [0, 4, 0], { anim: 'head' }),
+      ...[[9, -4], [7, 3], [5, 10]].map(([r, y], ring) =>
+        P([0, 0], [0, 0, 0, 0, 0, 0], [0, 24, 0], {
+          anim: `spin${ring}`,
+          children: [0, 1, 2, 3].map((k) => {
+            const a = (k / 4) * Math.PI * 2 + ring * 0.6;
+            return P([0, 16], [-1, 0, -1, 2, 8, 2], [Math.cos(a) * r, y - 20, Math.sin(a) * r]);
+          }),
+        }),
+      ),
+    ],
+  },
   creeper: {
     skin: 'creeper', texW: 64, texH: 32,
     parts: [
@@ -137,6 +171,24 @@ function playerModel(): VanillaModel {
       P([16, 48], limb, [1.9, 12, 0], { anim: 'legL', children: [o([0, 48], limb, 0.25)] }),
     ],
   };
+}
+
+/** Piglin (tête large, groin, défenses, oreilles) sur le corps du modèle joueur 64x64. */
+function piglinModel(skin: string): VanillaModel {
+  const base = playerModel();
+  const o = (uv: [number, number], box: CubePart['box'], extra: Partial<CubePart> = {}) => P(uv, box, [0, 0, 0], extra);
+  base.skin = skin;
+  base.parts[0] = P([0, 0], [-5, -8, -4, 10, 8, 8], [0, 0, 0], {
+    anim: 'head',
+    children: [
+      o([31, 1], [-2, -4, -5, 4, 4, 1]),
+      o([2, 4], [2, -2, -5, 1, 2, 1]),
+      o([2, 0], [-3, -2, -5, 1, 2, 1]),
+      P([51, 6], [0, 0, -2, 1, 5, 4], [4.5, -6, 0], { rot: [0, 0, -0.5236] }),
+      P([39, 6], [-1, 0, -2, 1, 5, 4], [-4.5, -6, 0], { rot: [0, 0, 0.5236] }),
+    ],
+  });
+  return base;
 }
 
 function spider(skin: string): VanillaModel {
@@ -322,7 +374,7 @@ export class MobModel {
     for (const k of ['legFL', 'legBR', 'legR']) this.rot(k, (b, o) => (o.rotation.x = b.x + s));
     for (const k of ['legFR', 'legBL', 'legL']) this.rot(k, (b, o) => (o.rotation.x = b.x - s));
     // bras : zombies tendus vers l'avant, squelettes balancés
-    const zombieArms = this.type.startsWith('zombie');
+    const zombieArms = this.type.startsWith('zombi');
     this.rot('armR', (b, o) => (o.rotation.x = zombieArms ? -HALF_PI + Math.sin(t * 2) * 0.05 - attack * 0.6 : b.x - s * 0.7 - attack * 1.4));
     this.rot('armL', (b, o) => (o.rotation.x = zombieArms ? -HALF_PI - Math.sin(t * 2) * 0.05 - attack * 0.6 : b.x + s * 0.7));
     // anciens modèles (boss)
@@ -339,6 +391,8 @@ export class MobModel {
       this.rot(`spiderR${i}`, (b, o) => (o.rotation.y = b.y + sw));
       this.rot(`spiderL${i}`, (b, o) => (o.rotation.y = b.y - sw));
     }
+    this.rot('tentacle', (b, o) => (o.rotation.x = b.x + 0.15 + Math.sin(t * 2.2 + o.position.x * 3 + o.position.z * 5) * 0.25));
+    for (let r = 0; r < 3; r++) this.rot(`spin${r}`, (b, o) => (o.rotation.y = b.y + t * (r === 1 ? -1.4 : 1.1 + r * 0.3)));
     this.rot('squash', (_b, o) => {
       const k = 1 + Math.sin(t * 6) * 0.06 * (0.3 + amp);
       o.scale.set(1 / Math.sqrt(k), k, 1 / Math.sqrt(k));

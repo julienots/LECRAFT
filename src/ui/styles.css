@@ -115,6 +115,8 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .debug { position: absolute; left: calc(8px + var(--safe-left)); top: calc(8px + var(--safe-top)); font: 12px/1.35 monospace; background: #0008; padding: 6px 8px; border-radius: 6px; white-space: pre; }
 .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(200, 0, 0, .55)); opacity: 0; transition: opacity .1s; }
 .underwater { position: absolute; inset: 0; pointer-events: none; background: rgba(30, 70, 160, .35); }
+.portal-fx { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(160, 60, 255, .35), rgba(90, 10, 180, .85)); animation: portal-wave 1.6s ease-in-out infinite alternate; }
+@keyframes portal-wave { from { filter: hue-rotate(-12deg); transform: scale(1.04) rotate(-0.6deg); } to { filter: hue-rotate(12deg); transform: scale(1.08) rotate(0.6deg); } }
 .inlava { position: absolute; inset: 0; pointer-events: none; background: rgba(255, 90, 10, .55); }
 .toasts { position: absolute; top: calc(44px + var(--safe-top)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(560px, 70vw); }
 .toast { background: #111a; border: 2px solid #fff3; padding: 8px 12px; border-radius: 10px; font-size: 14px; animation: toastIn .25s ease-out; max-width: 70vw; }

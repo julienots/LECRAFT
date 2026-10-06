@@ -133,6 +133,15 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.groan = s.mix({ buf: s.tone(1.0, 95, 70, { wave: 'saw', decay: 1.6, attack: 0.15, gain: 0.25, vibrato: 0.04, vibRate: 4 }) }, { buf: s.noise(1.0, { lp: 400, decay: 2, gain: 0.25 }) });
   out.groan_hurt = s.tone(0.3, 140, 90, { wave: 'saw', decay: 7, gain: 0.35 });
   out.groan_death = s.tone(0.9, 120, 50, { wave: 'saw', decay: 3, gain: 0.35 });
+  out.portal = s.mix({ buf: s.tone(2.4, 70, 140, { wave: 'saw', decay: 0.6, attack: 0.6, gain: 0.18, vibrato: 0.12, vibRate: 3 }) }, { buf: s.noise(2.4, { lp: 900, decay: 0.8, attack: 0.5, gain: 0.25 }) });
+  out.extinguish = s.noise(0.6, { hp: 1800, decay: 6, gain: 0.45, crackle: 0.3 });
+  out.ghast_moan = s.tone(1.6, 520, 380, { wave: 'tri', decay: 1.5, attack: 0.25, gain: 0.22, vibrato: 0.06, vibRate: 6 });
+  out.ghast_hurt = s.tone(0.6, 900, 600, { wave: 'tri', decay: 5, gain: 0.3, vibrato: 0.1, vibRate: 12 });
+  out.ghast_shoot = s.mix({ buf: s.tone(0.5, 700, 300, { wave: 'saw', decay: 6, gain: 0.25 }) }, { buf: s.noise(0.5, { lp: 1200, decay: 5, gain: 0.3 }) });
+  out.grunt = s.mix({ buf: s.tone(0.35, 150, 110, { wave: 'saw', decay: 6, gain: 0.3, vibrato: 0.08, vibRate: 25 }) }, { buf: s.noise(0.35, { lp: 500, decay: 6, gain: 0.25 }) });
+  out.grunt_hurt = s.tone(0.25, 220, 140, { wave: 'saw', decay: 9, gain: 0.35 });
+  out.blaze_breath = s.noise(1.2, { lp: 700, decay: 1.4, attack: 0.3, gain: 0.3, crackle: 0.5 });
+  out.blaze_hurt = s.mix({ buf: s.noise(0.3, { hp: 1200, decay: 9, gain: 0.35, crackle: 0.4 }) }, { buf: s.tone(0.3, 400, 260, { wave: 'square', decay: 9, gain: 0.15 }) });
   out.hiss = s.noise(0.5, { hp: 2500, decay: 5, gain: 0.35, attack: 0.05 });
   out.hiss_hurt = s.noise(0.25, { hp: 2000, decay: 10, gain: 0.45 });
   out.squish = s.mix({ buf: s.noise(0.25, { lp: 600, decay: 12, gain: 0.5 }) }, { buf: s.tone(0.2, 300, 120, { decay: 12, gain: 0.3 }) });

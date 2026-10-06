@@ -11,6 +11,7 @@ import { LOOT, MOB_INDEX } from '../src/world/StructureGenerator';
 import { Player } from '../src/player/Player';
 import { MOB_DEFS } from '../src/data/mobs';
 import { BiomeManager } from '../src/world/BiomeManager';
+import { EXTRA_ITEMS } from '../src/data/vanillaExtra';
 
 const recipe = (item: string) => RecipeRegistry.crafting.find((r) => r.result.item === item)!;
 /** Remplit une grille à partir d'un motif texte (une lettre = un objet). */
@@ -177,7 +178,7 @@ describe('Données', () => {
       for (const k of [...b.animals, ...b.hostiles]) expect(MOB_DEFS.some((m) => m.key === k), k).toBe(true);
       for (const v of b.vegetation) expect(BlockRegistry.has(v.block)).toBe(true);
     }
-    for (const m of MOB_DEFS) for (const d of m.drops) expect(ItemRegistry.has(d.item), d.item).toBe(true);
+    for (const m of MOB_DEFS) for (const d of m.drops) expect(ItemRegistry.has(d.item) || EXTRA_ITEMS.some((i) => i.key === d.item), d.item).toBe(true);
     // indices utilisés par les cages à monstres des structures
     for (const [k, i] of Object.entries(MOB_INDEX)) expect(MOB_DEFS[i].key).toBe(k === 'chef' ? 'zombie_chief' : k);
   });

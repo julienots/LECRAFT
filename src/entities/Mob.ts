@@ -113,7 +113,7 @@ export class Mob extends Entity {
     const custom = r.customId ? PROJECTILE_DEFS.get(r.customId) : undefined;
     const pr = this.spawner.spawnProjectile(custom ? 'custom' : r.projectile, sx, sy, sz, (dx / dh) * r.speed + (Math.random() - 0.5) * spread * r.speed, vy, (dz / dh) * r.speed + (Math.random() - 0.5) * spread * r.speed, custom?.damage || r.damage, false, custom);
     pr.owner = this;
-    ctx.audio.play(r.projectile === 'arrow' ? 'bow' : 'cast', { x: sx, y: sy, z: sz });
+    ctx.audio.play(r.projectile === 'arrow' ? 'bow' : this.def.key === 'ghast' ? 'ghast_shoot' : 'cast', { x: sx, y: sy, z: sz });
   }
 
   /** Mise à jour par tick (physique + IA). */
@@ -161,7 +161,7 @@ export class Mob extends Entity {
     }
     this.body.step(ctx.world, dt);
     // dégâts de contact (lave, cactus)
-    if (this.body.inLava) ctx.combat.damageMob(this, 4 * dt * 2, { kind: 'environment', fire: true });
+    if (this.body.inLava && !this.has('fireImmune')) ctx.combat.damageMob(this, 4 * dt * 2, { kind: 'environment', fire: true });
     // brûlure au soleil
     if (this.has('burnsInSun') && ctx.dayCycle.daylight > 0.8 && !ctx.raining() && !this.body.inWater) {
       const l = ctx.world.getLight(Math.floor(this.x), Math.floor(this.y + this.body.height), Math.floor(this.z));
@@ -247,7 +247,7 @@ export class Mob extends Entity {
     // éclairage
     const l = ctx.world.getLight(Math.floor(this.x), Math.floor(this.y + this.body.height * 0.6), Math.floor(this.z));
     const sky = (l.sky / 15) * ctx.dayCycle.daylight, blk = l.block / 15;
-    const br = Math.max(0.12, Math.pow(Math.max(sky, blk), 1.3));
+    const br = Math.max(ctx.dimension === 'nether' ? 0.45 : 0.12, Math.pow(Math.max(sky, blk), 1.3));
     if (this.hurtTimer > 0 || this.dead) this.model.setTint(1, 0.35, 0.35);
     else this.model.setTint(br, br, br * (this.loveTimer > 0 ? 0.9 : 1));
     this.model.setShadowSize(this.body.halfWidth * 2, ctx.settings.shadows !== 'off');

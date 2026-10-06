@@ -121,7 +121,20 @@ export class Sky {
   /**
    * Met à jour couleurs et positions. time ∈ [0,1), rain ∈ [0,1], flash ∈ [0,1] (éclair).
    */
+  /** Nether : ni soleil, ni lune, ni étoiles, ni nuages ; dôme de la couleur du brouillard. */
+  updateNether(camPos: THREE.Vector3, fog: THREE.Color) {
+    this.zenith.copy(fog);
+    this.horizon.copy(fog);
+    this.skyLightColor.setRGB(1, 1, 1);
+    this.domeMat.uniforms.uZenith.value.copy(fog);
+    this.domeMat.uniforms.uHorizon.value.copy(fog);
+    this.domeMat.uniforms.uSunGlow.value.setRGB(0, 0, 0);
+    this.group.position.copy(camPos);
+    this.sun.visible = this.moon.visible = this.stars.visible = this.clouds.visible = false;
+  }
+
   update(time: number, camPos: THREE.Vector3, rain: number, flash: number, elapsed: number, cloudsVisible: boolean) {
+    this.sun.visible = this.moon.visible = this.stars.visible = true;
     const ang = time * Math.PI * 2;
     const h = Math.sin(ang);
     const day = smoothstep(-0.2, 0.25, h);

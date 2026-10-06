@@ -133,7 +133,7 @@ export class SaveManager {
   }
 
   /** Sauvegarde atomique : état du monde + méta + chunks modifiés. */
-  async save(meta: WorldMeta, state: unknown, chunks: SavedChunk[]): Promise<void> {
+  async save(meta: WorldMeta, state: unknown, chunks: SavedChunk[], chunkPrefix = meta.id): Promise<void> {
     await this.open();
     const data = JSON.stringify(state);
     const rec: StateRecord = { id: meta.id, version: SAVE_VERSION, checksum: checksumString(data), savedAt: Date.now(), data };
@@ -150,7 +150,7 @@ export class SaveManager {
     const cs = tx.objectStore('chunks');
     for (const c of chunks) {
       const blocks = rleEncode16(c.blocks), m = rleEncode(c.meta);
-      const record: ChunkRecord = { key: `${meta.id}:${c.cx}:${c.cz}`, world: meta.id, blocks, fmt: 16, meta: m, checksum: (checksumBytes(blocks) ^ checksumBytes(m)) >>> 0 };
+      const record: ChunkRecord = { key: `${chunkPrefix}:${c.cx}:${c.cz}`, world: meta.id, blocks, fmt: 16, meta: m, checksum: (checksumBytes(blocks) ^ checksumBytes(m)) >>> 0 };
       cs.put(record);
     }
     await done(tx);

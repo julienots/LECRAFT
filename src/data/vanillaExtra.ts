@@ -376,6 +376,90 @@ shaped('shield', 'shield', 1, ['PIP', 'PPP', ' P '], { P: 'tag:planks', I: 'iron
 shapeless('netherite_ingot', 'netherite_ingot', 1, ['netherite_scrap', 'netherite_scrap', 'netherite_scrap', 'netherite_scrap', 'gold_ingot', 'gold_ingot', 'gold_ingot', 'gold_ingot']);
 shaped('carved_pumpkin_from', 'carved_pumpkin', 1, ['P'], { P: 'pumpkin' });
 
+// ---------- Nether : portail, feu, minerais, nylium, végétation ----------
+const NR = ['#5e2626', '#6e2c2c', '#7a3232', '#8a3a3a'];
+const netherOre = (spot: string[]): P => (t) => {
+  t.grain(NR.map(hex), 0.3, 2);
+  const c = spot.map(hex);
+  for (const [x, y] of [[3, 3], [4, 3], [4, 4], [10, 2], [11, 3], [7, 7], [8, 8], [7, 8], [12, 10], [13, 11], [3, 11], [4, 12], [9, 13], [10, 13]]) t.set(x, y, c[(x + y) % c.length]);
+};
+cube('nether_quartz_ore', 'Minerai de quartz du Nether', netherOre(['#e8e2da', '#ffffff', '#c8c0b6']), { hardness: 3, drops: [{ item: 'quartz' }], color: '#7a3232' });
+cube('nether_gold_ore', "Minerai d'or du Nether", netherOre(['#f8d848', '#ffe880', '#c8a020']), { hardness: 3, minTier: 0, drops: [{ item: 'gold_nugget', min: 2, max: 6 }], color: '#7a3232' });
+tile('ancient_debris_side', (t) => {
+  t.grain(['#4a3a34', '#5a4a40', '#3a2c28'].map(hex), 0.5, 4);
+  for (let y = 2; y < 16; y += 4) t.hline(0, 15, y, hex('#2a201c'));
+});
+tile('ancient_debris_top', (t) => {
+  t.grain(['#4a3a34', '#5e4c42', '#3a2c28'].map(hex), 0.4, 2);
+  t.border(hex('#2a201c'));
+});
+B.push({ key: 'ancient_debris', name: 'Débris antiques', textures: { top: 'ancient_debris_top', bottom: 'ancient_debris_top', side: 'ancient_debris_side' }, hardness: 30, tool: 'pickaxe', minTier: 4, sound: 'stone', color: '#5a4a40' });
+for (const [w, n, moss] of [['crimson', 'carmin', ['#8a0e12', '#a01418', '#b81c1c']], ['warped', 'biscornu', ['#167a72', '#1c8a80', '#24a094']]] as const) {
+  tile(`${w}_nylium`, (t) => void t.grain(moss.map(hex), 0.4, 2));
+  tile(`${w}_nylium_side`, (t) => {
+    t.grain(NR.map(hex), 0.3, 2);
+    for (let x = 0; x < 16; x++) {
+      const h = 3 + ((x * 7) % 3);
+      for (let y = 0; y < h; y++) t.set(x, y, hex(moss[(x + y) % 3]));
+    }
+  });
+  B.push({ key: `${w}_nylium`, name: `Nylium ${n}`, textures: { top: `${w}_nylium`, bottom: 'netherrack', side: `${w}_nylium_side` }, hardness: 0.4, tool: 'pickaxe', drops: [{ item: 'netherrack' }], sound: 'stone', color: moss[1] });
+  tile(`${w}_fungus`, (t) => {
+    t.clear();
+    t.vline(7, 9, 15, hex(w === 'crimson' ? '#c8b088' : '#c8b088'));
+    t.rect(4, 5, 8, 4, hex(moss[1]));
+    t.rect(5, 4, 6, 1, hex(moss[2]));
+    t.set(5, 6, hex(w === 'crimson' ? '#f0c040' : '#f08a20'));
+    t.set(10, 7, hex(w === 'crimson' ? '#f0c040' : '#f08a20'));
+  });
+  B.push({ key: `${w}_fungus`, name: `Champignon ${n}`, textures: { all: `${w}_fungus` }, hardness: 0, render: 'cross', solid: false, sound: 'grass', needsSupport: true, supportBlocks: [`${w}_nylium`, 'netherrack', 'soul_soil'], color: moss[1] });
+  tile(`${w}_roots`, (t) => {
+    t.clear();
+    for (const x of [2, 5, 8, 11, 13]) t.vline(x, 4 + (x % 5), 15, hex(moss[x % 3]));
+  });
+  B.push({ key: `${w}_roots`, name: `Racines ${n === 'carmin' ? 'carmin' : 'biscornues'}`, textures: { all: `${w}_roots` }, hardness: 0, render: 'cross', solid: false, replaceable: true, sound: 'grass', needsSupport: true, supportBlocks: [`${w}_nylium`, 'netherrack', 'soul_soil'], drops: [], color: moss[1] });
+}
+cube('shroomlight', 'Champilampe', grainT(['#f09030', '#f8b048', '#ffd070', '#e07820'], 0.4, 2), { hardness: 1, tool: 'hoe', minTier: 0, light: 15, sound: 'wool', color: '#f8a040' });
+tile('nether_portal', (t) => {
+  const c = ['#3a0a7a', '#5a14b0', '#7a2ad8', '#9a50f0', '#c890ff'].map(hex);
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const dx = x - 7.5, dy = y - 7.5;
+      const v = (Math.sin(Math.atan2(dy, dx) * 3 + Math.hypot(dx, dy) * 0.9) + 1) / 2;
+      t.set(x, y, c[Math.min(4, Math.floor(v * 4 + t.rng.next() * 1.2))], 190);
+    }
+});
+B.push({ key: 'nether_portal', name: 'Portail du Nether', textures: { all: 'nether_portal' }, hardness: -1, render: 'translucent', solid: false, light: 11, lightFilter: 0, sound: 'glass', drops: [], color: '#7a2ad8' });
+tile('fire', (t) => {
+  t.clear();
+  const c = ['#a01a00', '#e04a00', '#f88a10', '#ffc830', '#fff0a0'].map(hex);
+  for (let x = 0; x < 16; x++) {
+    const h = 6 + ((x * 5 + 3) % 7) + (x % 3 === 0 ? 3 : 0);
+    for (let y = 16 - h; y < 16; y++) {
+      const k = (y - (16 - h)) / h;
+      t.set(x, y, c[Math.min(4, Math.floor((1 - k) * 2.2 + t.rng.next() * 1.5 + (k > 0.7 ? 1.5 : 0)))]);
+    }
+  }
+});
+B.push({ key: 'fire', name: 'Feu', textures: { all: 'fire' }, hardness: 0, render: 'cross', solid: false, replaceable: true, light: 15, contactDamage: 1, sound: 'wool', drops: [], color: '#f88a10' });
+B.push({ key: 'soul_fire', name: 'Feu des âmes', textures: { all: 'soul_fire' }, hardness: 0, render: 'cross', solid: false, replaceable: true, light: 10, contactDamage: 2, sound: 'wool', drops: [], color: '#40c8e0' });
+tile('soul_fire', (t) => {
+  t.clear();
+  const c = ['#0a4a6a', '#1a7aa0', '#30b0d0', '#70e0f0', '#e0ffff'].map(hex);
+  for (let x = 0; x < 16; x++) {
+    const h = 6 + ((x * 5 + 3) % 7) + (x % 3 === 0 ? 3 : 0);
+    for (let y = 16 - h; y < 16; y++) {
+      const k = (y - (16 - h)) / h;
+      t.set(x, y, c[Math.min(4, Math.floor((1 - k) * 2.2 + t.rng.next() * 1.5 + (k > 0.7 ? 1.5 : 0)))]);
+    }
+  }
+});
+B.push({ key: 'nether_brick_fence', name: 'Barrière en briques du Nether', textures: { all: 'nether_bricks' }, hardness: 2, tool: 'pickaxe', minTier: 1, render: 'model', shape: 'fence', sound: 'stone', color: '#3a1c20' });
+shaped('nether_brick_fence', 'nether_brick_fence', 6, ['BNB', 'BNB'], { B: 'nether_bricks', N: 'nether_brick' });
+smelt('nether_gold_ore', 'gold_ingot');
+smelt('nether_quartz_ore', 'quartz');
+smelt('ancient_debris', 'netherite_scrap');
+
 export const EXTRA_BLOCKS: BlockDef[] = B;
 export const EXTRA_ITEMS: ItemDef[] = I;
 export const EXTRA_RECIPES = R;

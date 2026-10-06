@@ -1,7 +1,7 @@
 {
   "name": "lecraft",
   "private": true,
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "LeCraft - jeu sandbox voxel 3D hors ligne pour Android",
   "type": "module",
   "scripts": {
@@ -22,7 +22,8 @@
     "screens": "node scripts/screens.mjs",
     "tour": "node scripts/tour.mjs",
     "pack:embed": "node scripts/embed-pack.mjs",
-    "e2e:controls": "node scripts/e2e-controls.mjs"
+    "e2e:controls": "node scripts/e2e-controls.mjs",
+    "e2e:nether": "node scripts/e2e-nether.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

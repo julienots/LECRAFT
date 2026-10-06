@@ -27,7 +27,7 @@ const PACK_RENAME: Record<string, string> = {
   bamboo_block_side: 'bamboo_block', basalt: 'basalt_side', quartz_block: 'quartz_block_side', smooth_quartz: 'quartz_block_bottom', bone_block: 'bone_block_side',
   noteblock_top: 'note_block', noteblock_side: 'note_block', cartography_table_side: 'cartography_table_side1', lectern_side: 'lectern_sides', grindstone_top: 'grindstone_side',
   carved_pumpkin_top: 'pumpkin_top', carved_pumpkin_side: 'carved_pumpkin', jack_o_lantern_top: 'pumpkin_top', jack_o_lantern_side: 'jack_o_lantern',
-  campfire_top: 'campfire_log_lit', campfire_side: 'campfire_log_lit', azalea: 'azalea_top',
+  campfire_top: 'campfire_log_lit', campfire_side: 'campfire_log_lit', azalea: 'azalea_top', fire: 'fire_0', soul_fire: 'soul_fire_0',
 };
 const WATER_TINT = hex('#3f76e4');
 
@@ -43,6 +43,10 @@ export const SKIN_PATHS: Record<string, string[]> = {
   skeleton: ['entity/skeleton/skeleton.png'],
   player: ['entity/player/wide/steve.png', 'entity/steve.png'],
   creeper: ['entity/creeper/creeper.png'],
+  zombified_piglin: ['entity/piglin/zombified_piglin.png'],
+  ghast: ['entity/ghast/ghast.png'],
+  magma_cube: ['entity/slime/magmacube.png'],
+  blaze: ['entity/blaze.png'],
   spider: ['entity/spider/spider.png'],
   cave_spider: ['entity/spider/cave_spider.png'],
   slime: ['entity/slime/slime.png'],

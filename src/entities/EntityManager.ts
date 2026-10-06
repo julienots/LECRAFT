@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { GameContext } from '../core/GameContext';
 import { B, BlockRegistry } from '../blocks/BlockRegistry';
-import { MOB_BY_KEY, MOB_DEFS } from '../data/mobs';
+import { MOB_BY_KEY, MOB_DEFS, type MobDef } from '../data/mobs';
 import { CHUNK_SIZE, SEA_LEVEL } from '../core/Config';
 import { MobModel } from '../render/MobModels';
 import { rayAABB } from '../util/Raycast';
@@ -281,6 +281,10 @@ export class EntityManager implements EntitySpawner {
     const w = ctx.world;
     const peaceful = ctx.player.difficulty === 'peaceful';
     if (!ctx.gamerules.doMobSpawning) return;
+    if (ctx.dimension === 'nether') {
+      if (!peaceful) this.netherSpawns(ctx, cap);
+      return;
+    }
     const hostileCap = Math.round(cap * 0.6), passiveCap = Math.round(cap * 0.4);
     const pick = (minR: number, maxR: number) => {
       const a = Math.random() * Math.PI * 2, r = minR + Math.random() * (maxR - minR);
@@ -343,6 +347,31 @@ export class EntityManager implements EntitySpawner {
       if (!def) continue;
       if (Math.hypot(x - p.x, z - p.z) < 18) continue;
       this.spawnMob(def.key, x + 0.5, y, z + 0.5);
+    }
+  }
+
+  /** Nether : apparitions selon le biome à toute hauteur (pas de cycle jour/nuit). */
+  private netherSpawns(ctx: GameContext, cap: number) {
+    const p = ctx.player, w = ctx.world;
+    const nether = this.mobs.filter((m) => !m.dead && m.def.spawn?.where === 'nether').length;
+    if (nether >= Math.round(cap * 0.7) || Math.random() > 0.5) return;
+    const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 28;
+    const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);
+    if (!w.isLoaded(x, z)) return;
+    const biome = w.biomeAt(x, z);
+    const def = weighted(biome.hostiles.map((k) => MOB_BY_KEY.get(k)?.def).filter((d): d is MobDef => !!d && !!d.spawn));
+    if (!def) return;
+    const tall = def.key === 'ghast' ? 5 : 2;
+    let y = 32 + Math.floor(Math.random() * 80);
+    for (let k = 0; k < 40; k++, y--) {
+      if (y < 32) return;
+      if (!w.isSolid(x, y - 1, z) || BlockRegistry.liquid[w.getBlock(x, y - 1, z)]) continue;
+      let free = true;
+      for (let h = 0; h < tall && free; h++) if (w.getBlock(x, y + h, z) !== B.AIR) free = false;
+      if (!free) continue;
+      const n = def.spawn!.group[0] + Math.floor(Math.random() * (def.spawn!.group[1] - def.spawn!.group[0] + 1));
+      for (let i = 0; i < n; i++) this.spawnMob(def.key, x + 0.5 + (Math.random() - 0.5) * 2, y + (def.key === 'ghast' ? 2 : 0), z + 0.5 + (Math.random() - 0.5) * 2);
+      return;
     }
   }
 

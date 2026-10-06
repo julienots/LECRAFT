@@ -25,7 +25,7 @@ export interface StructWriter {
 }
 
 /** Tables de butin (stockées dans les bits 2..7 de la méta du coffre). */
-export const LOOT = { NONE: 0, VILLAGE: 1, RUINS: 2, TOWER: 3, TEMPLE: 4, MINE: 5, DUNGEON: 6, BOSS: 7, CAMP: 8 } as const;
+export const LOOT = { NONE: 0, VILLAGE: 1, RUINS: 2, TOWER: 3, TEMPLE: 4, MINE: 5, DUNGEON: 6, BOSS: 7, CAMP: 8, FORTRESS: 9 } as const;
 export const chestMeta = (loot: number, dir = 0) => (loot << 2) | (dir & 3);
 /** Méta des cages à monstres = index de la créature dans data/mobs. Méta autel = boss. */
 export const BOSS = { GOLEM: 1, LICH: 2 } as const;

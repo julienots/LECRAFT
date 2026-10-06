@@ -261,12 +261,12 @@ export class Game {
     else this.showNewWorld();
   }
 
-  private async startWorld(meta: WorldMeta, state: WorldState | null, bonusChest = false) {
+  private async startWorld(meta: WorldMeta, state: WorldState | null, bonusChest = false, travel?: string) {
     this.stopPanorama();
     this.audio.unlock();
     this.state = 'loading';
     this.settings.difficulty = state ? meta.difficulty : meta.difficulty;
-    const loading = loadingScreen(meta.name);
+    const loading = loadingScreen(travel ?? meta.name);
     this.ui.set(loading.screen);
     this.session?.dispose();
     this.chat.clear();
@@ -281,8 +281,43 @@ export class Game {
     this.hud.show(true);
     this.touch.setVisible(true);
     this.touch.syncToggles();
-    this.hud.toast(state ? `Bon retour dans « ${meta.name} »` : `Monde « ${meta.name} » créé (seed ${meta.seed})`);
+    if (!travel) this.hud.toast(state ? `Bon retour dans « ${meta.name} »` : `Monde « ${meta.name} » créé (seed ${meta.seed})`);
     if (!state) await this.session.save(true).catch(() => {});
+  }
+
+  /**
+   * Passage d'un portail : sauvegarde la dimension quittée, convertit les coordonnées (÷ 8 vers le
+   * Nether, × 8 vers la surface) et relance la partie dans l'autre dimension (écran de chargement).
+   */
+  async changeDimension(target: 'overworld' | 'nether', at?: { x: number; y: number; z: number }) {
+    const s = this.session;
+    if (!s || this.state !== 'playing') return;
+    this.closeInventory();
+    this.chat.close();
+    await s.save(false).catch(() => {});
+    const state = s.snapshot();
+    const from = s.dimension;
+    const dims = { ...(state.dims ?? {}) };
+    dims[from] = { chests: state.chests, spawners: state.spawners, furnaces: state.furnaces, mobs: state.mobs };
+    const next = dims[target];
+    delete dims[target];
+    const k = target === 'nether' ? 1 / 8 : 8;
+    const p = s.player;
+    const ax = Math.floor(p.x * k) + 0.5, az = Math.floor(p.z * k) + 0.5;
+    const newState: WorldState = {
+      ...state,
+      dimension: target,
+      dims,
+      chests: next?.chests ?? {},
+      spawners: next?.spawners ?? {},
+      furnaces: next?.furnaces ?? {},
+      mobs: next?.mobs ?? [],
+      arrival: at ? undefined : { x: ax, y: p.y, z: az },
+      player: (at ? { ...state.player, ...at } : { ...state.player, x: ax, y: Math.min(120, Math.max(40, p.y)), z: az }) as WorldState['player'],
+    };
+    // la nouvelle dimension est enregistrée tout de suite (un arrêt pendant le chargement reste cohérent)
+    await this.saves.save(s.meta, newState, []).catch((e) => console.error(e));
+    await this.startWorld(s.meta, newState, false, target === 'nether' ? 'Entrée dans le Nether' : 'Retour à la surface');
   }
 
   pause() {

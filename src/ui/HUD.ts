@@ -34,6 +34,7 @@ export class HUD implements HudApi {
   private vignette: HTMLElement;
   private underwater: HTMLElement;
   private inlava: HTMLElement;
+  private portalFx: HTMLElement;
   private compass: HTMLElement;
   private compassArrow: HTMLElement;
   private compassText: HTMLElement;
@@ -100,6 +101,7 @@ export class HUD implements HudApi {
     this.vignette = el('div', { class: 'vignette' });
     this.underwater = el('div', { class: 'underwater hidden' });
     this.inlava = el('div', { class: 'inlava hidden' });
+    this.portalFx = el('div', { class: 'portal-fx hidden' });
     this.compassArrow = el('span', { class: 'arrow' }, '➤');
     this.compassText = el('span');
     this.compass = el('div', { class: 'compass hidden' }, this.compassArrow, this.compassText);
@@ -128,6 +130,7 @@ export class HUD implements HudApi {
     this.root.append(
       this.underwater,
       this.inlava,
+      this.portalFx,
       this.vignette,
       el('div', { class: 'crosshair' }),
       this.ring,
@@ -220,6 +223,12 @@ export class HUD implements HudApi {
   flashDamage() {
     this.vignette.style.opacity = '1';
     setTimeout(() => (this.vignette.style.opacity = '0'), 180);
+  }
+
+  /** Voile violet ondulant pendant le passage d'un portail (0..1). */
+  setPortal(f: number) {
+    this.portalFx.style.opacity = String(Math.min(0.85, f));
+    this.portalFx.classList.toggle('hidden', f <= 0);
   }
 
   setOverlays(underwater: boolean, lava: boolean) {

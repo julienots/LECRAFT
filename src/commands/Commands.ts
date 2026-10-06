@@ -1306,10 +1306,21 @@ const COMMANDS: CommandDef[] = [
       let i = 0;
       const sub = (st: St): Ctx => ({ ...c, origin: st.origin, executor: st.executor });
       const rotOf = (t: Target) => (t.kind === 'player' ? { yaw: c.s.player.yaw, pitch: c.s.player.pitch } : { yaw: t.e.yaw, pitch: 0 });
+      let inDim: 'overworld' | 'nether' | null = null;
       while (i < args.length) {
         const kw = args[i++];
         if (kw === 'run') {
           const rest = args.slice(i).join(' ');
+          // « execute in <dimension> run tp … » : voyage vers l'autre dimension
+          if (inDim && inDim !== c.s.dimension) {
+            const tp = /^\/?(tp|teleport)\s+(?:@s|@p)?\s*(\S+)\s+(\S+)\s+(\S+)/.exec(rest);
+            if (!tp) throw new CommandError(`La dimension ${inDim === 'nether' ? 'du Nether' : 'de la surface'} n'est pas chargée (seul « run tp » est possible)`);
+            const st = states[0];
+            const [x, y, z] = parseCoords([tp[2], tp[3], tp[4]], st.origin, false);
+            void c.s.game.changeDimension(inDim, { x, y, z });
+            c.out(`Téléportation vers ${inDim === 'nether' ? 'le Nether' : 'la surface'}`);
+            return;
+          }
           let ok = 0;
           for (const st of states) if (execute(c.s, rest, c.out, c.depth + 1, st.origin, true, st.executor)) ok++;
           if (!ok && states.length) throw new CommandError('Échec de la commande exécutée');
@@ -1349,9 +1360,12 @@ const COMMANDS: CommandDef[] = [
           case 'anchored':
             if (args[i++] === 'eyes') states = states.map((st) => ({ ...st, origin: { ...st.origin, y: st.origin.y + 1.62 } }));
             break;
-          case 'in':
-            i++;
+          case 'in': {
+            const d = String(args[i++] ?? '').replace(/^minecraft:/, '');
+            inDim = d === 'the_nether' || d === 'nether' ? 'nether' : d === 'overworld' ? 'overworld' : null;
+            if (!inDim) throw new CommandError(`Dimension inconnue : ${d}`);
             break;
+          }
           case 'rotated': {
             if (args[i] === 'as') {
               const sel = args[i + 1];
