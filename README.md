@@ -207,6 +207,23 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   jusqu'à 3 blocs, nage ; évite lave, cactus et barrières ; traverse portes et portillons ouverts) pour
   poursuivre, chercher le joueur, rentrer, suivre la nourriture et errer ; si la cible est inaccessible,
   elles vont au plus près ; les morts-vivants cherchent l'**ombre** quand ils brûlent au soleil.
+- **Multijoueur : serveur de mini-jeux intégré « LeCraft Network »** (écran titre › *Multijoueur*) —
+  un serveur original (ni le nom ni la marque d'un serveur existant), qui fonctionne **hors ligne** :
+  les autres joueurs sont des **bots** (skins du pack, pseudos, rangs VIP/MVP, chat). Liste des
+  serveurs avec message du jour, joueurs en ligne et ping. **Hub** : île avec fontaine, PNJ des jeux
+  (toucher pour jouer), boussole « Menu des jeux », bots qui se promènent et discutent (ils répondent
+  au chat), tableau de scores latéral (pièces, victoires, éliminations), hub protégé. **Mini-jeux** :
+  **SkyWars** (8 joueurs, cages de verre, coffres pillés, ponts de laine des bots, dernier en vie),
+  **Spleef** (pelle en diamant, les bots cassent la neige là où l'adversaire va poser le pied),
+  **TNT Run** (le sol disparaît sous les pas, 3 couches), **Duel** (1 contre 1 en fer contre un bot de
+  niveau 1 à 10), **Parkour** (36 sauts, 5 points de contrôle, chrono et record). Compte à rebours,
+  titres, élimination puis spectateur, annonce du gagnant et du classement, **pièces** gagnées
+  (victoire, élimination, participation), retour au hub ; la carte est restaurée après chaque partie.
+  **Bots** : recherche de chemin, combat de joueur (sprint, coups critiques en sautant, esquive
+  latérale seulement s'il y a du sol de chaque côté, recul et pomme dorée quand la vie est basse),
+  pillage des coffres (meilleure arme, armure), ponts au-dessus du vide. Commandes : `/hub`, `/jeux`,
+  `/play <jeu>`. Profil (pièces, victoires, record) conservé sur l'appareil ; le monde du serveur
+  n'est jamais sauvegardé.
 - **Petites touches LeCraft** : des **feuilles tombent** des arbres ; à la mort, la **position** est
   affichée et, après la réapparition, une **boussole** guide 5 minutes vers le lieu de la mort.
 
@@ -729,6 +746,10 @@ npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 
 npm run e2e:doors                # 11 vérifications : plantes hautes (pose, casse, remplacement), portes des 12 essences, trappe, portillon,
                                  # porte en fer (pas à la main), levier, bouton, plaque de pression,
                                  # visée au doigt (bloc posé là où on touche)
+npm run e2e:server               # 18 vérifications : menu Multijoueur, hub (PNJ, bots qui marchent, tableau
+                                 # de scores, hub protégé), menu des jeux, Duel (le bot frappe, victoire,
+                                 # pièces), SkyWars (cages, coffres, bots armés et ponts), Spleef, carte
+                                 # restaurée, TNT Run, Parkour (record), réponses des bots au chat
 npm run e2e:wither               # 26 vérifications : pas de bloc fantôme, icônes plates, squelette
                                  # wither, invocation, charge, crânes, armure, étoile du Nether, bras
                                  # en 1re personne, pose accroupie, feuilles qui tombent, objets au sol

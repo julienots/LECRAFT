@@ -229,10 +229,16 @@ export class Bot extends Mob {
       this.strafeTimer = 0.5 + Math.random() * (1.4 - this.skill * 0.6);
       this.strafeDir = Math.random() < 0.5 ? -1 : 1;
     }
-    const keep = d < 1.8 ? -1 : d > 2.6 ? 1 : 0;
     const px = -dz / d, pz = dx / d;
-    const sx = this.x + (dx / d) * keep * 2 + px * this.strafeDir * 2 * this.skill;
-    const sz = this.z + (dz / d) * keep * 2 + pz * this.strafeDir * 2 * this.skill;
+    // sur un pont ou au bord du vide : pas d'esquive latérale ni de recul (on resterait en l'air)
+    const w = ctx.world, fy = Math.floor(this.y - 0.5);
+    const solidAt = (ox: number, oz: number) => w.isSolid(Math.floor(this.x + ox), fy, Math.floor(this.z + oz)) || w.isSolid(Math.floor(this.x + ox), fy - 1, Math.floor(this.z + oz));
+    const wide = solidAt(px * 1.2, pz * 1.2) && solidAt(-px * 1.2, -pz * 1.2);
+    const behind = solidAt((-dx / d) * 1.2, (-dz / d) * 1.2);
+    const keep = d < 1.8 && behind ? -1 : d > 2.6 ? 1 : 0;
+    const side = wide ? this.strafeDir * 2 * this.skill : 0;
+    const sx = this.x + (dx / d) * keep * 2 + px * side;
+    const sz = this.z + (dz / d) * keep * 2 + pz * side;
     this.ai.moveTowards(sx, sz, 1.1, true);
     // coup : cadence 6 à 10 clics/s selon le niveau ; précision selon le niveau
     if (this.attackTimer <= 0 && d <= 3.1) {
