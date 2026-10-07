@@ -1000,7 +1000,8 @@ export class Session implements GameContext {
     else if (inLava) r.setFog(0.2, 3, new THREE.Color(0.9, 0.35, 0.05));
     else if (netherFog && this.dimension === 'end') r.setFog(far * 0.75, far * 1.1, netherFog);
     else if (netherFog) r.setFog(Math.min(far, 64) * 0.1, Math.min(far, 64), netherFog);
-    else r.setFog(far * (rain > 0.3 ? 0.35 : 0.6), far, r.sky.horizon);
+    // brouillard du jeu original : seulement sur la fin de la distance de vue (fin − clamp(fin/10, 4, 64))
+    else r.setFog(rain > 0.3 ? far * 0.35 : far - Math.min(64, Math.max(4, far / 10)), far, r.sky.horizon);
     game.hud.setOverlays(underwater, inLava);
     // météo
     const light = this.world.getLight(Math.floor(p.x), Math.floor(p.y + 1.6), Math.floor(p.z));

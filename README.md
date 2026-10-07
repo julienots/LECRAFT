@@ -174,6 +174,9 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   **porte et trappe en fer** qui ne s'ouvrent qu'avec la redstone : **levier**, **boutons** (pierre et
   bois, relâchés après 1 / 1,5 s) et **plaques de pression** (joueur et créatures ; objets aussi sur
   le bois) alimentent les ouvrants dans un rayon d'un bloc.
+- **Distance de vue** : profils à 4 / 6 / 10 tronçons (jusqu'à 12), brouillard du jeu original
+  limité à la fin de la distance (on voit beaucoup plus loin), textures avec **mipmaps** (moins de
+  scintillement au loin, niveau choisi sans couture entre tuiles).
 - **Liquides et blocs** : surface de l'eau et de la lave en pente comme le jeu original (hauteur de
   chaque coin moyennée, plus de trous entre niveaux), animation à 16 images (8 images/s) issue du pack,
   surfaces translucides sans « parois fantômes », glace et verre sans double face contre l'eau ;

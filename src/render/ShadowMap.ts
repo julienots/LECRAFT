@@ -12,7 +12,7 @@ function depthMaterial(atlas: THREE.Texture) {
         float tile = floor(vTile + 0.5);
         float col = mod(tile, ${ATLAS_COLS}.0), row = floor(tile / ${ATLAS_COLS}.0);
         vec2 f = clamp(fract(vUv), 0.0005, 0.9995);
-        if (texture2D(uAtlas, vec2((col + f.x) / ${ATLAS_COLS}.0, 1.0 - (row + 1.0 - f.y) / ${ATLAS_COLS}.0)).a < 0.5) discard;
+        if (textureLod(uAtlas, vec2((col + f.x) / ${ATLAS_COLS}.0, 1.0 - (row + 1.0 - f.y) / ${ATLAS_COLS}.0), 0.0).a < 0.5) discard;
         gl_FragColor = vec4(1.0);
       }`,
     colorWrite: false,

@@ -56,7 +56,7 @@ function videoScreen(game: Game): Screen {
     body: [
       mcGrid(
         mcCycle<QualityLevel>('Qualité', [['LOW', 'Basse'], ['MEDIUM', 'Moyenne'], ['HIGH', 'Haute']], s.quality, (v) => (applyQuality(s, v), apply(true))),
-        mcSlider((v) => `Distance de rendu : ${v} tronçons`, 2, 10, 1, s.renderDistance, (v) => ((s.renderDistance = v), apply())),
+        mcSlider((v) => `Distance de rendu : ${v} tronçons`, 2, 12, 1, s.renderDistance, (v) => ((s.renderDistance = v), apply())),
         mcCycle<number>('FPS max', [[30, '30'], [45, '45'], [60, '60']], s.fpsCap, (v) => ((s.fpsCap = v as 30 | 45 | 60), apply())),
         mcSlider((v) => `Résolution : ${pct(v)}`, 0.5, 1, 0.05, s.resolutionScale, (v) => ((s.resolutionScale = v), apply())),
         mcCycle('Ombres', [['off', 'NON'], ['blob', 'Entités'], ['blob+ao', 'Entités + OA']], s.shadows, (v) => ((s.shadows = v as typeof s.shadows), apply())),

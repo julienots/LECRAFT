@@ -98,7 +98,10 @@ void main() {
   float row = floor(tile / ${ATLAS_COLS}.0);
   vec2 f = clamp(fract(vUv), 0.0005, 0.9995);
   vec2 uv = vec2((col + f.x) / ${ATLAS_COLS}.0, 1.0 - (row + 1.0 - f.y) / ${ATLAS_COLS}.0);
-  vec4 tex = texture2D(uAtlas, uv);
+  // niveau de mipmap calculé sur les coordonnées continues (pas de couture au bord des tuiles répétées)
+  vec2 gx = dFdx(vUv) * 16.0, gy = dFdy(vUv) * 16.0;
+  float lod = clamp(0.5 * log2(max(dot(gx, gx), dot(gy, gy))), 0.0, 2.0);
+  vec4 tex = textureLod(uAtlas, uv, lod);
   if (tex.a < 0.1) discard;
   vec3 c = tex.rgb;
   if (tex.a < 0.95 && tex.a > 0.5) c *= vTint.rgb;

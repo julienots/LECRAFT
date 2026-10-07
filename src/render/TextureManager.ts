@@ -151,8 +151,10 @@ export class TextureManager implements SkinProvider {
     this.atlasCanvas = buildAtlas();
     this.atlas = new THREE.CanvasTexture(this.atlasCanvas);
     this.atlas.magFilter = THREE.NearestFilter;
-    this.atlas.minFilter = THREE.NearestFilter;
-    this.atlas.generateMipmaps = false;
+    // mipmaps comme le jeu original (moins de scintillement au loin) ; le shader des chunks
+    // choisit lui-même le niveau (sans couture entre tuiles) et le limite à 4 px par tuile
+    this.atlas.minFilter = THREE.NearestMipmapLinearFilter;
+    this.atlas.generateMipmaps = true;
     this.atlas.colorSpace = THREE.NoColorSpace;
     this.atlas.needsUpdate = true;
   }
