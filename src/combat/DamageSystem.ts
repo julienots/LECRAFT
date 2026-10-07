@@ -40,6 +40,13 @@ export class DamageSystem {
     // créatures du Nether : insensibles au feu et à la lave
     if (src.fire && src.kind === 'environment' && m.has('fireImmune')) return 0;
     let dmg = amount * this.multiplier(m, src) * m.effects.damageMul(!!src.fire);
+    // bots du serveur : armure et dernier attaquant (crédit des éliminations)
+    const bot = m as unknown as { armorFactor?: number; lastAttacker?: unknown };
+    if (bot.armorFactor !== undefined) {
+      dmg *= bot.armorFactor;
+      if (src.kind === 'player') bot.lastAttacker = 'player';
+      else if (src.kind === 'bot' && src.attacker) bot.lastAttacker = src.attacker;
+    }
     const ev = this.eventOf(src);
     if (hooks.beforeHurt) {
       dmg = hooks.beforeHurt(m, dmg, ev);

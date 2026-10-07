@@ -144,12 +144,13 @@ export class AIController {
       this.pathIdx = 0;
     }
     const path = this.path;
-    if (!path || this.pathIdx >= path.length) return this.moveTowards(x, z, speedMul, !path);
+    // fin du chemin (ou chemin partiel : cible inaccessible) : approche directe sans sauter d'une falaise
+    if (!path || this.pathIdx >= path.length) return this.moveTowards(x, z, speedMul, true);
     // étape suivante : on la valide quand on est sur sa case
     let [px, py, pz] = path[this.pathIdx];
     if (Math.floor(m.x) === px && Math.floor(m.z) === pz && Math.abs(Math.floor(m.y + 0.05) - py) <= 1) {
       this.pathIdx++;
-      if (this.pathIdx >= path.length) return this.moveTowards(x, z, speedMul, false);
+      if (this.pathIdx >= path.length) return this.moveTowards(x, z, speedMul, true);
       [px, py, pz] = path[this.pathIdx];
     }
     this.moveTowards(px + 0.5, pz + 0.5, speedMul, false);

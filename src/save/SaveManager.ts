@@ -14,6 +14,8 @@ export interface WorldMeta {
   version: number;
   /** Commandes de triche autorisées (option « Activer les triches »). */
   cheats?: boolean;
+  /** Monde du serveur de mini-jeux (jamais enregistré). */
+  server?: boolean;
 }
 
 interface StateRecord {

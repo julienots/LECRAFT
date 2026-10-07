@@ -114,7 +114,10 @@ export class ChatUI {
       if (v.startsWith('/')) {
         this.add(v, 'chat');
         game.session?.runCommand(v);
-      } else if (!hooks.chat?.(v)) this.add(`<${game.session?.player.name ?? 'Joueur'}> ${v}`, 'chat');
+      } else if (!hooks.chat?.(v)) {
+        this.add(`<${game.session?.player.name ?? 'Joueur'}> ${v}`, 'chat');
+        game.session?.server?.playerChat(v);
+      }
       this.close();
     };
     input.addEventListener('keydown', (e) => {

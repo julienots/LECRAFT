@@ -52,7 +52,7 @@ export class ChunkManager {
     private saves: SaveManager | null,
     private worldId: string | null,
     public opts: ChunkManagerOptions,
-    readonly dimension: 'overworld' | 'nether' | 'end' = 'overworld',
+    readonly dimension: 'overworld' | 'nether' | 'end' | 'server' = 'overworld',
   ) {
     this.worker = new Worker(new URL('../workers/world.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e: MessageEvent<FromWorker>) => this.onMessage(e.data);

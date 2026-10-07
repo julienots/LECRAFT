@@ -69,6 +69,8 @@ export class EntityManager implements EntitySpawner {
 
   // ---------- EntitySpawner ----------
   modelFor(key: string, scale: number): MobModel {
+    // bots du serveur : modèle de joueur avec leur propre skin (« bot:<skin> »)
+    if (key.startsWith('bot:')) return new MobModel('player', scale, this.ctx?.shadowTexture ?? null, this.ctx.skins, `player_${key.slice(4)}`);
     const list = this.pool.get(key);
     const m = list?.pop() ?? new MobModel(key, scale, this.ctx?.shadowTexture ?? null, this.ctx.skins);
     m.group.scale.setScalar(scale);
@@ -79,6 +81,10 @@ export class EntityManager implements EntitySpawner {
 
   private release(m: MobModel) {
     this.group.remove(m.group);
+    if (m.skinKey) {
+      m.dispose();
+      return;
+    }
     let list = this.pool.get(m.type);
     if (!list) this.pool.set(m.type, (list = []));
     if (list.length < 8) list.push(m);
@@ -105,6 +111,13 @@ export class EntityManager implements EntitySpawner {
     this.entities.push(m);
     this.group.add(m.object3d);
     hooks.spawned?.(m, opts.cause ?? (opts.baby ? 'Born' : 'Spawned'));
+    return m;
+  }
+
+  /** Ajoute une créature construite ailleurs (bots du serveur). */
+  addMob<T extends Mob>(m: T): T {
+    this.entities.push(m);
+    this.group.add(m.object3d);
     return m;
   }
 

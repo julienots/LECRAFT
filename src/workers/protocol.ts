@@ -3,7 +3,7 @@ import type { SpecialBlock } from '../world/ChunkData';
 
 /** Messages thread principal -> worker. */
 export type ToWorker =
-  | { type: 'init'; seed: number; dimension?: 'overworld' | 'nether' | 'end'; addonBlocks?: import('../blocks/Block').BlockDef[]; addonTiles?: string[] }
+  | { type: 'init'; seed: number; dimension?: 'overworld' | 'nether' | 'end' | 'server'; addonBlocks?: import('../blocks/Block').BlockDef[]; addonTiles?: string[] }
   | { type: 'load'; cx: number; cz: number; saved?: { blocks: Uint16Array; meta: Uint8Array } }
   | { type: 'unload'; cx: number; cz: number }
   | { type: 'set'; edits: Int32Array } // [x,y,z,id,meta]*

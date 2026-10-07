@@ -55,6 +55,7 @@ export class HUD implements HudApi {
   private titleEl: HTMLElement;
   private subtitleEl: HTMLElement;
   private actionbarEl: HTMLElement;
+  private sidebarEl: HTMLElement;
   private coordsEl: HTMLElement;
   private titleTimer = 0;
   private actionTimer = 0;
@@ -115,6 +116,7 @@ export class HUD implements HudApi {
     this.titleEl = el('div', { class: 'mc-title-big' });
     this.subtitleEl = el('div', { class: 'mc-subtitle' });
     this.actionbarEl = el('div', { class: 'mc-actionbar' });
+    this.sidebarEl = el('div', { class: 'mc-sidebar hidden' });
     this.coordsEl = el('div', { class: 'mc-coords hidden' });
     const pause = el('button', { class: 'btn-pause', 'aria-label': 'Pause' });
     pause.style.backgroundImage = touchIcon('pause');
@@ -139,6 +141,7 @@ export class HUD implements HudApi {
       chatBtn,
       el('div', { class: 'mc-titles' }, this.titleEl, this.subtitleEl),
       this.actionbarEl,
+      this.sidebarEl,
       this.coordsEl,
       el('div', { class: 'mc-hud' }, this.itemName, this.armor, this.hearts, this.air, this.food, this.xpBg, this.xpLevel, this.hotbar, invBtn),
     );
@@ -158,6 +161,24 @@ export class HUD implements HudApi {
     this.applySprites();
     this.last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1 };
     this.hotbarDirty = true;
+  }
+
+  private sidebarKey = '';
+  /** Tableau de scores latéral (serveur de mini-jeux) ; null le masque. */
+  setSidebar(title: string | null, lines: string[] = []) {
+    const key = title === null ? '' : title + '\n' + lines.join('\n');
+    if (key === this.sidebarKey) return;
+    this.sidebarKey = key;
+    this.sidebarEl.classList.toggle('hidden', title === null);
+    if (title === null) return;
+    const t = el('div', { class: 'sb-title' });
+    setMcText(t, title);
+    const rows = lines.map((l) => {
+      const r = el('div', { class: 'sb-line' });
+      setMcText(r, l || '\u00a0');
+      return r;
+    });
+    this.sidebarEl.replaceChildren(t, ...rows);
   }
 
   /** /title : titre, sous-titre ou barre d'action. */

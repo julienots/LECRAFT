@@ -378,3 +378,23 @@ html.gamepad .touch-layer, html.gamepad .btn-pause, html.gamepad .btn-chat, html
 
 /* shaders : vignette douce autour de l'écran de jeu */
 html.shaders-on #app::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.16) 100%); }
+
+/* tableau de scores latéral (serveur de mini-jeux) */
+.mc-sidebar {
+  position: absolute;
+  right: calc(var(--gs) * 2px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.32);
+  padding: calc(var(--gs) * 1px) calc(var(--gs) * 2px);
+  font-family: var(--mc-font, monospace);
+  font-size: calc(var(--gs) * 7px);
+  line-height: 1.15;
+  color: #fff;
+  text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f;
+  pointer-events: none;
+  min-width: calc(var(--gs) * 70px);
+  white-space: nowrap;
+}
+.mc-sidebar.hidden { display: none; }
+.mc-sidebar .sb-title { text-align: center; margin-bottom: calc(var(--gs) * 1px); background: rgba(0, 0, 0, 0.15); }

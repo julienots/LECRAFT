@@ -487,11 +487,14 @@ export class MobModel {
   /** Os nommés (modèles d'add-ons) avec leur pose de repos. */
   readonly bones = new Map<string, { o: THREE.Object3D; rot: THREE.Euler; pos: THREE.Vector3 }>();
 
-  constructor(readonly type: string, scale: number, shadowTex: THREE.Texture | null, skins: SkinProvider) {
+  /** Skin imposée (bots : skin de joueur différente) ; ces modèles ne sont pas remis au pool. */
+  readonly skinKey: string | undefined;
+  constructor(readonly type: string, scale: number, shadowTex: THREE.Texture | null, skins: SkinProvider, skinKey?: string) {
+    this.skinKey = skinKey;
     const def = VANILLA[type];
     this.vanilla = !!def;
     if (def) {
-      this.material = new THREE.MeshBasicMaterial({ map: skins.skin(def.skin), transparent: type === 'slime', alphaTest: type === 'slime' ? 0.05 : 0.5, side: type === 'slime' ? THREE.DoubleSide : THREE.FrontSide, depthWrite: type !== 'slime' });
+      this.material = new THREE.MeshBasicMaterial({ map: skins.skin(skinKey ?? def.skin), transparent: type === 'slime', alphaTest: type === 'slime' ? 0.05 : 0.5, side: type === 'slime' ? THREE.DoubleSide : THREE.FrontSide, depthWrite: type !== 'slime' });
       if (def.furSkin) this.furMaterial = new THREE.MeshBasicMaterial({ map: skins.skin(def.furSkin), alphaTest: 0.5 });
       if (def.glow)
         this.glowMaterial = new THREE.MeshBasicMaterial({

@@ -31,6 +31,7 @@ export function mainMenu(game: Game): Screen {
     el('div', { class: 'panorama', style: `background-image:url(${artCache.land})` }),
     el('div', { class: 'logo-wrap' }, el('img', { class: 'logo', src: artCache.logo, alt: 'LeCraft' }), el('div', { class: 'splash' }, splash)),
     mcButton('Solo', () => game.showWorlds()),
+    mcButton('Multijoueur', () => game.showServers()),
     mcRow(mcButton('Aide', () => game.showHelp(), { w: 98 }), mcButton('Crédits', () => game.showCredits(), { w: 98 })),
     el('div', { style: 'height:calc(var(--gs) * 8px)' }),
     mcRow(mcButton('Options...', () => game.showSettings(), { w: 98 }), mcButton('Quitter le jeu', () => game.back(), { w: 98 })),
@@ -200,7 +201,7 @@ export function pauseScreen(game: Game): Screen {
           status.textContent = `Sauvegardé à ${new Date().toLocaleTimeString('fr-FR')}`;
         }, { w: 100 }),
       ),
-      mcButton('Sauvegarder et quitter', () => game.quitToMenu(), { w: 204 }),
+      mcButton(game.session?.meta.server ? 'Se déconnecter' : 'Sauvegarder et quitter', () => game.quitToMenu(), { w: 204 }),
       status,
       el('div', { style: 'flex:1' }),
     ],

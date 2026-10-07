@@ -51,6 +51,12 @@ export interface InteractionHost {
   view?(): { fov: number; aspect: number };
   /** Bouton enfoncé : relâché après `seconds` (1 s pierre, 1,5 s bois). */
   pressButton?(x: number, y: number, z: number, seconds: number): void;
+  /** Règles du lieu (serveur de mini-jeux) : casser / poser autorisé à cet endroit ? */
+  canEdit?(x: number, y: number, z: number, action: 'break' | 'place', block: number): boolean;
+  /** Utilisation d'un objet interceptée (menu des jeux…) : vrai si traitée. */
+  useItem?(itemId: string): boolean;
+  /** Interaction avec une créature particulière (PNJ du serveur) : vrai si traitée. */
+  mobInteract?(m: Mob): boolean;
 }
 
 /** Index d'orientation correspondant à une direction horizontale (dx, dz). */
@@ -105,6 +111,7 @@ export class PlayerInteraction {
 
   /** La créature a-t-elle une interaction avec l'objet tenu (sinon un toucher la frappe) ? */
   private mobInteractable(m: Mob, held: string | null): boolean {
+    if ((m as unknown as { npc?: unknown }).npc) return true;
     if (m instanceof Villager) return !m.baby;
     if (m instanceof Wolf) return held === 'bone' || (m as unknown as { tamed?: boolean }).tamed === true;
     if (m instanceof Animal) {
@@ -206,6 +213,7 @@ export class PlayerInteraction {
       hooks.hitBlock?.(t.x, t.y, t.z, faceOf(t));
     }
     const p = ctx.player;
+    if (this.host.canEdit && !this.host.canEdit(t.x, t.y, t.z, 'break', t.block)) return;
     const time = breakTime(t.block, itemId, p.creative, p.body.headInWater || (!p.body.onGround && p.body.inWater));
     if (!isFinite(time)) return;
     this.miningProgress += dt / time;
@@ -310,6 +318,8 @@ export class PlayerInteraction {
     const t = this.target;
     // 0) scripts d'add-ons : interaction avec une créature ou un bloc (peut annuler la suite)
     if (!repeat && this.targetMob && hooks.interactEntity?.(this.targetMob, held ? { ...held } : null)) return;
+    if (!repeat && this.targetMob && this.host.mobInteract?.(this.targetMob)) return;
+    if (!repeat && held && this.host.useItem?.(held.id)) return;
     if (!repeat && t && !this.targetMob && hooks.interactBlock) {
       const [ox, oy, oz, dx, dy, dz] = this.eye();
       const hit: [number, number, number] = [ox + dx * t.distance, oy + dy * t.distance, oz + dz * t.distance];
@@ -532,6 +542,7 @@ export class PlayerInteraction {
 
   private validate(pv: PlacementPreview, merging = false): PlacementPreview {
     pv.valid = merging ? this.free(pv.x, pv.y, pv.z, pv.block) : this.canPlace(pv.x, pv.y, pv.z, pv.block, pv.meta);
+    if (pv.valid && this.host.canEdit && !this.host.canEdit(pv.x, pv.y, pv.z, 'place', pv.block)) pv.valid = false;
     for (const [x, y, z] of pv.extra) if (pv.valid && !this.canPlace(x, y, z, pv.block, -1)) pv.valid = false;
     if (pv.valid && pv.extra.length && BlockRegistry.get(pv.block).shape === 'bed') {
       const [x, y, z] = pv.extra[0];

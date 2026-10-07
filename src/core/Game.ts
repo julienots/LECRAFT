@@ -1,4 +1,6 @@
 import { detectDevice, AdaptiveQuality, type DeviceInfo } from './DeviceProfiler';
+import { serversScreen, openGameSelector } from '../ui/ServerUI';
+import { SERVER_NAME, type ServerNetwork } from '../server/ServerNetwork';
 import type { Screen } from '../ui/UIManager';
 import { applyQuality, loadSettings, saveSettings, type Settings } from './Settings';
 import { GameLoop } from './GameLoop';
@@ -247,6 +249,23 @@ export class Game {
   }
 
   // ---------- mondes ----------
+  // ---------- serveur de mini-jeux ----------
+  showServers() {
+    this.ui.push(serversScreen(this));
+  }
+
+  /** Connexion au serveur intégré : monde du hub et des arènes, non sauvegardé. */
+  async joinServer() {
+    const now = Date.now();
+    const meta: WorldMeta = { id: '__server__', name: SERVER_NAME, seed: 20240607, creationDate: now, lastPlayed: now, playTime: 0, thumbnail: null, gameMode: 'survival', difficulty: 'normal', version: SAVE_VERSION, cheats: false, server: true };
+    await this.startWorld(meta, null);
+    this.session?.server?.start();
+  }
+
+  openServerSelector(net: ServerNetwork) {
+    openGameSelector(this, net);
+  }
+
   async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty, bonusChest = false, cheats = true) {
     const seed = seedText.trim() ? seedFromString(seedText) : (Math.random() * 2 ** 31) | 0;
     const meta = await this.saves.createWorld(name.trim() || 'Nouveau monde', seed, mode, difficulty);

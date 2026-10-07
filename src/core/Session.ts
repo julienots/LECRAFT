@@ -54,6 +54,8 @@ import { ScriptHost } from '../scripting/ScriptHost';
 import { DroppedItemModels } from '../render/DroppedItems';
 import { ShadowMap } from '../render/ShadowMap';
 import { updatePowerAround } from '../world/Redstone';
+import { ServerNetwork } from '../server/ServerNetwork';
+import { HUB } from '../server/ServerMaps';
 
 export interface WorldState {
   version: number;
@@ -152,13 +154,15 @@ export class Session implements GameContext {
   elapsed = 0;
   saving: Promise<void> | null = null;
   readonly stats: StatsApi;
+  /** Serveur de mini-jeux (monde du serveur intégré), sinon null. */
+  readonly server: ServerNetwork | null;
 
   constructor(readonly game: Game, readonly meta: WorldMeta, state: WorldState | null) {
     const r = game.renderer;
     this.scene = r.scene;
     this.dimension = state?.dimension ?? 'overworld';
     this.world = new World(meta.seed);
-    this.world.voidBelow = this.dimension === 'end';
+    this.world.voidBelow = this.dimension === 'end' || !!meta.server;
     this.player = new Player(meta.gameMode, meta.difficulty);
     this.functions = game.addonFunctions;
     this.player.difficulty = game.settings.difficulty;
@@ -168,11 +172,11 @@ export class Session implements GameContext {
     this.entities.ctx = this;
     this.ticker = new WorldTicker(this.entities);
     this.world.events.on('blockChanged', (e) => this.ticker.blockChanged(e, this.world));
-    this.chunks = new ChunkManager(this.world, r.materials, game.saves, this.chunkPrefix, {
+    this.chunks = new ChunkManager(this.world, r.materials, meta.server ? null : game.saves, meta.server ? null : this.chunkPrefix, {
       renderDistance: game.settings.renderDistance,
       jobsInFlight: this.profile.workerJobsInFlight,
       meshUploadsPerFrame: this.profile.chunkBudgetPerFrame,
-    }, this.dimension);
+    }, meta.server ? 'server' : this.dimension);
     this.world.events.on('blockChanged', (e) => {
       Portals.onBlockChanged(this.world, e.x, e.y, e.z);
       if (BlockRegistry.has('wither_skeleton_skull') && e.id === BlockRegistry.byName('wither_skeleton_skull').id) this.checkWitherSummon(e.x, e.y, e.z);
@@ -226,7 +230,11 @@ export class Session implements GameContext {
       throwEye: () => void this.throwEye(),
       pressButton: (x, y, z, seconds) => this.buttons.push({ x, y, z, t: seconds }),
       view: () => ({ fov: game.renderer.camera.fov, aspect: game.renderer.camera.aspect }),
+      canEdit: (x, y, z, a, b) => !this.server || this.server.canEdit(x, y, z, a, b),
+      useItem: (id) => !!this.server?.useItem(id),
+      mobInteract: (m) => !!this.server?.mobInteract(m),
     });
+    this.server = meta.server ? new ServerNetwork(this) : null;
     this.fovCurrent = game.settings.fov;
     // événements joueur
     this.player.onDamage = (_dmg, src) => {
@@ -264,7 +272,11 @@ export class Session implements GameContext {
     this.weather.onThunder = (delay) => setTimeout(() => this.audio.play('thunder', { volume: 1 }), delay * 1000);
     // état initial
     if (state) this.restore(state);
-    else {
+    else if (meta.server) {
+      this.player.spawn = [HUB.spawn.x, HUB.spawn.y, HUB.spawn.z];
+      this.player.body.setPos(HUB.spawn.x, HUB.spawn.y, HUB.spawn.z);
+      this.player.yaw = HUB.spawn.yaw;
+    } else {
       const spawn = new WorldGenerator(meta.seed).findSpawn();
       this.player.spawn = [spawn.x, spawn.y + 1, spawn.z];
       this.player.body.setPos(spawn.x, spawn.y + 1, spawn.z);
@@ -292,6 +304,7 @@ export class Session implements GameContext {
 
   /** Exécute une commande de chat ; les messages vont dans le chat. */
   runCommand(line: string): boolean {
+    if (this.server?.command(line)) return true;
     return execute(this, line, (m, err) => this.game.chat.add(m, err ? 'error' : 'info'));
   }
 
@@ -392,7 +405,7 @@ export class Session implements GameContext {
       const a = this.arrival;
       this.arrival = null;
       this.arrive(a);
-    } else if (this.isNew) {
+    } else if (this.isNew && !this.server) {
       // nouveau monde : colonne de sol naturel (pas sur un arbre ni dans l'eau) proche du point prévu
       const spot = this.findGroundSpot(Math.floor(p.x), Math.floor(p.z));
       p.body.setPos(spot.x + 0.5, spot.y, spot.z + 0.5);
@@ -518,7 +531,7 @@ export class Session implements GameContext {
 
   /** Sauvegarde atomique (état + chunks modifiés + miniature). */
   async save(withThumbnail = true): Promise<void> {
-    if (!this.loaded) return;
+    if (!this.loaded || this.server) return;
     if (this.saving) await this.saving;
     const list = this.chunks.collectUnsaved();
     const versions = list.map((c) => c.version);
@@ -571,6 +584,7 @@ export class Session implements GameContext {
     // l'affichage ralentit (comme les 20 ticks par seconde du jeu original)
     const steps = Math.min(5, Math.max(1, Math.ceil(dt / 0.05 - 1e-6)));
     for (let i = 0; i < steps; i++) this.simulate(dt / steps, i === 0 ? remaining : []);
+    this.server?.update(dt);
     this.chunks.update(p.x, p.z);
     this.particles.update(dt);
     this.entities.render(this, this.elapsed);
@@ -1058,6 +1072,7 @@ export class Session implements GameContext {
 
   private onDeath() {
     const p = this.player;
+    if (this.server?.onPlayerDeath()) return;
     this.lastDeath = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z), dim: this.dimension };
     this.audio.play('hurt', { pitch: 0.7 });
     this.haptic('heavy');
@@ -1208,6 +1223,7 @@ export class Session implements GameContext {
 
   dispose() {
     this.scripts?.dispose();
+    this.game.hud.setSidebar(null);
     this.dropped.dispose();
     this.shadowMap?.dispose();
     this.shadowMap = null;

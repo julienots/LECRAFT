@@ -31,6 +31,9 @@ const PACK_RENAME: Record<string, string> = {
 };
 const WATER_TINT = hex('#3f76e4');
 
+/** Skins de joueur fournies par les packs récents (entity/player/wide). */
+export const PLAYER_SKINS = ['steve', 'alex', 'ari', 'efe', 'kai', 'makena', 'noor', 'sunny', 'zuri'];
+
 /** Chemins des skins des créatures dans un pack (plusieurs versions du jeu). */
 export const SKIN_PATHS: Record<string, string[]> = {
   pig: ['entity/pig/pig.png', 'entity/pig/temperate_pig.png'],
@@ -42,6 +45,8 @@ export const SKIN_PATHS: Record<string, string[]> = {
   zombie_chief: ['entity/zombie/husk.png'],
   skeleton: ['entity/skeleton/skeleton.png'],
   player: ['entity/player/wide/steve.png', 'entity/steve.png'],
+  // skins des joueurs (bots du serveur)
+  ...Object.fromEntries(PLAYER_SKINS.map((n) => [`player_${n}`, [`entity/player/wide/${n}.png`, 'entity/player/wide/steve.png', 'entity/steve.png']])),
   creeper: ['entity/creeper/creeper.png'],
   zombified_piglin: ['entity/piglin/zombified_piglin.png'],
   ghast: ['entity/ghast/ghast.png'],
@@ -122,6 +127,7 @@ const GLOW_FROM: Record<string, [string, 'red' | 'purple']> = {
 };
 
 export const SKIN_FALLBACK: Record<string, string> = {};
+for (const n of PLAYER_SKINS) SKIN_FALLBACK[`player_${n}`] = 'player';
 /** Textures d'objets aux noms différents dans le jeu vanilla. */
 const ITEM_PATHS: Record<string, string[]> = {
   compass: ['item/compass_16.png', 'item/compass_00.png', 'item/compass.png'],

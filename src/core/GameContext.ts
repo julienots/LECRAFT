@@ -9,7 +9,7 @@ import type { Mob } from '../entities/Mob';
 import type { GameRules } from '../commands/Commands';
 
 export interface DamageInfo {
-  kind: 'player' | 'projectile' | 'environment';
+  kind: 'player' | 'projectile' | 'environment' | 'bot';
   /** Objet utilisé (épée, pioche...). */
   itemId?: string;
   fire?: boolean;
