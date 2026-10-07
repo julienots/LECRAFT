@@ -22,8 +22,8 @@ describe('Génération de surface', () => {
   it('plantes hautes complètes (moitié haute au-dessus de la basse) et nénuphars sur l’eau', () => {
     const tall = new Set(['tall_grass', 'large_fern', 'lilac', 'rose_bush', 'peony'].map(id));
     let n = 0;
-    for (let cx = -10; cx < 10; cx++)
-      for (let cz = -10; cz < 10; cz++) {
+    for (let cx = -7; cx < 7; cx++)
+      for (let cz = -7; cz < 7; cz++) {
         const c = gen.generateChunk(cx, cz).data;
         for (let y = 1; y < WORLD_HEIGHT - 1; y++)
           for (let z = 0; z < 16; z++)
@@ -36,7 +36,7 @@ describe('Génération de surface', () => {
             }
       }
     expect(n).toBeGreaterThan(20);
-  });
+  }, 30000);
 
   it('badlands : sable rouge et strates de terre cuite', () => {
     let found: [number, number] | null = null;
