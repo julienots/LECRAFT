@@ -35,9 +35,11 @@ const center = async (sel) => {
   return [b.x + b.width / 2, b.y + b.height / 2];
 };
 async function tapAt(x, y, id = 1) {
-  // toucher bref (sans pause : sur une machine chargée, l'outil de test met déjà ~100 ms entre les deux)
-  await touch('touchStart', [[x, y, id]]);
-  await touch('touchEnd', []);
+  // toucher bref : horodatages explicites à 60 ms d'écart (l'outil de test attend que chaque événement
+  // soit traité ; sur une image lente en rendu logiciel l'écart réel dépasserait l'appui long)
+  const t = Date.now() / 1000;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id }], timestamp: t });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: t + 0.06 });
   await wait(60);
 }
 /** Remet le joueur au centre d'une zone plane dégagée (tests reproductibles). */
@@ -207,17 +209,23 @@ try {
   await tap(slot(4));
   const gridOk = await G(() => window.__lecraft.session.player.inventory.count('oak_log'));
   check('Curseur : prendre puis poser les troncs dans la grille 2x2', gridOk === 0);
+  // le résultat apparaît à l'image suivante (lente en rendu logiciel)
+  await page.waitForFunction(() => document.querySelectorAll('.gui .gslot')[8]?.querySelector('img,canvas,.item'), null, { timeout: 5000 }).catch(() => {});
+  await wait(300);
   await dbl(slot(8));
   const planks = await G(() => window.__lecraft.session.player.inventory.count('oak_planks'));
-  check('Fabrication 2x2 : planches (double toucher = tout fabriquer)', planks === 16, `planches : ${planks}`);
+  const craftDbg = planks === 16 ? '' : await G(() => { const g = window.__lecraft.inventoryUI ?? window.__lecraft.invUI; const s = window.__lecraft.session; return JSON.stringify({ slots: s.player.inventory.slots.map((x) => x && `${x.id}x${x.count}`).filter(Boolean), gui: [...document.querySelectorAll('.gui .gslot')].slice(4, 9).map((e) => e.outerHTML.slice(0, 120)), keys: Object.keys(window.__lecraft).filter((k) => /inv/i.test(k)) }); });
+  check('Fabrication 2x2 : planches (double toucher = tout fabriquer)', planks === 16, `planches : ${planks} ${craftDbg}`);
   // livre de recettes
   if ((await page.locator('.gui-side').count()) === 0) await page.locator('.gui .gui-btn').dispatchEvent('pointerup');
   await wait(200);
   await shot('e2e-05-crafting');
   await tap(page.locator('.brecipe[data-item=crafting_table]'));
+  await wait(400);
   await dbl(slot(8));
   check('Livre de recettes : établi', (await G(() => window.__lecraft.session.player.inventory.count('crafting_table'))) === 1);
   await tap(page.locator('.brecipe[data-item=stick]'));
+  await wait(400);
   await dbl(slot(8));
   check('Livre de recettes : bâtons', (await G(() => window.__lecraft.session.player.inventory.count('stick'))) === 4);
   // déplacer un stack (toucher prendre / toucher poser)
@@ -246,7 +254,8 @@ try {
   await wait(300);
   await tapAt(457, 206, 10);
   await wait(400);
-  check('Établi posé puis ouvert (grille 3x3)', (await page.locator('.gui .gslot').count()) === 46);
+  const tableDbg = await G(() => { const s = window.__lecraft.session, i = s.interaction, a = window.__arena; let placed = null; for (let dx = -7; dx <= 7; dx++) for (let dz = -7; dz <= 7; dz++) for (let dy = 0; dy < 4; dy++) if (s.world.getBlock(a.x + dx, a.y + dy, a.z + dz) === window.__lecraft.debug.blockId('crafting_table')) placed = [dx, dy, dz]; return JSON.stringify({ placed, inv: s.player.inventory.count('crafting_table'), mob: i.targetMob?.def.key ?? null, mobs: s.entities.mobs.filter((m) => Math.hypot(m.x - a.x, m.z - a.z) < 8).map((m) => m.def.key), t: i.target && [i.target.x - a.x, i.target.y - a.y, i.target.z - a.z] }); });
+  check('Établi posé puis ouvert (grille 3x3)', (await page.locator('.gui .gslot').count()) === 46, tableDbg);
   await tap(page.locator('.brecipe[data-item=wooden_pickaxe]'));
   await dbl(slot(9));
   check('Fabrication 3x3 : pioche en bois', (await G(() => window.__lecraft.session.player.inventory.count('wooden_pickaxe'))) === 1);
