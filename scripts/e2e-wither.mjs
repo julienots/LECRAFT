@@ -292,8 +292,11 @@ try {
   const shd = await G(async () => {
     const g = window.__lecraft, s = g.session, u = g.renderer.materials.uniforms, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     s.runCommand('/time set 6000');
-    const def = g.settings.shaders;
+    // par défaut : activés, sauf en profil Bas (désactivés pour la fluidité)
+    const def = g.settings.shaders, quality = g.settings.quality;
+    g.settings.shaders = 'on';
     await sleep(200);
+    for (let t = 0; t < 40 && u.uShaders.value !== 1; t++) await sleep(100);
     const on = u.uShaders.value;
     g.settings.shaders = 'ultra';
     await sleep(600);
@@ -308,9 +311,9 @@ try {
     s.world.setBlock(a.x, a.y + 2, a.z + 5, I('chest'), 2);
     s.interaction.target = null;
     const boxes = s.world.getBlock(a.x, a.y + 2, a.z + 5) === I('chest');
-    return { def, on, ultra, map, matrix, off, boxes };
+    return { def, quality, on, ultra, map, matrix, off, boxes };
   });
-  check('Shaders activés par défaut ; Ultra : carte d’ombres du soleil ; désactivables', shd.def === 'on' && shd.on === 1 && shd.ultra === 2 && shd.map && shd.matrix && shd.off === 0, JSON.stringify(shd));
+  check('Shaders par défaut (désactivés en profil Bas) ; Ultra : carte d’ombres du soleil ; désactivables', shd.def === (shd.quality === 'LOW' ? 'off' : 'on') && shd.on === 1 && shd.ultra === 2 && shd.map && shd.matrix && shd.off === 0, JSON.stringify(shd));
   check('Yeux lumineux (araignée, dragon)', dragon.glow && dragon.spiderGlow, JSON.stringify(dragon));
   check('Mort d’un mob : bascule sur le côté pendant 1 s puis disparaît', dragon.midPresent && dragon.midAngle > 0.8 && dragon.midAngle <= Math.PI / 2 + 1e-6 && dragon.gone, JSON.stringify(dragon));
   check('Mort : position mémorisée, message et boussole vers le lieu de la mort', death.last && death.last.x === death.at.x && death.compass === 'Lieu de votre mort' && death.msg, JSON.stringify(death));
