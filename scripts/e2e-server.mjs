@@ -21,7 +21,7 @@ try {
   await page.waitForFunction(() => window.__lecraft?.state === 'menu', null, { timeout: 120000 });
   await page.getByText('Multijoueur', { exact: true }).click();
   await wait(300);
-  await page.locator('.server-entry').click();
+  await page.locator('.server-entry[data-server="LeCraft Network"]').click();
   await page.getByText('Rejoindre le serveur').click();
   await page.waitForFunction(() => window.__lecraft?.state === 'playing' && window.__lecraft.session.loaded && window.__lecraft.session.server, null, { timeout: 120000 });
   await wait(3000);
@@ -31,7 +31,7 @@ try {
     return { npcs: bots.filter((b) => b.npc).length, walkers: bots.filter((b) => !b.npc).length, compass: p.inventory.slots[0]?.id, sidebar: document.querySelector('.mc-sidebar:not(.hidden)')?.textContent ?? '', y: p.y, floor: s.world.getBlock(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) };
   });
   check('Menu Multijoueur → serveur : hub chargé (sol, boussole)', hub.floor > 0 && hub.compass === 'compass', JSON.stringify(hub));
-  check('Hub : 5 PNJ de jeux et des bots joueurs', hub.npcs === 5 && hub.walkers >= 8, JSON.stringify(hub));
+  check('Hub : 5 PNJ de jeux + PNJ « Survie moddée » et des bots joueurs', hub.npcs === 6 && hub.walkers >= 8, JSON.stringify(hub));
   check('Tableau de scores latéral', /LECRAFT NETWORK/.test(hub.sidebar) && /Pièces/.test(hub.sidebar), hub.sidebar);
   await G(() => { const p = window.__lecraft.session.player; p.body.flying = true; p.body.setPos(0.5, 80, 30); p.yaw = 0; p.pitch = -0.55; });
   await wait(2500);
@@ -68,6 +68,15 @@ try {
     return { minD: +minD.toFixed(1), lost: +(h0 - p.health).toFixed(1), weapon: bot.weapon };
   });
   check('Duel : le bot approche et frappe (épée en fer)', duel.minD < 3.5 && duel.lost > 0 && duel.weapon === 'iron_sword', JSON.stringify(duel));
+  // à distance, le bot tire à l'arc
+  const bow = await G(async () => {
+    const s = window.__lecraft.session, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const bot = s.server.game.parts[1].bot;
+    const a0 = bot.arrows;
+    for (let i = 0; i < 40 && bot.arrows === a0; i++) { p.health = 20; p.body.setPos(bot.x, bot.y + 0.1, bot.z + 14); await sleep(100); }
+    return { before: a0, after: bot.arrows };
+  });
+  check('Duel : à distance, le bot tire à l’arc', bow.after < bow.before, JSON.stringify(bow));
   await shot('03-duel');
   // le joueur frappe le bot jusqu'à la victoire
   const win = await G(async () => {
@@ -94,6 +103,9 @@ try {
   st = await net();
   const cage = await G(() => { const s = window.__lecraft.session, p = s.player; return { glass: s.world.getBlock(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) === window.__lecraft.debug.blockId('glass'), chest: (() => { const c = s.server.game.islands[0].chest; return s.world.getChest(c[0], c[1], c[2], false)?.slots.filter(Boolean).length ?? -1; })() }; });
   check('SkyWars : 8 joueurs, cage de verre, coffres remplis', st.parts === 8 && cage.glass && cage.chest > 0, JSON.stringify({ st, cage }));
+  await wait(4000);
+  const queue = await G(() => window.__lecraft.chat.lines.map((l) => l.text.replace(/§./g, '')).filter((l) => /a rejoint la partie \(\d\/8\)/.test(l)).length);
+  check('File d’attente : les joueurs arrivent un par un (k/8)', queue >= 5, `${queue} arrivées annoncées`);
   await shot('04-skywars-cage');
   await page.waitForFunction(() => window.__lecraft.session.server.game?.state === 'playing', null, { timeout: 15000 });
   await G(() => { const p = window.__lecraft.session.player; p.gameMode = 'creative'; });

@@ -224,6 +224,27 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   pillage des coffres (meilleure arme, armure), ponts au-dessus du vide. Commandes : `/hub`, `/jeux`,
   `/play <jeu>`. Profil (pièces, victoires, record) conservé sur l'appareil ; le monde du serveur
   n'est jamais sauvegardé.
+- **Serveur de survie moddé « LeCraft SMP »** (Multijoueur › 2e serveur, ou PNJ « Survie moddée »
+  du hub, `/server smp`) — un monde de survie **sauvegardé** (masqué de la liste Solo) où 3 à 6 **bots**
+  sont en ligne : ils **rejoignent et quittent** la partie (messages), **coupent du bois** (arbre entier),
+  fabriquent de meilleurs outils (bois → pierre → fer → diamant, four pour le fer), **minent en
+  escalier** (3 blocs de haut, torches, minerais visibles ramassés, lave bouchée), **choisissent un
+  terrain** plat et sec (hors des arbres) et **construisent leur maison bloc par bloc** (déblaiement,
+  fondations, murs, toit, porte, lit), rentrent la nuit et **combattent les monstres**. Ils **parlent**
+  entre eux et **répondent** : « tu fais quoi ? », « suis-moi » (ils se téléportent s'ils sont loin),
+  « donne-moi du fer/bois/pierre… », « où est ta maison ? », salut, merci… ; un bot tué revient et
+  proteste. **Mods** : abattage d'arbre entier (hache), filons de minerai (pioche), **tombes** (vos
+  objets dans un coffre à l'endroit de la mort). **Plugins** : `/spawn`, `/sethome`, `/home`, `/tpa`,
+  `/rtp`, `/money`, `/pay`, `/shop` (boutique), `/sell` (vendre l'objet en main), `/msg`, `/list`,
+  spawn protégé, **pièces** gagnées en minant et en tuant des monstres. Profils des bots (outils,
+  inventaire, maison) sauvegardés avec le monde.
+- **Mini-jeux améliorés** : file d'attente (les joueurs arrivent un par un, k/N), bots qui **tirent à
+  l'arc** à distance (Duel, SkyWars), **niveau** du joueur, PNJ et `/server` pour changer de serveur.
+- **Moins de lag sur téléphone** : la résolution est plafonnée selon le profil (Bas 1×, Moyen 1,5×,
+  Haut 2× au lieu de jusqu'à 2× partout), anticrénelage seulement en profil Haut, qualité automatique
+  plus réactive (baisse de résolution en 3 s) et mémorisée d'un lancement à l'autre, shaders
+  désactivés par défaut en profil Bas. Créatures : saut à 1,3 bloc (comme le joueur), nage pour
+  sortir de l'eau, peuvent sauter dans l'eau depuis plus haut.
 - **Petites touches LeCraft** : des **feuilles tombent** des arbres ; à la mort, la **position** est
   affichée et, après la réapparition, une **boussole** guide 5 minutes vers le lieu de la mort.
 
@@ -746,10 +767,13 @@ npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 
 npm run e2e:doors                # 11 vérifications : plantes hautes (pose, casse, remplacement), portes des 12 essences, trappe, portillon,
                                  # porte en fer (pas à la main), levier, bouton, plaque de pression,
                                  # visée au doigt (bloc posé là où on touche)
-npm run e2e:server               # 18 vérifications : menu Multijoueur, hub (PNJ, bots qui marchent, tableau
+npm run e2e:server               # 20 vérifications : file d'attente, arc des bots, : menu Multijoueur, hub (PNJ, bots qui marchent, tableau
                                  # de scores, hub protégé), menu des jeux, Duel (le bot frappe, victoire,
                                  # pièces), SkyWars (cages, coffres, bots armés et ponts), Spleef, carte
                                  # restaurée, TNT Run, Parkour (record), réponses des bots au chat
+npm run e2e:smp                  # 17 vérifications : connexion, bots qui rejoignent et travaillent, maison
+                                 # construite, chat (tu fais quoi, donne, suis-moi), /sethome /home /tpa
+                                 # /sell /shop, abattage d'arbre, filon, tombe, sauvegarde des bots
 npm run e2e:wither               # 26 vérifications : pas de bloc fantôme, icônes plates, squelette
                                  # wither, invocation, charge, crânes, armure, étoile du Nether, bras
                                  # en 1re personne, pose accroupie, feuilles qui tombent, objets au sol

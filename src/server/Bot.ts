@@ -53,6 +53,9 @@ export class Bot extends Mob {
   blocks = 0;
   blockId: number = B.OAK_PLANKS;
   gapples = 0;
+  /** Flèches (arc) : le bot tire sur le joueur à distance. */
+  arrows = 0;
+  private bowTimer = 1;
   /** Niveau 0..1 (précision, réflexes, cadence). */
   skill: number;
   kills = 0;
@@ -206,6 +209,27 @@ export class Bot extends Mob {
   fight(ctx: GameContext, t: Fighter, dt: number, hit: (dmg: number, kx: number, kz: number, crit: boolean) => void): number {
     const dx = t.x - this.x, dz = t.z - this.z, d = Math.hypot(dx, dz) || 0.01;
     const b = this.body;
+    // arc : à distance, tir sur le joueur (visée anticipée selon le niveau)
+    this.bowTimer -= dt;
+    if (this.arrows > 0 && t === (ctx.player as unknown as Fighter) && d > 7 && d < 26 && this.bowTimer <= 0 && b.onGround) {
+      this.bowTimer = 1.6 - this.skill * 0.6 + Math.random() * 0.6;
+      const p = ctx.player;
+      const lead = this.skill * 0.35;
+      const tx = p.x + p.body.vx * lead, ty = p.y + 1.2, tz = p.z + p.body.vz * lead;
+      const sx = this.x, sy = this.y + 1.5, sz = this.z;
+      const hx = tx - sx, hz = tz - sz, dh = Math.hypot(hx, hz) || 1, speed = 30;
+      const time = dh / speed;
+      const vy = (ty - sy) / time + 0.5 * 12 * time;
+      const err = (1 - this.skill) * 0.08;
+      const pr = this.spawner.spawnProjectile('arrow', sx, sy, sz, (hx / dh) * speed + (Math.random() - 0.5) * err * speed, vy, (hz / dh) * speed + (Math.random() - 0.5) * err * speed, 4, false);
+      pr.owner = this;
+      this.arrows--;
+      this.attackAnim = 1;
+      this.faceTo(t.x, t.z);
+      this.ai.stop();
+      ctx.audio.play('bow', { x: sx, y: sy, z: sz });
+      return d;
+    }
     // vie basse : on recule et on mange une pomme dorée
     if (this.health <= 7 && this.gapples > 0 && this.retreat <= 0 && Math.random() < dt * 2) this.retreat = 1.2 + Math.random();
     if (this.retreat > 0) {

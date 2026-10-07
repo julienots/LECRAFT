@@ -60,7 +60,7 @@ interface Mind {
   timer: number;
   target: [number, number, number] | null;
   mining: { x: number; y: number; z: number; t: number; then?: () => void } | null;
-  stairs: { x: number; y: number; z: number; dx: number; dz: number; step: number } | null;
+  stairs: { x: number; y: number; z: number; dx: number; dz: number; step: number; startY: number } | null;
   plan: [number, number, number, number, number][] | null;
   follow: number;
   placeTimer: number;
@@ -147,8 +147,13 @@ export class SmpServer {
   private chat(text: string) {
     this.s.game.chat.add(text, 'chat');
   }
+  private said = new Map<string, number>();
   private say(m: Mind, text: string) {
     if (!this.online.includes(m)) return;
+    // pas deux fois la même phrase en deux minutes (comme un vrai joueur)
+    const k = `${m.p.name}|${text}`, now = performance.now();
+    if (now - (this.said.get(k) ?? -1e9) < 120000) return;
+    this.said.set(k, now);
     const rank = RANKS[m.p.rank] ?? RANKS[0];
     this.chat(`${rank.tag}${rank.color}${m.p.name}§f: ${text}`);
   }
@@ -601,10 +606,11 @@ export class SmpServer {
       }
       const [dx, dz] = this.rng.pick([[1, 0], [-1, 0], [0, 1], [0, -1]]);
       const sx = Math.floor(b.x), sz = Math.floor(b.z);
-      m.stairs = { x: sx, y: Math.floor(b.y + 0.05), z: sz, dx, dz, step: 0 };
+      m.stairs = { x: sx, y: Math.floor(b.y + 0.05), z: sz, dx, dz, step: 0, startY: Math.floor(b.y + 0.05) };
     }
     const st = m.stairs;
-    const goalY = m.p.tier >= 3 ? 14 : m.p.tier >= 2 ? 28 : 46;
+    // profondeur visée selon l'outil, et au moins 12 marches depuis le départ
+    const goalY = Math.max(6, Math.min(m.p.tier >= 3 ? 14 : m.p.tier >= 2 ? 28 : 46, st.startY - 12));
     // minerais à portée : on les prend d'abord (mod VeinMiner)
     const ore = this.findOre(b);
     if (ore) return this.mine(m, ore[0], ore[1], ore[2]);
@@ -865,6 +871,15 @@ export class SmpServer {
       p.body.fallDistance = 0;
     };
     switch (c) {
+      case '/server':
+      case '/lobby':
+      case '/hub':
+        if (c === '/server' && (args[0] ?? '').toLowerCase() !== 'lobby') this.chat('§7Serveurs : §e/server lobby §7(mini-jeux). Vous êtes sur §2SMP§7.');
+        else {
+          void this.s.save().catch(() => {});
+          setTimeout(() => void this.s.game.joinServer(), 0);
+        }
+        return true;
       case '/spawn':
         tp(...p.spawn);
         this.chat('§aTéléporté au point d’apparition.');

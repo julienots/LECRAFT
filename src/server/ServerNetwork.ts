@@ -26,6 +26,7 @@ export interface ServerProfile {
   played: number;
   kills: number;
   bestParkour: number;
+  xp?: number;
 }
 
 function loadProfile(): ServerProfile {
@@ -90,6 +91,12 @@ export class ServerNetwork {
       npc.invulnerable = true;
       npc.setTag(`${g.color}§l${g.name.toUpperCase()}\n§7${n.game === 'parkour' ? 'Solo' : `${g.players} joueurs`}\n§a▶ Toucher pour jouer`);
     }
+    // PNJ vers le serveur de survie moddé
+    const smp = this.spawnBot(-9.5, FLOOR + 1, 9.5, 1);
+    smp.npc = 'smp';
+    smp.invulnerable = true;
+    smp.setTag('§2§lSURVIE MODDÉE\n§7LeCraft SMP\n§a▶ Toucher pour rejoindre');
+    this.npcs.push(smp);
     this.toHub(true);
   }
 
@@ -222,7 +229,12 @@ export class ServerNetwork {
     const date = `§7${d.toLocaleDateString('fr-FR')} §8lobby${1 + (this.online % 7)}`;
     if (this.game) return [date, '', ...this.game.sidebar(), '', '§elecraft.local'];
     const wins = Object.values(this.profile.wins).reduce((a, n) => a + (n ?? 0), 0);
-    return [date, '', `§fPièces : §6${this.profile.coins}`, `§fVictoires : §a${wins}`, `§fÉliminations : §c${this.profile.kills}`, '', `§fEn ligne : §a${this.online}`, '', '§elecraft.local'];
+    return [date, '', `§fNiveau : §b${this.level}`, `§fPièces : §6${this.profile.coins}`, `§fVictoires : §a${wins}`, `§fÉliminations : §c${this.profile.kills}`, '', `§fEn ligne : §a${this.online}`, '', '§elecraft.local'];
+  }
+
+  /** Niveau du joueur (expérience gagnée en jouant : pièces cumulées). */
+  get level() {
+    return 1 + Math.floor(Math.sqrt((this.profile.xp ?? 0) / 40));
   }
 
   saveProfile() {
@@ -237,6 +249,11 @@ export class ServerNetwork {
   mobInteract(m: Mob): boolean {
     const npc = (m as Bot).npc;
     if (!npc) return false;
+    if (npc === 'smp') {
+      this.chat('§7Connexion à §2LeCraft SMP§7…');
+      setTimeout(() => void this.s.game.joinSmp(), 0);
+      return true;
+    }
     this.join(npc as GameKey);
     return true;
   }
@@ -294,6 +311,11 @@ export class ServerNetwork {
       this.toHub();
       return true;
     }
+    if (cmd === '/server') {
+      if (arg === 'smp' || arg === 'survie') setTimeout(() => void this.s.game.joinSmp(), 0);
+      else this.chat('§7Serveurs : §e/server smp §7(survie moddée). Vous êtes sur le §elobby§7.');
+      return true;
+    }
     if (cmd === '/jeux' || cmd === '/games' || cmd === '/menu') {
       this.openSelector();
       return true;
@@ -332,7 +354,13 @@ export class ServerNetwork {
     this.removeBot(b);
   }
   reward(coins: number, why: string) {
+    const before = this.level;
     this.profile.coins += coins;
+    this.profile.xp = (this.profile.xp ?? 0) + coins;
+    if (this.level > before) {
+      this.title(`§b§lNIVEAU ${this.level} !`, '§7Continuez à jouer pour monter');
+      this.s.audio.play('levelup');
+    }
     this.chat(`§6+${coins} pièces §7(${why})`);
     this.saveProfile();
   }
@@ -418,6 +446,10 @@ abstract class MiniGame {
     this.net.title('§7Chargement de la carte…');
   }
 
+  /** Annonces d'arrivée des autres joueurs pendant l'attente (k/N). */
+  private joinQueue: Part[] = [];
+  private joinTimer = 0.4;
+
   /** Mise en place une fois la carte chargée. */
   private ready() {
     const w = this.s.world;
@@ -437,7 +469,9 @@ abstract class MiniGame {
           else b.ai.stop();
         };
       }
-    this.net.title(`${GAMES[this.key].color}§l${GAMES[this.key].name}`, '§7La partie commence bientôt');
+    this.net.title(`${GAMES[this.key].color}§l${GAMES[this.key].name}`, this.parts.length > 1 ? '§7En attente de joueurs…' : '§7La partie commence bientôt');
+    this.joinQueue = this.parts.filter((x) => x.bot);
+    this.timer += Math.min(6, this.joinQueue.length * 0.6);
     this.net.chat(`§e${GAMES[this.key].name} §7: ${GAMES[this.key].desc}`);
   }
 
@@ -454,6 +488,13 @@ abstract class MiniGame {
       return;
     }
     if (this.state === 'countdown') {
+      this.joinTimer -= dt;
+      if (this.joinQueue.length && this.joinTimer <= 0) {
+        this.joinTimer = 0.3 + Math.random() * 0.8;
+        const j = this.joinQueue.shift()!;
+        const n = this.parts.length - this.joinQueue.length;
+        this.net.chat(`${j.bot!.chatName} §ea rejoint la partie (§b${n}§e/§b${this.parts.length}§e) !`);
+      }
       const before = Math.ceil(this.timer);
       this.timer -= dt;
       this.hold(dt);
@@ -700,6 +741,7 @@ class SkyWars extends MiniGame {
       else if (def?.armor) pts += def.armor.defense;
       else if (s.id === 'oak_planks') b.blocks += s.count;
       else if (s.id === 'golden_apple') b.gapples += s.count;
+      else if (s.id === 'arrow') b.arrows += s.count;
       else return;
       inv.slots[i] = null;
     });
@@ -915,6 +957,7 @@ class Duel extends MiniGame {
     b.skill = 0.55 + Math.random() * 0.4;
     b.weapon = 'iron_sword';
     b.gapples = 3;
+    b.arrows = 16;
     b.armorFactor = armorFactor(15);
     this.parts.push({ bot: b, name: b.botName, alive: true, kills: 0 });
     this.timer = 5;
