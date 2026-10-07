@@ -35,8 +35,8 @@ const center = async (sel) => {
   return [b.x + b.width / 2, b.y + b.height / 2];
 };
 async function tapAt(x, y, id = 1) {
+  // toucher bref (sans pause : sur une machine chargée, l'outil de test met déjà ~100 ms entre les deux)
   await touch('touchStart', [[x, y, id]]);
-  await wait(60);
   await touch('touchEnd', []);
   await wait(60);
 }
@@ -190,7 +190,11 @@ try {
   // ---------- inventaire à curseur & fabrication ----------
   const slot = (n) => page.locator('.gui .gslot').nth(n);
   const tap = async (loc) => { await loc.dispatchEvent('pointerdown'); await loc.dispatchEvent('pointerup'); await wait(60); };
-  const dbl = async (loc) => { await tap(loc); await tap(loc); await wait(100); };
+  // double toucher réel : les quatre événements partent d'un coup (sans aller-retour par événement)
+  const dbl = async (loc) => {
+    await loc.evaluate((el) => { for (const t of ['pointerdown', 'pointerup', 'pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerType: 'touch' })); });
+    await wait(160);
+  };
   const [ix, iy] = await center('.mc-invbtn');
   await tapAt(ix, iy, 8);
   await wait(400);
@@ -260,10 +264,11 @@ try {
   });
   await wait(500);
   const hp0 = await G((id) => window.__lecraft.session.entities.mobs.find((m) => m.id === id)?.health, mob);
-  await hold('.btn-attack', 300);
+  // comme l'édition mobile : toucher la créature la frappe
+  await tapAt(457, 206, 11);
   await wait(300);
   const hp1 = await G((id) => window.__lecraft.session.entities.mobs.find((m) => m.id === id)?.health ?? 0, mob);
-  check('Combat : attaque d’une créature (bouton ⚔)', hp1 < hp0, `PV ${hp0} → ${hp1}`);
+  check('Combat : toucher une créature la frappe', hp1 < hp0, `PV ${hp0} → ${hp1}`);
   const fsm = await G((id) => window.__lecraft.session.entities.mobs.find((m) => m.id === id)?.ai.state, mob);
   check('IA : fuite après dégâts (animal passif)', fsm === 'FLEE', `état ${fsm}`);
   const hostile = await G(() => {
@@ -284,7 +289,8 @@ try {
   check('Combat : le joueur reçoit des dégâts', hpP1 < hpP0, `PV joueur ${hpP0} → ${hpP1}`);
   await shot('e2e-06-combat');
   await G((id) => { const s = window.__lecraft.session; const m = s.entities.mobs.find((x) => x.id === id); if (m) s.combat.damageMob(m, 999, { kind: 'player', fromPlayer: true }); s.dayCycle.time = 0.2; }, hostile);
-  await wait(1200);
+  // la créature bascule pendant 1 s (temps de jeu) puis disparaît ; on attend au plus 4 s réelles
+  for (let i = 0; i < 20 && (await G((id) => window.__lecraft.session.entities.mobs.some((m) => m.id === id), hostile)); i++) await wait(200);
   check('Mort d’une créature (suppression)', !(await G((id) => window.__lecraft.session.entities.mobs.some((m) => m.id === id), hostile)));
 
   // ---------- pause / retour Android ----------

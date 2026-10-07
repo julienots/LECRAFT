@@ -166,6 +166,12 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   brouillard éclairé par le couchant, couleurs plus riches et vignette ; *Ultra* ajoute de vraies
   **ombres projetées** (carte d'ombres du soleil, filtrée, découpe des feuilles et herbes respectée) ;
   *NON* revient au rendu classique.
+- **Boutons tactiles comme l'édition mobile** : carrés gris translucides à icônes en pixel art
+  (croix directionnelle, sauter, s'accroupir, courir, pause, chat) ; pas de bouton « attaquer » ni
+  « utiliser » : toucher une créature la frappe (sauf interaction : nourrir, échanger, apprivoiser…),
+  toucher un bloc pose, appui long casse ; en vol (créatif) « s'accroupir » devient « descendre »
+  (maintenu) ; la vue (1re / 3e personne) se règle dans le menu pause. Les durées de toucher sont
+  mesurées sur l'horodatage réel des événements (un ralentissement ne change pas un toucher en appui).
 - **Visée tactile au doigt** (Options › Commandes › Visée tactile) : comme les commandes classiques
   de l'édition mobile, un toucher bref pose / utilise **là où l'on touche** et un appui long mine le
   bloc sous le doigt ; *Au viseur* garde la visée au centre de l'écran.

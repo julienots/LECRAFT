@@ -74,6 +74,8 @@ export class InventoryUI {
   private unsub: (() => void)[] = [];
   private timer = 0;
   private lastTap = { slot: null as GuiSlot | null, t: 0 };
+  /** Instant (horodatage de l'événement) du dernier toucher transmis. */
+  private eventTime: number | null = null;
   private pointer = { x: 0, y: 0 };
   private scale = 2;
   private tooltipTimer = 0;
@@ -304,7 +306,8 @@ export class InventoryUI {
       e.stopPropagation();
       this.pointer = { x: e.clientX, y: e.clientY };
       fired = false;
-      downAt = performance.now();
+      // horodatages réels des événements (une image en retard ne fausse pas la durée)
+      downAt = e.timeStamp;
       if (target && !target.take && this.carried) this.drag = { slots: [target], one: e.button === 2 };
       if (e.pointerType === 'mouse') return;
       t = window.setTimeout(() => {
@@ -334,7 +337,8 @@ export class InventoryUI {
         else cb('tap', e);
         return;
       }
-      if (performance.now() - downAt > LONG_MS) return;
+      if (e.timeStamp - downAt > LONG_MS) return;
+      this.eventTime = e.timeStamp;
       cb('tap', e);
     });
     void target;
@@ -346,7 +350,9 @@ export class InventoryUI {
   }
 
   private onSlot(sl: GuiSlot, kind: 'tap' | 'long' | 'double' | 'right' | 'shift') {
-    const now = performance.now();
+    // double toucher mesuré entre les instants réels des touchers
+    const now = this.eventTime ?? performance.now();
+    this.eventTime = null;
     if (kind === 'tap' && this.lastTap.slot === sl && now - this.lastTap.t < DOUBLE_MS) {
       // le premier toucher a déjà pris/posé le stack : on l'annule avant le transfert rapide
       this.lastTap.slot = null;

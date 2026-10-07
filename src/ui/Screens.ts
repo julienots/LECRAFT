@@ -182,6 +182,15 @@ export function pauseScreen(game: Game): Screen {
     body: [
       el('div', { style: 'flex:1' }),
       mcButton('Retour au jeu', () => game.resume(), { w: 204 }),
+      // vue de la caméra (le jeu original la règle dans les options, pas de bouton à l'écran)
+      (() => {
+        const names = ['1re personne', '3e personne (dos)', '3e personne (face)'];
+        const b = mcButton(`Vue : ${names[game.session?.perspective ?? 0]}`, () => {
+          game.session?.cyclePerspective();
+          b.textContent = `Vue : ${names[game.session?.perspective ?? 0]}`;
+        }, { w: 204 });
+        return b;
+      })(),
       mcRow(mcButton('Progrès', () => game.showProgress(), { w: 100 }), mcButton('Statistiques', () => game.showStats(), { w: 100 })),
       mcRow(
         mcButton('Options...', () => game.showSettings(), { w: 100 }),

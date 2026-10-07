@@ -4,6 +4,7 @@ import type { Session } from '../core/Session';
 import type { TextureManager } from '../render/TextureManager';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { el } from './dom';
+import { touchIcon } from './TouchIcons';
 import { buildHudSprites, type HudSprites } from './HudArt';
 
 /**
@@ -51,7 +52,6 @@ export class HUD implements HudApi {
   onPause: () => void = () => {};
   onInventory: () => void = () => {};
   onChat: () => void = () => {};
-  onView: () => void = () => {};
   private titleEl: HTMLElement;
   private subtitleEl: HTMLElement;
   private actionbarEl: HTMLElement;
@@ -105,23 +105,19 @@ export class HUD implements HudApi {
     this.compassArrow = el('span', { class: 'arrow' }, '➤');
     this.compassText = el('span');
     this.compass = el('div', { class: 'compass hidden' }, this.compassArrow, this.compassText);
-    const chatBtn = el('button', { class: 'btn-chat', 'aria-label': 'Chat' }, '💬');
+    const chatBtn = el('button', { class: 'btn-chat', 'aria-label': 'Chat' });
+    chatBtn.style.backgroundImage = touchIcon('chat');
     chatBtn.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       e.preventDefault();
       this.onChat();
     });
-    const viewBtn = el('button', { class: 'btn-view', 'aria-label': 'Changer de vue' }, '👁');
-    viewBtn.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      this.onView();
-    });
     this.titleEl = el('div', { class: 'mc-title-big' });
     this.subtitleEl = el('div', { class: 'mc-subtitle' });
     this.actionbarEl = el('div', { class: 'mc-actionbar' });
     this.coordsEl = el('div', { class: 'mc-coords hidden' });
-    const pause = el('button', { class: 'btn-pause', 'aria-label': 'Pause' }, '❚❚');
+    const pause = el('button', { class: 'btn-pause', 'aria-label': 'Pause' });
+    pause.style.backgroundImage = touchIcon('pause');
     pause.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -141,7 +137,6 @@ export class HUD implements HudApi {
       this.debug,
       pause,
       chatBtn,
-      viewBtn,
       el('div', { class: 'mc-titles' }, this.titleEl, this.subtitleEl),
       this.actionbarEl,
       this.coordsEl,

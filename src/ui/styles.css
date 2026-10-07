@@ -108,7 +108,7 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .slot.sel { border-color: #fff; box-shadow: 0 0 0 2px #fff8, inset 0 0 8px #fff3; }
 .slot.picked { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
 .item-name { font-size: 14px; text-shadow: 0 0 4px #000, 0 0 4px #000; min-height: 18px; transition: opacity .4s; }
-.btn-pause { position: absolute; top: calc(10px + var(--safe-top)); right: calc(12px + var(--safe-right)); width: 48px; height: 48px; border-radius: 10px; background: #0008; border: 2px solid #fff4; pointer-events: auto; font-size: 22px; display: flex; align-items: center; justify-content: center; }
+.btn-pause { position: absolute; top: calc(10px + var(--safe-top)); right: calc(12px + var(--safe-right)); width: 44px; height: 44px; pointer-events: auto; }
 .boss-bar { position: absolute; top: calc(12px + var(--safe-top)); left: 50%; transform: translateX(-50%); width: min(420px, 60vw); text-align: center; text-shadow: 0 0 4px #000; }
 .boss-bar .bar { height: 12px; background: #000b; border: 2px solid #000; border-radius: 6px; overflow: hidden; margin-top: 4px; }
 .boss-bar .bar > div { height: 100%; background: linear-gradient(#d84aff, #8a20c0); transition: width .2s; }
@@ -130,9 +130,15 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .touch-layer { position: absolute; inset: 0; pointer-events: auto; touch-action: none; }
 .joy-base { position: absolute; border-radius: 50%; background: radial-gradient(#ffffff22, #ffffff10); border: 2px solid #ffffff40; pointer-events: none; }
 .joy-knob { position: absolute; left: 50%; top: 50%; margin: auto; border-radius: 50%; background: #ffffff70; border: 2px solid #fff; translate: -50% -50%; }
-.touch-btn { position: absolute; border-radius: 50%; background: #0000004d; border: 2px solid #ffffff59; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; text-shadow: 0 1px 2px #000; touch-action: none; }
-.touch-btn.pressed { background: #ffffff59; }
-.touch-btn.active { background: #6fcf5a99; border-color: #b8ff9a; }
+.touch-btn { position: absolute; }
+/* boutons tactiles du jeu original : carrés gris translucides, liseré clair, icône en pixel art */
+.touch-btn, .dpad-cell, .btn-pause, .btn-chat {
+  background-color: rgba(30, 30, 30, 0.42); background-repeat: no-repeat; background-position: center; background-size: 52%;
+  border: 2px solid rgba(255, 255, 255, 0.42); border-radius: 0; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25);
+  image-rendering: pixelated; touch-action: none; color: transparent;
+}
+.touch-btn.pressed, .dpad-cell.pressed, .btn-pause:active, .btn-chat:active { background-color: rgba(255, 255, 255, 0.38); border-color: rgba(255, 255, 255, 0.75); }
+.touch-btn.active, .dpad-center.active { background-color: rgba(255, 255, 255, 0.32); border-color: #fff; }
 .touch-layer.editing { background: #0006; }
 .touch-layer.editing .touch-btn { border-style: dashed; border-color: var(--gold); animation: wiggle .6s infinite alternate; }
 @keyframes wiggle { from { rotate: -3deg; } to { rotate: 3deg; } }
@@ -334,8 +340,7 @@ html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }
 .chat-sugg-item { background: rgba(0, 0, 0, 0.75); color: #a0a0a0; font-size: calc(var(--gs) * 8px); line-height: calc(var(--gs) * 11px); padding: 0 calc(var(--gs) * 3px); cursor: pointer; }
 .chat-sugg-item:first-child { color: #ffff55; }
 .chat-help { color: #a0a0a0; font-size: calc(var(--gs) * 6px); text-shadow: 1px 1px 0 #000; }
-.btn-chat { position: absolute; top: calc(10px + var(--safe-top)); right: calc(68px + var(--safe-right)); width: 48px; height: 48px; border-radius: 10px; background: #0008; border: 2px solid #fff4; pointer-events: auto; font-size: 20px; display: flex; align-items: center; justify-content: center; }
-.btn-view { position: absolute; top: calc(10px + var(--safe-top)); right: calc(124px + var(--safe-right)); width: 48px; height: 48px; border-radius: 10px; background: #0008; border: 2px solid #fff4; pointer-events: auto; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+.btn-chat { position: absolute; top: calc(10px + var(--safe-top)); right: calc(62px + var(--safe-right)); width: 44px; height: 44px; pointer-events: auto; }
 .view-front .crosshair { display: none; }
 .mc-titles { position: absolute; left: 0; right: 0; top: 30%; text-align: center; pointer-events: none; color: #fff; }
 .mc-title-big { font-size: calc(var(--gs) * 32px); line-height: 1.1; text-shadow: calc(var(--gs) * 4px) calc(var(--gs) * 4px) 0 #3f3f3f; }
@@ -345,12 +350,10 @@ html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }
 /* croix directionnelle classique */
 .dpad { position: absolute; bottom: calc(var(--safe-bottom) + 16px); display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 3px; pointer-events: auto; touch-action: none; z-index: 1; }
 .dpad.hidden { display: none; }
-.dpad-cell { display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(40, 40, 40, 0.45); border: 2px solid rgba(255, 255, 255, 0.35); text-shadow: 1px 1px 0 #000; user-select: none; }
-.dpad-cell.pressed { background: rgba(200, 200, 200, 0.45); }
-.dpad-up { grid-area: 1 / 2; } .dpad-left { grid-area: 2 / 1; } .dpad-center { grid-area: 2 / 2; border-radius: 50%; transform: scale(0.75); } .dpad-right { grid-area: 2 / 3; } .dpad-down { grid-area: 3 / 2; }
+.dpad-cell { user-select: none; }
+.dpad-up { grid-area: 1 / 2; } .dpad-left { grid-area: 2 / 1; } .dpad-center { grid-area: 2 / 2; transform: scale(0.8); } .dpad-right { grid-area: 2 / 3; } .dpad-down { grid-area: 3 / 2; }
 .dpad-upleft { grid-area: 1 / 1; visibility: hidden; } .dpad-upright { grid-area: 1 / 3; visibility: hidden; }
 .dpad.forward .dpad-upleft, .dpad.forward .dpad-upright { visibility: visible; }
-.dpad-center.active { background: rgba(120, 200, 255, 0.55); }
 
 /* formulaires des scripts d'add-ons (@minecraft/server-ui) */
 .script-form .form-btn { display: flex; align-items: center; justify-content: center; gap: calc(var(--gs) * 4px); width: 100%; }
@@ -365,7 +368,7 @@ html.pano-ready .title-screen { background: rgba(0, 0, 0, 0.12); }
 .gp-cursor { position: fixed; left: 0; top: 0; width: 20px; height: 26px; z-index: 10000; pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 13' shape-rendering='crispEdges'%3E%3Cpath d='M0 0v11l3-3 2 5 2-1-2-4h4z' fill='%23fff' stroke='%23000' stroke-width='1'/%3E%3C/svg%3E") no-repeat 0 0 / contain; }
 .gp-cursor.hidden { display: none; }
-html.gamepad .touch-layer, html.gamepad .btn-pause, html.gamepad .btn-chat, html.gamepad .btn-view, html.gamepad .mc-invbtn { display: none !important; }
+html.gamepad .touch-layer, html.gamepad .btn-pause, html.gamepad .btn-chat, html.gamepad .mc-invbtn { display: none !important; }
 
 /* échanges avec les villageois */
 .trade-screen { background: rgba(0, 0, 0, .55); }

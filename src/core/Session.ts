@@ -556,10 +556,7 @@ export class Session implements GameContext {
       if (ev === 'pause') game.pause();
       else if (ev === 'inventory') game.openInventory('hand');
       else if (ev === 'debug') game.hud.toggleDebug();
-      else if (ev === 'perspective') {
-        this.perspective = ((this.perspective + 1) % 3) as 0 | 1 | 2;
-        document.documentElement.classList.toggle('view-front', this.perspective === 2);
-      }
+      else if (ev === 'perspective') this.cyclePerspective();
       else if (ev === 'chat') game.openChat('');
       else if (ev === 'command') game.openChat('/');
       else if (ev === 'drop') this.dropSelected(false);
@@ -588,6 +585,7 @@ export class Session implements GameContext {
       if (below > 0 && BlockRegistry.solid[below]) this.particles.sprintDust(p.x, p.y, p.z, below);
     }
     if (p.swimming && Math.random() < dt * 12) this.particles.burst('water', p.x, p.y + 0.3, p.z, 1);
+    this.game.touch.setFlying(this.player.body.flying);
     this.fallingLeaves(dt);
     this.updateRedstone(dt);
     this.interaction.update(dt, remaining);
@@ -1075,6 +1073,12 @@ export class Session implements GameContext {
       return;
     }
     this.game.showDeath();
+  }
+
+  /** Vue suivante : 1re personne → 3e personne arrière → 3e personne avant. */
+  cyclePerspective() {
+    this.perspective = ((this.perspective + 1) % 3) as 0 | 1 | 2;
+    document.documentElement.classList.toggle('view-front', this.perspective === 2);
   }
 
   /** Boutons enfoncés (relâchés après un délai). */

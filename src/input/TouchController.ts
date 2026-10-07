@@ -2,6 +2,7 @@ import type { Settings } from '../core/Settings';
 import type { InputState } from './InputState';
 import { VirtualJoystick } from './VirtualJoystick';
 import { DPad } from './DPad';
+import { touchIcon } from '../ui/TouchIcons';
 
 export interface TouchButtonDef {
   id: string;
@@ -15,13 +16,15 @@ export interface TouchButtonDef {
   kind: 'hold' | 'tap' | 'toggle';
 }
 
-/** Disposition par défaut : grappe d'actions en bas à droite (hors de la hotbar). */
+/**
+ * Disposition par défaut, comme l'édition mobile : sauter en bas à droite, s'accroupir à sa gauche,
+ * courir au-dessus du joystick. Pas de bouton « attaquer » ni « utiliser » : on touche l'écran
+ * (toucher bref = poser / frapper, appui long = casser), comme dans le jeu original.
+ */
 const BUTTONS: TouchButtonDef[] = [
-  { id: 'jump', label: '⤒', right: 22, bottom: 28, size: 78, kind: 'hold' },
-  { id: 'sneak', label: '⇩', right: 110, bottom: 20, size: 54, kind: 'toggle' },
-  { id: 'attack', label: '⚔', right: 104, bottom: 88, size: 64, kind: 'hold' },
-  { id: 'use', label: '✋', right: 22, bottom: 120, size: 62, kind: 'tap' },
-  { id: 'sprint', label: '»', left: 24, bottom: 190, size: 54, kind: 'toggle' },
+  { id: 'jump', label: 'up', right: 26, bottom: 34, size: 74, kind: 'hold' },
+  { id: 'sneak', label: 'sneak', right: 110, bottom: 34, size: 62, kind: 'toggle' },
+  { id: 'sprint', label: 'sprint', left: 40, bottom: 200, size: 56, kind: 'toggle' },
 ];
 
 const LONG_PRESS_MS = 280;
@@ -70,7 +73,7 @@ export class TouchController {
     const el = document.createElement('div');
     el.className = `touch-btn btn-${def.id}`;
     el.dataset.id = def.id;
-    el.textContent = def.label;
+    el.style.backgroundImage = touchIcon(def.label);
     el.setAttribute('role', 'button');
     el.setAttribute('aria-label', def.id);
     this.root.appendChild(el);
@@ -117,15 +120,12 @@ export class TouchController {
       case 'jump':
         i.jump = down;
         break;
-      case 'attack':
-        i.attack = down;
-        if (down) i.push('attackTap');
-        break;
-      case 'use':
-        if (down) i.push('use');
-        i.useHeld = down;
-        break;
       case 'sneak':
+        // en vol (créatif) : maintenir pour descendre, comme le jeu original
+        if (this.flying) {
+          i.sneak = down;
+          break;
+        }
         if (down) {
           i.sneak = !i.sneak;
           this.buttons.get('sneak')!.classList.toggle('active', i.sneak);
@@ -138,6 +138,20 @@ export class TouchController {
         }
         break;
     }
+  }
+
+  private flying = false;
+  /** En vol (créatif) : « s'accroupir » devient « descendre » (flèche vers le bas). */
+  setFlying(on: boolean) {
+    if (on === this.flying) return;
+    this.flying = on;
+    const b = this.buttons.get('sneak')!;
+    b.style.backgroundImage = touchIcon(on ? 'down' : 'sneak');
+    if (on) {
+      this.input.sneak = false;
+      b.classList.remove('active');
+    }
+    this.dpad.setFlying(on);
   }
 
   /** Réinitialise l'état visuel des bascules (après mort, menu...). */
@@ -154,7 +168,6 @@ export class TouchController {
       const el = this.buttons.get(def.id)!;
       const size = def.size * scale;
       el.style.width = el.style.height = `${size}px`;
-      el.style.fontSize = `${size * 0.42}px`;
       const custom = s.layout[def.id];
       el.style.left = el.style.right = el.style.top = el.style.bottom = '';
       if (custom) {
@@ -212,7 +225,9 @@ export class TouchController {
       this.joystick.start(e.pointerId, e.clientX, e.clientY);
       return;
     }
-    const entry = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), long: false, timer: 0 };
+    // horodatage réel du toucher (pas l'heure de traitement : une image en retard ne doit pas
+    // transformer un toucher bref en appui long)
+    const entry = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: e.timeStamp, long: false, timer: 0 };
     entry.timer = window.setTimeout(() => {
       if (Math.hypot(entry.x - entry.sx, entry.y - entry.sy) < TAP_MOVE_PX * 2) {
         entry.long = true;
@@ -250,12 +265,18 @@ export class TouchController {
     if (!l) return;
     clearTimeout(l.timer);
     this.look.delete(e.pointerId);
+    const short = e.timeStamp - l.t < LONG_PRESS_MS && Math.hypot(l.x - l.sx, l.y - l.sy) < TAP_MOVE_PX;
     if (l.long) {
       if (![...this.look.values()].some((o) => o.long)) {
         this.input.attack = false;
         this.input.holdAim = null;
       }
-    } else if (performance.now() - l.t < LONG_PRESS_MS && Math.hypot(l.x - l.sx, l.y - l.sy) < TAP_MOVE_PX) {
+      // minuterie déclenchée en retard alors que le doigt s'était relevé à temps : c'était un toucher
+      if (short) {
+        this.input.tapAim = this.aimAt(l.sx, l.sy);
+        this.input.push('use');
+      }
+    } else if (short) {
       // toucher bref : utiliser / poser là où le doigt a touché
       this.input.tapAim = this.aimAt(l.sx, l.sy);
       this.input.push('use');

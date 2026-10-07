@@ -1,4 +1,5 @@
 import type { InputState } from './InputState';
+import { touchIcon } from '../ui/TouchIcons';
 
 type Cell = 'up' | 'down' | 'left' | 'right' | 'upleft' | 'upright' | 'center' | null;
 
@@ -28,11 +29,11 @@ export class DPad {
   constructor(parent: HTMLElement, private input: InputState) {
     this.root = document.createElement('div');
     this.root.className = 'dpad hidden';
-    const labels: Record<Exclude<Cell, null>, string> = { up: '▲', down: '▼', left: '◀', right: '▶', upleft: '◤', upright: '◥', center: '◆' };
-    for (const k of Object.keys(labels) as Exclude<Cell, null>[]) {
+    const icons: Record<Exclude<Cell, null>, string> = { up: 'up', down: 'down', left: 'left', right: 'right', upleft: 'upleft', upright: 'upright', center: 'sneak' };
+    for (const k of Object.keys(icons) as Exclude<Cell, null>[]) {
       const c = document.createElement('div');
       c.className = `dpad-cell dpad-${k}`;
-      c.textContent = labels[k];
+      c.style.backgroundImage = touchIcon(icons[k]);
       this.root.append(c);
       this.cells.set(k, c);
     }
@@ -44,6 +45,13 @@ export class DPad {
       this.pointer = e.pointerId;
       this.input.mode = 'touch';
       const cell = this.cellAt(e.clientX, e.clientY, true);
+      if (cell === 'center' && this.flying) {
+        // en vol : maintenir la case centrale pour descendre
+        this.input.sneak = true;
+        this.cells.get('center')!.classList.add('pressed');
+        this.current = 'center';
+        return;
+      }
       if (cell === 'center') {
         this.input.sneak = !this.input.sneak;
         this.cells.get('center')!.classList.toggle('active', this.input.sneak);
@@ -67,6 +75,10 @@ export class DPad {
     };
     const up = (e: PointerEvent) => {
       if (e.pointerId !== this.pointer) return;
+      if (this.current === 'center' && this.flying) {
+        this.input.sneak = false;
+        this.cells.get('center')!.classList.remove('pressed');
+      }
       this.pointer = null;
       this.set(null);
       if (this.sprintByTap) {
@@ -132,6 +144,14 @@ export class DPad {
     this.root.style.left = leftHanded ? '' : `calc(var(--safe-left) + ${Math.round(16 * k)}px)`;
     this.root.style.right = leftHanded ? `calc(var(--safe-right) + ${Math.round(16 * k)}px)` : '';
     this.root.style.fontSize = `${Math.round(22 * k)}px`;
+  }
+
+  private flying = false;
+  /** En vol : la case centrale devient « descendre ». */
+  setFlying(on: boolean) {
+    this.flying = on;
+    this.cells.get('center')!.style.backgroundImage = touchIcon(on ? 'down' : 'sneak');
+    if (on) this.cells.get('center')!.classList.remove('active');
   }
 
   syncSneak() {

@@ -81,7 +81,6 @@ export class Game {
     this.hud.onPause = () => this.pause();
     this.hud.onInventory = () => this.input.push('inventory');
     this.hud.onChat = () => this.openChat('');
-    this.hud.onView = () => this.input.push('perspective');
     this.chat = new ChatUI(this, this.hud.root);
     this.hud.stats = () => this.debugText();
     this.touch = new TouchController(root.querySelector('#hud') as HTMLElement, this.input, this.settings);

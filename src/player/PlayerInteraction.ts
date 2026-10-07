@@ -103,6 +103,18 @@ export class PlayerInteraction {
     return [p.x, p.y + p.eyeHeight, p.z, dx, dy, dz];
   }
 
+  /** La créature a-t-elle une interaction avec l'objet tenu (sinon un toucher la frappe) ? */
+  private mobInteractable(m: Mob, held: string | null): boolean {
+    if (m instanceof Villager) return !m.baby;
+    if (m instanceof Wolf) return held === 'bone' || (m as unknown as { tamed?: boolean }).tamed === true;
+    if (m instanceof Animal) {
+      if (held && m.def.food?.includes(held)) return true;
+      if (held === 'shears' && m.def.key === 'sheep') return true;
+      if (held === 'bucket' && (m.def.key === 'cow' || m.def.key === 'mooshroom')) return true;
+    }
+    return false;
+  }
+
   /** Bloc et créature visés le long d'un rayon. */
   private aimTargets(aim: { x: number; y: number } | null) {
     const [ox, oy, oz, dx, dy, dz] = this.eye(aim);
@@ -145,7 +157,10 @@ export class PlayerInteraction {
 
     // événements ponctuels
     for (const ev of events) {
-      if (ev === 'use') this.use();
+      // toucher bref sur une créature (commandes tactiles) : on la frappe, sauf interaction possible
+      // (nourrir, échanger, apprivoiser, tondre, traire…), comme l'édition mobile
+      if (ev === 'use' && tap && this.targetMob && !this.mobInteractable(this.targetMob, held?.id ?? null)) this.entities.combat.playerAttack(ctx, this.targetMob);
+      else if (ev === 'use') this.use();
       else if (ev === 'attackTap' && this.targetMob) this.entities.combat.playerAttack(ctx, this.targetMob);
       else if (ev === 'attackTap') this.deflectProjectile();
     }
