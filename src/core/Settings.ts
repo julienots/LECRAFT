@@ -92,8 +92,16 @@ export function loadSettings(fallbackQuality: QualityLevel): { settings: Setting
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { settings: def, fresh: true };
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return { settings: { ...def, ...parsed, layout: { ...(parsed.layout ?? {}) } }, fresh: false };
+    const parsed = JSON.parse(raw) as Partial<Settings> & { gfxV?: number };
+    const settings = { ...def, ...parsed, layout: { ...(parsed.layout ?? {}) } };
+    // réglages graphiques d'avant la v2.16 : pleine résolution et distance de vue plus longue
+    if ((parsed.gfxV ?? 0) < 2) {
+      const p = QUALITY_PROFILES[settings.quality] ?? QUALITY_PROFILES.MEDIUM;
+      if (parsed.resolutionScale === undefined || parsed.resolutionScale < p.pixelRatio) settings.resolutionScale = p.pixelRatio;
+      if (parsed.renderDistance === undefined || parsed.renderDistance < p.renderDistance) settings.renderDistance = p.renderDistance;
+      (settings as Settings & { gfxV?: number }).gfxV = 2;
+    }
+    return { settings, fresh: false };
   } catch {
     return { settings: def, fresh: true };
   }

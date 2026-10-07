@@ -19,7 +19,8 @@ export class Renderer {
 
   constructor(readonly canvas: HTMLCanvasElement, textures: TextureManager, private settings: Settings) {
     THREE.ColorManagement.enabled = false;
-    this.gl = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+    // anticrénelage (contours nets, sans escaliers) sauf sur les appareils du profil bas
+    this.gl = new THREE.WebGLRenderer({ canvas, antialias: settings.quality !== 'LOW', alpha: false, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     this.gl.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;

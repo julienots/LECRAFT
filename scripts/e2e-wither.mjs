@@ -255,7 +255,11 @@ try {
     p.health = 20;
     let roll = 0;
     p.damage(2, 'mob');
-    for (let i = 0; i < 12; i++) { await new Promise((r) => requestAnimationFrame(r)); roll = Math.max(roll, Math.abs(g.renderer.camera.rotation.z)); }
+    // instant du pic d'inclinaison (f ≈ 0,84 du temps d'invulnérabilité) figé le temps d'une image
+    Object.defineProperty(p, 'invulnerable', { configurable: true, get: () => 0.42, set: () => {} });
+    for (let i = 0; i < 3; i++) { await new Promise((r) => requestAnimationFrame(r)); roll = Math.max(roll, Math.abs(g.renderer.camera.rotation.z)); }
+    delete p.invulnerable;
+    p.invulnerable = 0;
     return { hasPack, packMoon: sk.packMoon, packClouds: sk.packClouds, clouds3d: sk.clouds3d.geo.getAttribute('position')?.count > 0, roll };
   });
   check('Ciel : soleil, phases de la lune et nuages 3D du pack (sinon ceux du jeu)', (sky.hasPack ? sky.packMoon && sky.packClouds : !sky.packMoon) && sky.clouds3d, JSON.stringify(sky));

@@ -23,7 +23,7 @@ export class GameLoop {
       this.acc += elapsed;
       this.last = now;
       if (this.fpsCap < 60 && this.acc < minFrame) return;
-      const dt = Math.min(0.1, this.acc / 1000);
+      const dt = Math.min(0.25, this.acc / 1000);
       this.acc = 0;
       this.frame(dt);
     };

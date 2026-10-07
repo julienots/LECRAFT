@@ -337,7 +337,9 @@ export class HUD implements HudApi {
     // indice & anneau de minage
     const hints: Record<string, string> = { mine: '⛏ appui long : miner', attack: '⚔ attaquer', open: '✋ toucher : ouvrir', place: '▣ toucher : poser', eat: '🍖 toucher : manger', feed: '♥ toucher : nourrir' };
     const h = s.interaction.hint;
-    const showHint = h && s.game.input.mode === 'touch';
+    // comme le jeu original : pas d'indication permanente au centre, seulement l'interaction
+    // possible avec une créature (nourrir)
+    const showHint = h === 'feed' && s.game.input.mode === 'touch';
     this.hint.classList.toggle('hidden', !showHint);
     if (showHint) this.hint.textContent = hints[h];
     const prog = s.interaction.miningProgress;

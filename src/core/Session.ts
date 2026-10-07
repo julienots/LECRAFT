@@ -567,6 +567,34 @@ export class Session implements GameContext {
     if (this.paused || !this.loaded) return;
     const p = this.player;
     this.controller.look();
+    // simulation en sous-pas de 0,05 s au plus : la vitesse du jeu reste réelle même quand
+    // l'affichage ralentit (comme les 20 ticks par seconde du jeu original)
+    const steps = Math.min(5, Math.max(1, Math.ceil(dt / 0.05 - 1e-6)));
+    for (let i = 0; i < steps; i++) this.simulate(dt / steps, i === 0 ? remaining : []);
+    this.chunks.update(p.x, p.z);
+    this.particles.update(dt);
+    this.entities.render(this, this.elapsed);
+    this.meta.playTime += dt;
+    // sons d'eau
+    const inWater = p.body.inWater;
+    if (inWater && !this.wasInWater && p.body.vy < -4) {
+      this.audio.play('splash');
+      this.particles.burst('water', p.x, p.y + 0.5, p.z, 12);
+    }
+    this.wasInWater = inWater;
+    if (inWater && Math.hypot(p.body.vx, p.body.vz) > 1) {
+      this.swimSoundTimer -= dt;
+      if (this.swimSoundTimer <= 0) {
+        this.swimSoundTimer = 0.7;
+        this.audio.play('swim', { volume: 0.5 });
+      }
+    }
+    this.updateView(dt);
+  }
+
+  /** Un pas de simulation (joueur, interactions, ticks à 20 Hz). */
+  private simulate(dt: number, remaining: string[]) {
+    const p = this.player;
     this.controller.update(this.world, dt);
     this.updatePortal(dt);
     this.updateFires();
@@ -598,25 +626,6 @@ export class Session implements GameContext {
       n++;
     }
     if (n === 3) this.tickAcc = 0;
-    this.chunks.update(p.x, p.z);
-    this.particles.update(dt);
-    this.entities.render(this, this.elapsed);
-    this.meta.playTime += dt;
-    // sons d'eau
-    const inWater = p.body.inWater;
-    if (inWater && !this.wasInWater && p.body.vy < -4) {
-      this.audio.play('splash');
-      this.particles.burst('water', p.x, p.y + 0.5, p.z, 12);
-    }
-    this.wasInWater = inWater;
-    if (inWater && Math.hypot(p.body.vx, p.body.vz) > 1) {
-      this.swimSoundTimer -= dt;
-      if (this.swimSoundTimer <= 0) {
-        this.swimSoundTimer = 0.7;
-        this.audio.play('swim', { volume: 0.5 });
-      }
-    }
-    this.updateView(dt);
   }
 
   /** Portail : 4 s dedans (1 s en créatif) pour changer de dimension ; il faut en sortir pour repartir. */
@@ -851,8 +860,8 @@ export class Session implements GameContext {
       this.progressTimer = 1;
       const biome = this.world.biomeAt(Math.floor(p.x), Math.floor(p.z));
       if (this.world.isLoaded(Math.floor(p.x), Math.floor(p.z)) && !this.progression.biomes.has(biome.key)) {
+        // suivi des biomes visités (progrès), sans message à l'écran comme le jeu original
         this.progression.biomes.add(biome.key);
-        this.hud.toast(`Biome découvert : ${biome.name}`);
       }
       this.progression.min('deepest', Math.floor(p.y));
       this.progression.check(p.level);

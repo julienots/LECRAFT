@@ -303,7 +303,6 @@ export class Game {
     this.hud.show(true);
     this.touch.setVisible(true);
     this.touch.syncToggles();
-    if (!travel) this.hud.toast(state ? `Bon retour dans « ${meta.name} »` : `Monde « ${meta.name} » créé (seed ${meta.seed})`);
     if (!state) await this.session.save(true).catch(() => {});
   }
 
