@@ -299,7 +299,8 @@ try {
     await sleep(600);
     const ultra = u.uShaders.value, map = !!u.uShadowMap.value, matrix = u.uShadowMatrix.value.elements.some((v, i) => i % 5 !== 0 && v !== 0);
     g.settings.shaders = 'off';
-    await sleep(200);
+    // la valeur est appliquée à l'image suivante (lente avec les ombres en rendu logiciel)
+    for (let t = 0; t < 40 && u.uShaders.value !== 0; t++) await sleep(100);
     const off = u.uShaders.value;
     g.settings.shaders = def;
     // coffre : corps + loquet en relief
