@@ -97,6 +97,9 @@ export class AIController {
       let drop = 0;
       for (let y = Math.floor(m.y) - 1; y > Math.floor(m.y) - 5; y--) {
         if (w.isSolid(ax, y, az)) break;
+        // de l'eau dessous : on peut y entrer (pas une falaise)
+        const lb = w.getBlock(ax, y, az);
+        if (lb > 0 && BlockRegistry.liquid[lb] === 1) break;
         drop++;
       }
       const ahead = w.getBlock(ax, Math.floor(m.y), az);
@@ -113,7 +116,7 @@ export class AIController {
     // saut d'obstacle / escalade / sautillement
     if (b.collidedH && (b.onGround || b.inWater)) {
       if (m.has('climbs')) b.vy = 4;
-      else b.vy = 8.2;
+      else b.vy = 9.2;
       this.stuckTimer += 0.1;
     }
     if (b.inWater && !m.has('flies')) b.vy = Math.max(b.vy, 1.5);
@@ -138,7 +141,7 @@ export class AIController {
       const w = this.ctx.world;
       this.path = findPath(w, Math.floor(m.x), Math.floor(m.y + 0.05), Math.floor(m.z), gx, gy, gz, {
         height: Math.ceil(m.body.height - 0.01),
-        maxNodes: direct > 20 ? 700 : 450,
+        maxNodes: direct > 20 ? 1000 : direct > 10 ? 700 : 450,
         waterCost: m.has('burnsInSun') ? 1 : 3,
       });
       this.pathIdx = 0;
@@ -156,7 +159,9 @@ export class AIController {
     this.moveTowards(px + 0.5, pz + 0.5, speedMul, false);
     // marche montante : saut anticipé (sans attendre de cogner le bloc)
     const b = m.body;
-    if (py > Math.floor(m.y + 0.05) && b.onGround && Math.hypot(px + 0.5 - m.x, pz + 0.5 - m.z) < 1.3) b.vy = 8.2;
+    // dans l'eau : on nage vers le haut (comme un joueur qui maintient « sauter ») pour sortir sur la rive
+    if (b.inWater && (py >= Math.floor(m.y + 0.05) || b.collidedH)) b.vy = Math.max(b.vy, 5);
+    if (py > Math.floor(m.y + 0.05) && b.onGround && Math.hypot(px + 0.5 - m.x, pz + 0.5 - m.z) < 1.3 && Math.hypot(b.vx, b.vz) > 0.4) b.vy = 9.2;
     return direct;
   }
 

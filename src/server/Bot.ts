@@ -220,7 +220,7 @@ export class Bot extends Mob {
     if (d > 3.2 || Math.abs(t.y - this.y) > 2.5) {
       this.goTo(t.x, t.y, t.z, d > 4);
       // saut d'approche : arrive en tombant pour placer un coup critique
-      if (d < 5 && b.onGround && Math.random() < dt * 3 * this.skill) b.vy = 8.2;
+      if (d < 5 && b.onGround && Math.random() < dt * 3 * this.skill) b.vy = 9.2;
       return d;
     }
     this.faceTo(t.x, t.z);
@@ -252,7 +252,7 @@ export class Bot extends Mob {
         ctx.audio.play(crit ? 'crit' : 'hit', { x: t.x, y: t.y, z: t.z });
       }
       // saut pour le coup critique suivant
-      if (b.onGround && Math.random() < this.skill * 0.6) b.vy = 8.2;
+      if (b.onGround && Math.random() < this.skill * 0.6) b.vy = 9.2;
     }
     return d;
   }

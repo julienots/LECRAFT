@@ -180,6 +180,8 @@ export class EntityManager implements EntitySpawner {
       e.distToPlayer = Math.hypot(e.x - p.x, e.y - p.y, e.z - p.z);
       // les entités hors des chunks chargés sont gelées
       const roaming = e.kind === 'mob' && ((e as Mob).def.key === 'ender_dragon' || (e as Mob).def.key === 'wither');
+      // bots joueurs : simulés partout où le terrain est chargé (pas de gel à distance)
+      const player = e.kind === 'mob' && (e as Mob).def.key.startsWith('bot:');
       if (!roaming && !ctx.world.isLoaded(Math.floor(e.x), Math.floor(e.z))) {
         if (e.kind !== 'mob') e.removed = true;
         continue;
@@ -190,8 +192,8 @@ export class EntityManager implements EntitySpawner {
         // LOD de simulation
         const far = e.distToPlayer > simDist;
         const mid = e.distToPlayer > 32;
-        m.sim = roaming || (!far && (!mid || (this.lodTick + m.id) % 4 === 0));
-        if (m.sim) m.update(ctx, mid && !roaming ? dt * 4 : dt);
+        m.sim = roaming || player || (!far && (!mid || (this.lodTick + m.id) % 4 === 0));
+        if (m.sim) m.update(ctx, mid && !roaming && !player ? dt * 4 : dt);
         // disparition des monstres
         if (m instanceof Monster && !m.persistent && (e.distToPlayer > 80 || m.farTime > 60) && !m.origin) m.removed = true;
         if (m instanceof Boss && !roaming && (e.distToPlayer > 48 || p.dead) && !m.dead) {

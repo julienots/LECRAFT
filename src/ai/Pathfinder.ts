@@ -178,8 +178,9 @@ export function findPath(w: PathWorld, sx: number, sy: number, sz: number, tx: n
       if (standable(w, nx, y, nz, h)) ny = y;
       else if (!diag && standable(w, nx, y + 1, nz, h) && passable(w, x, y + h, z)) ny = y + 1; // saut d'un bloc
       else if (passable(w, nx, y, nz) && passable(w, nx, y + h - 1, nz))
-        for (let d = 1; d <= maxDrop; d++) {
-          if (standable(w, nx, y - d, nz, h)) {
+        for (let d = 1; d <= Math.max(maxDrop, 12); d++) {
+          // chute de plus de 3 blocs seulement vers de l'eau (sans dégâts)
+          if (standable(w, nx, y - d, nz, h) && (d <= maxDrop || isWater(w, nx, y - d, nz))) {
             ny = y - d;
             break;
           }

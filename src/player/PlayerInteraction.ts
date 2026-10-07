@@ -55,6 +55,8 @@ export interface InteractionHost {
   canEdit?(x: number, y: number, z: number, action: 'break' | 'place', block: number): boolean;
   /** Utilisation d'un objet interceptée (menu des jeux…) : vrai si traitée. */
   useItem?(itemId: string): boolean;
+  /** Bloc cassé par le joueur (mods du serveur de survie : abattage d'arbre, filons). */
+  afterBreak?(x: number, y: number, z: number, block: number, itemId: string | undefined): void;
   /** Interaction avec une créature particulière (PNJ du serveur) : vrai si traitée. */
   mobInteract?(m: Mob): boolean;
 }
@@ -234,6 +236,7 @@ export class PlayerInteraction {
       }
       this.breakBlock(t.x, t.y, t.z, itemId);
       hooks.afterBreak?.(t.x, t.y, t.z, t.block, meta, stack);
+      this.host.afterBreak?.(t.x, t.y, t.z, t.block, itemId);
       this.resetMining();
       // en créatif, petit délai entre deux cassages
       if (p.creative) this.hitSoundTimer = 0.2;

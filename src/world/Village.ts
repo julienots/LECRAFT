@@ -8,7 +8,7 @@
 import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { FACING_DIR } from '../blocks/Shapes';
 import { SEA_LEVEL } from '../core/Config';
-import type { Rng } from '../util/math';
+import { Rng as RngImpl, type Rng } from '../util/math';
 import { BiomeManager } from './BiomeManager';
 import type { StructWriter, TerrainQuery } from './StructureGenerator';
 
@@ -354,4 +354,25 @@ export function buildVillage(w: StructWriter, ox: number, oz: number, rng: Rng, 
       }
     }
   }
+}
+
+/**
+ * Plan d'un bâtiment (liste ordonnée des blocs à poser) : utilisé par les bots du serveur de survie,
+ * qui construisent leur maison bloc par bloc. Les blocs d'air (déblaiement) viennent en premier,
+ * puis le reste de bas en haut.
+ */
+export function planBuilding(kind: Building, x: number, y: number, z: number, facing: number, biome: string, t: TerrainQuery, seed = 1): [number, number, number, number, number][] {
+  const out = new Map<string, [number, number, number, number, number]>();
+  const rec: StructWriter = {
+    set: (bx, by, bz, b, m = 0) => void out.set(`${bx},${by},${bz}`, [bx, by, bz, b, m]),
+    setIfAir: (bx, by, bz, b, m = 0) => void out.set(`${bx},${by},${bz}`, [bx, by, bz, b, m]),
+  };
+  build(kind, new Frame(rec, x, y, z, facing), t, palette(biome), new RngImpl(seed), 0);
+  const list = [...out.values()];
+  return [...list.filter((e) => e[3] === B.AIR), ...list.filter((e) => e[3] !== B.AIR).sort((a, b) => a[1] - b[1])];
+}
+
+/** Emprise (demi-largeur, profondeur) d'un bâtiment. */
+export function buildingSize(kind: Building): [number, number] {
+  return SIZES[kind];
 }

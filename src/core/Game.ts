@@ -1,5 +1,6 @@
 import { detectDevice, AdaptiveQuality, type DeviceInfo } from './DeviceProfiler';
-import { serversScreen, openGameSelector } from '../ui/ServerUI';
+import { serversScreen, openGameSelector, openShop } from '../ui/ServerUI';
+import { SMP_NAME, SMP_SEED, SMP_WORLD_ID } from '../server/SmpServer';
 import { SERVER_NAME, type ServerNetwork } from '../server/ServerNetwork';
 import type { Screen } from '../ui/UIManager';
 import { applyQuality, loadSettings, saveSettings, type Settings } from './Settings';
@@ -260,6 +261,26 @@ export class Game {
     const meta: WorldMeta = { id: '__server__', name: SERVER_NAME, seed: 20240607, creationDate: now, lastPlayed: now, playTime: 0, thumbnail: null, gameMode: 'survival', difficulty: 'normal', version: SAVE_VERSION, cheats: false, server: true };
     await this.startWorld(meta, null);
     this.session?.server?.start();
+  }
+
+  /** Serveur de survie moddé : monde sauvegardé (créé à la première connexion). */
+  async joinSmp() {
+    const all = await this.saves.listAllWorlds().catch(() => []);
+    let meta = all.find((w) => w.id === SMP_WORLD_ID);
+    let state: WorldState | null = null;
+    if (meta) state = await this.saves.load<WorldState>(meta.id).catch(() => null);
+    else {
+      const now = Date.now();
+      meta = { id: SMP_WORLD_ID, name: SMP_NAME, seed: SMP_SEED, creationDate: now, lastPlayed: now, playTime: 0, thumbnail: null, gameMode: 'survival', difficulty: 'normal', version: SAVE_VERSION, cheats: false, smp: true };
+      await this.saves.updateMeta(meta);
+    }
+    await this.startWorld(meta, state);
+    this.session?.smp?.start();
+  }
+
+  /** Boutique du serveur de survie (/shop). */
+  openServerShop(items: [string, number, number][], coins: () => number, buy: (id: string, n: number, price: number) => boolean) {
+    openShop(this, items, coins, buy);
   }
 
   openServerSelector(net: ServerNetwork) {

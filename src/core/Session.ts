@@ -55,6 +55,7 @@ import { DroppedItemModels } from '../render/DroppedItems';
 import { ShadowMap } from '../render/ShadowMap';
 import { updatePowerAround } from '../world/Redstone';
 import { ServerNetwork } from '../server/ServerNetwork';
+import { SmpServer } from '../server/SmpServer';
 import { HUB } from '../server/ServerMaps';
 
 export interface WorldState {
@@ -156,6 +157,8 @@ export class Session implements GameContext {
   readonly stats: StatsApi;
   /** Serveur de mini-jeux (monde du serveur intégré), sinon null. */
   readonly server: ServerNetwork | null;
+  /** Serveur de survie moddé, sinon null. */
+  readonly smp: SmpServer | null;
 
   constructor(readonly game: Game, readonly meta: WorldMeta, state: WorldState | null) {
     const r = game.renderer;
@@ -230,11 +233,20 @@ export class Session implements GameContext {
       throwEye: () => void this.throwEye(),
       pressButton: (x, y, z, seconds) => this.buttons.push({ x, y, z, t: seconds }),
       view: () => ({ fov: game.renderer.camera.fov, aspect: game.renderer.camera.aspect }),
-      canEdit: (x, y, z, a, b) => !this.server || this.server.canEdit(x, y, z, a, b),
+      canEdit: (x, y, z, a, b) => (!this.server || this.server.canEdit(x, y, z, a, b)) && (!this.smp || this.smp.canEdit(x, y, z)),
+      afterBreak: (x, y, z, b, item) => this.smp?.afterBreak(x, y, z, b, item),
       useItem: (id) => !!this.server?.useItem(id),
       mobInteract: (m) => !!this.server?.mobInteract(m),
     });
     this.server = meta.server ? new ServerNetwork(this) : null;
+    this.smp = meta.smp ? new SmpServer(this) : null;
+    if (this.smp) {
+      const prev = this.entities.damage.onKill;
+      this.entities.damage.onKill = (m) => {
+        prev(m);
+        this.smp?.mobKilled(m);
+      };
+    }
     this.fovCurrent = game.settings.fov;
     // événements joueur
     this.player.onDamage = (_dmg, src) => {
@@ -305,6 +317,7 @@ export class Session implements GameContext {
   /** Exécute une commande de chat ; les messages vont dans le chat. */
   runCommand(line: string): boolean {
     if (this.server?.command(line)) return true;
+    if (this.smp?.command(line)) return true;
     return execute(this, line, (m, err) => this.game.chat.add(m, err ? 'error' : 'info'));
   }
 
@@ -532,6 +545,7 @@ export class Session implements GameContext {
   /** Sauvegarde atomique (état + chunks modifiés + miniature). */
   async save(withThumbnail = true): Promise<void> {
     if (!this.loaded || this.server) return;
+    this.smp?.save();
     if (this.saving) await this.saving;
     const list = this.chunks.collectUnsaved();
     const versions = list.map((c) => c.version);
@@ -585,6 +599,7 @@ export class Session implements GameContext {
     const steps = Math.min(5, Math.max(1, Math.ceil(dt / 0.05 - 1e-6)));
     for (let i = 0; i < steps; i++) this.simulate(dt / steps, i === 0 ? remaining : []);
     this.server?.update(dt);
+    this.smp?.update(dt);
     this.chunks.update(p.x, p.z);
     this.particles.update(dt);
     this.entities.render(this, this.elapsed);
@@ -1073,11 +1088,13 @@ export class Session implements GameContext {
   private onDeath() {
     const p = this.player;
     if (this.server?.onPlayerDeath()) return;
+    // serveur de survie : les objets vont dans une tombe
+    const graved = !!this.smp?.makeGrave();
     this.lastDeath = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z), dim: this.dimension };
     this.audio.play('hurt', { pitch: 0.7 });
     this.haptic('heavy');
     // perte de l'inventaire (sauf en facile/paisible)
-    if ((p.difficulty === 'normal' || p.difficulty === 'hard') && !this.gamerules.keepInventory) {
+    if (!graved && (p.difficulty === 'normal' || p.difficulty === 'hard') && !this.gamerules.keepInventory) {
       for (let i = 0; i < p.inventory.size; i++) {
         const s = p.inventory.slots[i];
         if (s) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability);

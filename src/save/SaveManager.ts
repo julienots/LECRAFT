@@ -16,6 +16,8 @@ export interface WorldMeta {
   cheats?: boolean;
   /** Monde du serveur de mini-jeux (jamais enregistré). */
   server?: boolean;
+  /** Monde du serveur de survie moddé (masqué de la liste Solo). */
+  smp?: boolean;
 }
 
 interface StateRecord {
@@ -100,6 +102,10 @@ export class SaveManager {
   }
 
   async listWorlds(): Promise<WorldMeta[]> {
+    return (await this.listAllWorlds()).filter((w) => !w.smp);
+  }
+
+  async listAllWorlds(): Promise<WorldMeta[]> {
     await this.open();
     const all = await req(this.store('worlds').getAll() as IDBRequest<WorldMeta[]>);
     return all.sort((a, b) => b.lastPlayed - a.lastPlayed);

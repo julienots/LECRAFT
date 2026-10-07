@@ -190,7 +190,7 @@ export class ServerNetwork {
     const d = Math.hypot(w.x - b.x, w.z - b.z);
     if (d > 1.2) b.goTo(w.x, FLOOR + 1, w.z, Math.random() < 0.3);
     else b.ai.stop();
-    if (b.body.onGround && Math.random() < dt * 0.3) b.body.vy = 8.2;
+    if (b.body.onGround && Math.random() < dt * 0.3) b.body.vy = 9.2;
   }
 
   // ---------- événements du jeu ----------
@@ -806,7 +806,7 @@ class Spleef extends MiniGame {
     }
     this.breakTimers.set(b, t);
     // ne pas tomber : si la case sous soi a disparu, saut vers une case pleine voisine
-    if (b.body.onGround && w.getBlock(Math.floor(b.x), FLOOR, Math.floor(b.z)) !== B.SNOW_BLOCK) b.body.vy = 8.2;
+    if (b.body.onGround && w.getBlock(Math.floor(b.x), FLOOR, Math.floor(b.z)) !== B.SNOW_BLOCK) b.body.vy = 9.2;
   }
 }
 
@@ -889,7 +889,7 @@ class TntRun extends MiniGame {
     }
     b.goTo(g.x, layer + 1, g.z, true);
     // trou devant : saut (comme un joueur qui court)
-    if (b.body.onGround && !here(Math.floor(b.x + b.body.vx * 0.15), Math.floor(b.z + b.body.vz * 0.15)) && Math.random() < 0.5 + b.skill * 0.5) b.body.vy = 8.2;
+    if (b.body.onGround && !here(Math.floor(b.x + b.body.vx * 0.15), Math.floor(b.z + b.body.vz * 0.15)) && Math.random() < 0.5 + b.skill * 0.5) b.body.vy = 9.2;
   }
 }
 
