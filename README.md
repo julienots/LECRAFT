@@ -187,6 +187,26 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   chaque coin moyennée, plus de trous entre niveaux), animation à 16 images (8 images/s) issue du pack,
   surfaces translucides sans « parois fantômes », glace et verre sans double face contre l'eau ;
   coffre aux couleurs de `entity/chest/normal.png` avec loquet en relief.
+- **Rendu plus net** : anticrénelage (sauf profil *Bas*), pleine résolution par défaut (les anciens
+  réglages sont relevés une fois), image non pixelisée à l'agrandissement, simulation par sous-pas
+  (physique stable même quand l'image ralentit) ; plus de messages superflus à l'écran.
+- **Génération plus fidèle** : nouveaux biomes — **forêt de bouleaux**, **forêt fleurie**,
+  **prairie** (en altitude), **cerisaie** (arbres roses à branches), **taïga enneigée**, **badlands**
+  (sable rouge, plateaux en terrasses, strates de terre cuite colorée), **pics rocheux** (pierre et
+  calcite), **océan profond** — choisis par un bruit de « variante » comme la bizarrerie du jeu
+  original ; pics de glace plus rares. **Plantes hautes** sur deux blocs (hautes herbes, grandes
+  fougères, lilas, rosier, pivoine : se posent sur deux blocs, casser une moitié retire l'autre, un seul
+  objet lâché ; colorants), **nénuphars** dans les marais.
+- **Villages comme le jeu original** : puits et cloche au centre, 2 à 4 rues en terre battue qui
+  suivent le relief, bâtiments orientés vers la rue avec **vraies portes**, toits à deux pans en
+  **escaliers**, poteaux en bûches, soubassement en pierre, vitres, lits, coffres, lanternes et torches ;
+  petites et grandes maisons, **bibliothèque**, **forge**, **champs** irrigués et **lampadaires** ; style
+  selon le biome (chêne, sapin, acacia, grès à toit plat dans le désert) ; les villages s'installent
+  sur un terrain assez plat et sec.
+- **Créatures plus intelligentes** : recherche de chemin **A*** (marche, saut d'un bloc, descente
+  jusqu'à 3 blocs, nage ; évite lave, cactus et barrières ; traverse portes et portillons ouverts) pour
+  poursuivre, chercher le joueur, rentrer, suivre la nourriture et errer ; si la cible est inaccessible,
+  elles vont au plus près ; les morts-vivants cherchent l'**ombre** quand ils brûlent au soleil.
 - **Petites touches LeCraft** : des **feuilles tombent** des arbres ; à la mort, la **position** est
   affichée et, après la réapparition, une **boussole** guide 5 minutes vers le lieu de la mort.
 
@@ -678,7 +698,8 @@ La sensibilité et l'inversion de l'axe vertical des Paramètres s'appliquent au
 ## 14. Tests
 
 ```bash
-npm test                         # 53 tests unitaires : génération déterministe, biomes, grottes,
+npm test                         # 53 tests unitaires : génération déterministe, biomes (nouveaux biomes,
+                                 # plantes hautes, badlands), grottes, recherche de chemin A*,
                                  # mesher/lumière, physique, liquides, inventaire, grilles 2x2/3x3,
                                  # fourneau, formes/orientations, drops, butin, survie, police TrueType,
                                  # sauvegarde/corruption (fake-indexeddb)
@@ -697,7 +718,7 @@ npm run e2e:addons               # 33 vérifications : import d'un .mcaddon gén
 npm run e2e:nether               # 18 vérifications : portail (allumage, cadre cassé), passage, génération,
                                  # ambiance, eau, lit, créatures et colère des piglins, forteresse, retour
                                  # par le portail relié, persistance des blocs du Nether
-npm run e2e:mobs                 # 13 vérifications : modèles, loup (apprivoisement, défense), enderman
+npm run e2e:mobs                 # 14 vérifications : zombie qui contourne un mur (A*), modèles, loup (apprivoisement, défense), enderman
                                  # (regard, téléportation), échanges, calamar, boule de feu renvoyée,
                                  # flèche de lenteur, village (cloche, villageois)
 npm run e2e:movement             # 8 vérifications : sprint au double appui, saut en sprint, poussière,
@@ -705,7 +726,7 @@ npm run e2e:movement             # 8 vérifications : sprint au double appui, sa
 npm run e2e:end                  # 12 vérifications : œil de l'Ender, fort et 12 cadres, ouverture,
                                  # arrivée, cristaux et dragon, soin et cristal détruit, vide, victoire
                                  # (portail de sortie, œuf), retour à la surface
-npm run e2e:doors                # 8 vérifications : portes des 12 essences, trappe, portillon,
+npm run e2e:doors                # 11 vérifications : plantes hautes (pose, casse, remplacement), portes des 12 essences, trappe, portillon,
                                  # porte en fer (pas à la main), levier, bouton, plaque de pression,
                                  # visée au doigt (bloc posé là où on touche)
 npm run e2e:wither               # 26 vérifications : pas de bloc fantôme, icônes plates, squelette
@@ -717,6 +738,7 @@ npm run e2e:wither               # 26 vérifications : pas de bloc fantôme, ic�
 npm run e2e:controls             # 25 vérifications : manette simulée (curseur des menus, déplacement,
                                  # regard, gâchettes poser/casser, LB/RB, saut, inventaire A/B, pause,
                                  # lâcher), vues 1re/3e personne (F5, croix ↑), caméra contre un mur
+node scripts/shots-biomes.mjs    # captures des nouveaux biomes ; shots-village.mjs : un village
 npm run screens                  # captures 16:9, 20:9, petit écran, tablette, portrait
 npm run perf                     # coûts CPU par frame
 ```

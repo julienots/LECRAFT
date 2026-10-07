@@ -204,6 +204,31 @@ try {
   check('Flèche de vagabond : lenteur', slow === 'lecraft:stray_arrow' && slowed > 0 || slowed === 0 && false, `${slow} niveau ${slowed}`);
   await G(() => { const s = window.__lecraft.session; for (const e of s.entities.entities) e.removed = true; });
 
+  // ---------- recherche de chemin : contourner un mur pour atteindre le joueur ----------
+  const nav = await G(async () => {
+    const s = window.__lecraft.session, a = window.__arena, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (const m of s.entities.mobs) m.removed = true;
+    // mur de verre (on voit à travers, on ne passe pas) ouvert seulement à son extrémité est
+    s.runCommand(`/fill ${a.x - 13} ${a.y} ${a.z - 3} ${a.x + 6} ${a.y + 2} ${a.z - 3} glass`);
+    p.body.setPos(a.x + 0.5, a.y, a.z + 0.5);
+    p.health = 20;
+    const z = s.entities.spawnMob('zombie', a.x + 0.5, a.y, a.z - 8 + 0.5, { persistent: true });
+    let best = 99, pathLen = 0;
+    for (let t = 0; t < 150; t++) {
+      await sleep(100);
+      p.health = 20;
+      p.body.setPos(a.x + 0.5, a.y, a.z + 0.5);
+      best = Math.min(best, Math.hypot(z.x - p.x, z.z - p.z));
+      if (z.ai.path) pathLen = Math.max(pathLen, z.ai.path.length);
+      if (best < 2) break;
+    }
+    const out = { best: +best.toFixed(2), pathLen, state: z.ai.state };
+    z.removed = true;
+    s.runCommand(`/fill ${a.x - 13} ${a.y} ${a.z - 3} ${a.x + 6} ${a.y + 2} ${a.z - 3} air`);
+    return out;
+  });
+  check('Zombie : contourne un mur (chemin A*) pour atteindre le joueur', nav.best < 2 && nav.pathLen > 5, JSON.stringify(nav));
+
   // ---------- village : cloche et villageois ----------
   const vloc = await G(async () => { const s = window.__lecraft.session, p = s.player; return s.chunks.locate('village', p.x, p.z); });
   if (vloc.found) {
