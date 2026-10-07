@@ -14,13 +14,15 @@ export class Renderer {
   readonly camera: THREE.PerspectiveCamera;
   readonly materials: ReturnType<typeof createChunkMaterials>;
   readonly sky = new Sky();
-  private dynamicScale = 1;
+  /** Échelle dynamique (réduite par la qualité automatique ; mémorisée dans les réglages). */
+  private dynamicScale: number;
   shake = 0;
 
   constructor(readonly canvas: HTMLCanvasElement, textures: TextureManager, private settings: Settings) {
     THREE.ColorManagement.enabled = false;
-    // anticrénelage (contours nets, sans escaliers) sauf sur les appareils du profil bas
-    this.gl = new THREE.WebGLRenderer({ canvas, antialias: settings.quality !== 'LOW', alpha: false, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+    this.dynamicScale = Math.max(0.55, Math.min(1, settings.dynScale ?? 1));
+    // anticrénelage seulement sur le profil haut (sur téléphone il coûte cher en bande passante)
+    this.gl = new THREE.WebGLRenderer({ canvas, antialias: settings.quality === 'HIGH', alpha: false, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     this.gl.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;
@@ -34,7 +36,9 @@ export class Renderer {
   }
 
   get pixelRatio() {
-    return Math.min(window.devicePixelRatio || 1, 2) * this.settings.resolutionScale * this.dynamicScale;
+    // plafond selon le profil : un écran 3× ne doit pas calculer 9 fois plus de pixels
+    const cap = this.settings.quality === 'HIGH' ? 2 : this.settings.quality === 'MEDIUM' ? 1.5 : 1;
+    return Math.min(cap, Math.min(window.devicePixelRatio || 1, 2) * this.settings.resolutionScale) * this.dynamicScale;
   }
 
   /** Ajustement dynamique (résolution) pour tenir la cible FPS. */
@@ -42,6 +46,7 @@ export class Renderer {
     const next = Math.max(0.55, Math.min(1, this.dynamicScale + dir * 0.1));
     if (next === this.dynamicScale) return false;
     this.dynamicScale = next;
+    this.settings.dynScale = next;
     this.resize();
     return true;
   }

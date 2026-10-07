@@ -580,6 +580,7 @@ export class Game {
         this.applySettings();
       }
     } else this.renderer.adjustDynamicScale(1);
+    saveSettings(this.settings);
   }
 
   private debugText(): string {

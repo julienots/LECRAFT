@@ -36,6 +36,8 @@ export interface Settings {
   showFps: boolean;
   viewBobbing: boolean;
   haptics: boolean;
+  /** Échelle de résolution trouvée par la qualité automatique (reprise au lancement suivant). */
+  dynScale?: number;
 }
 
 const KEY = 'lecraft.settings.v1';
@@ -50,7 +52,7 @@ export function defaultSettings(q: QualityLevel = 'MEDIUM'): Settings {
     shadows: p.shadows,
     particles: q === 'LOW' ? 'low' : 'high',
     waterQuality: p.waterQuality,
-    shaders: 'on',
+    shaders: q === 'LOW' ? 'off' : 'on',
     resolutionScale: p.pixelRatio,
     clouds: p.clouds,
     sensitivity: 1,

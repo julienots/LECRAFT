@@ -69,18 +69,18 @@ export function detectDevice(): DeviceInfo {
  */
 export class AdaptiveQuality {
   private samples: number[] = [];
-  private cooldown = 5;
+  private cooldown = 3;
   constructor(private onAdjust: (dir: -1 | 1) => void) {}
   update(dt: number, target: number) {
     this.cooldown -= dt;
     this.samples.push(dt);
     if (this.samples.length > 90) this.samples.shift();
-    if (this.cooldown > 0 || this.samples.length < 60) return;
+    if (this.cooldown > 0 || this.samples.length < 45) return;
     const avg = this.samples.reduce((a, b) => a + b, 0) / this.samples.length;
     const fps = 1 / avg;
-    if (fps < target * 0.8) {
+    if (fps < target * 0.85) {
       this.onAdjust(-1);
-      this.cooldown = 6;
+      this.cooldown = 3;
       this.samples.length = 0;
     } else if (fps > target * 0.98) {
       this.onAdjust(1);
