@@ -269,8 +269,7 @@ export class Session implements GameContext {
       this.player.spawn = [spawn.x, spawn.y + 1, spawn.z];
       this.player.body.setPos(spawn.x, spawn.y + 1, spawn.z);
       this.player.yaw = Math.PI * 0.75;
-      if (meta.gameMode === 'creative') this.giveCreativeKit();
-      else this.player.inventory.add({ id: 'apple', count: 3 });
+      // comme le jeu original : on apparaît les mains vides (créatif : tout est dans l'inventaire créatif)
     }
     this.held.setItem(this.player.inventory.selectedStack?.id ?? '');
   }
@@ -371,11 +370,6 @@ export class Session implements GameContext {
 
   private biomeWeather() {
     return this.world.biomeAt(Math.floor(this.player.x), Math.floor(this.player.z)).weather;
-  }
-
-  private giveCreativeKit() {
-    const kit = ['grass_block', 'dirt', 'stone', 'cobblestone', 'oak_planks', 'oak_log', 'glass', 'torch', 'bricks', 'stone_bricks', 'sand', 'white_wool', 'lantern', 'crafting_table', 'chest', 'furnace', 'diamond_pickaxe', 'diamond_sword', 'bow', 'arrow', 'wheat_seeds', 'oak_door', 'oak_stairs', 'oak_slab', 'ladder', 'red_bed', 'water_bucket'];
-    for (const k of kit) if (ItemRegistry.has(k)) this.player.inventory.add({ id: k, count: ItemRegistry.maxStack(k) });
   }
 
   // ---------- chargement ----------
