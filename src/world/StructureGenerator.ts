@@ -12,6 +12,7 @@ import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT } from '../core/Config';
 import { hash3, Rng } from '../util/math';
 import { BiomeManager } from './BiomeManager';
+import { buildVillage } from './Village';
 
 export interface TerrainQuery {
   heightAt(x: number, z: number): number;
@@ -72,6 +73,7 @@ function styleFor(biomeKey: string): HouseStyle {
     case 'desert':
       return { wall: B.SANDSTONE, corner: B.SANDSTONE, floor: B.SANDSTONE, roof: B.SANDSTONE };
     case 'taiga':
+    case 'snowy_taiga':
     case 'tundra':
       return { wall: B.OAK_PLANKS, corner: B.SPRUCE_LOG, floor: B.OAK_PLANKS, roof: B.SPRUCE_LOG };
     case 'savanna':
@@ -125,18 +127,6 @@ function house(w: StructWriter, t: TerrainQuery, cx: number, cz: number, rng: Rn
   return { doorX: cx, doorZ: z0 - 1, y };
 }
 
-function path(w: StructWriter, t: TerrainQuery, ax: number, az: number, bx: number, bz: number) {
-  const n = Math.max(Math.abs(bx - ax), Math.abs(bz - az));
-  for (let i = 0; i <= n; i++) {
-    const x = Math.round(ax + ((bx - ax) * i) / n), z = Math.round(az + ((bz - az) * i) / n);
-    for (const [dx, dz] of [[0, 0], [1, 0]]) {
-      const h = t.heightAt(x + dx, z + dz);
-      if (h < SEA_LEVEL) w.set(x + dx, SEA_LEVEL, z + dz, B.OAK_PLANKS);
-      else w.set(x + dx, h, z + dz, B.DIRT_PATH);
-    }
-  }
-}
-
 function spawner(w: StructWriter, x: number, y: number, z: number, mob: number) {
   w.set(x, y, z, B.SPAWNER, mob);
 }
@@ -150,55 +140,9 @@ const TYPES: StructureType[] = [
     key: 'village',
     spacing: 10,
     chance: 0.75,
-    radius: 30,
+    radius: 48,
     build(w, ox, oz, rng, t) {
-      const biome = BiomeManager.get(t.biomeAt(ox, oz));
-      const style = styleFor(biome.key);
-      const cy = t.heightAt(ox, oz) + 1;
-      // puits central
-      foundation(w, t, ox - 2, oz - 2, ox + 2, oz + 2, cy, B.COBBLESTONE);
-      fill(w, ox - 2, cy, oz - 2, ox + 2, cy, oz + 2, B.COBBLESTONE);
-      fill(w, ox - 2, cy + 1, oz - 2, ox + 2, cy + 5, oz + 2, B.AIR);
-      fill(w, ox - 1, cy - 3, oz - 1, ox + 1, cy, oz + 1, B.WATER);
-      for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) fill(w, ox + dx, cy + 1, oz + dz, ox + dx, cy + 3, oz + dz, style.corner);
-      fill(w, ox - 2, cy + 4, oz - 2, ox + 2, cy + 4, oz + 2, B.OAK_PLANKS);
-      // cloche du village (point de rassemblement des villageois)
-      if (BlockRegistry.has('bell')) w.set(ox + 2, cy + 3, oz, BlockRegistry.byName('bell').id);
-      const n = rng.int(3, 6);
-      const a0 = rng.next() * Math.PI * 2;
-      for (let i = 0; i < n; i++) {
-        const a = a0 + (i / n) * Math.PI * 2;
-        const d = rng.int(11, 18);
-        const hx = Math.round(ox + Math.cos(a) * d), hz = Math.round(oz + Math.sin(a) * d);
-        if (t.heightAt(hx, hz) < SEA_LEVEL) continue;
-        const door = house(w, t, hx, hz, rng, style, false, LOOT.VILLAGE);
-        path(w, t, ox, oz + 3, door.doorX, door.doorZ);
-        // lampadaire
-        const lx = door.doorX + 2, lz = door.doorZ - 1, ly = t.heightAt(lx, lz) + 1;
-        if (ly > SEA_LEVEL) {
-          fill(w, lx, ly, lz, lx, ly + 1, lz, B.OAK_LOG);
-          w.set(lx, ly + 2, lz, B.LANTERN);
-        }
-      }
-      // champ cultivé
-      const fa = a0 + Math.PI / n;
-      const fx = Math.round(ox + Math.cos(fa) * 9), fz = Math.round(oz + Math.sin(fa) * 9);
-      const fy = t.heightAt(fx, fz);
-      if (fy >= SEA_LEVEL) {
-        foundation(w, t, fx - 3, fz - 3, fx + 3, fz + 3, fy, B.DIRT);
-        fill(w, fx - 3, fy + 1, fz - 3, fx + 3, fy + 3, fz + 3, B.AIR);
-        for (let z = fz - 3; z <= fz + 3; z++)
-          for (let x = fx - 3; x <= fx + 3; x++) {
-            const border = Math.abs(x - fx) === 3 || Math.abs(z - fz) === 3;
-            if (border) w.set(x, fy, z, B.OAK_LOG);
-            else if (x === fx) w.set(x, fy, z, B.WATER);
-            else {
-              w.set(x, fy, z, B.FARMLAND, 1);
-              const crop = rng.next() < 0.75 ? B.WHEAT : B.CARROTS;
-              w.set(x, fy + 1, z, crop, crop === B.WHEAT ? rng.int(2, 7) : rng.int(1, 3));
-            }
-          }
-      }
+      buildVillage(w, ox, oz, rng, t, LOOT.VILLAGE);
     },
   },
   {
@@ -563,7 +507,7 @@ export class StructureGenerator {
       if (this.terrain.heightAt(x, z) < SEA_LEVEL) return null;
     } else if (!type.underground) {
       const biome = BiomeManager.get(this.terrain.biomeAt(x, z));
-      if (biome.key === 'ocean' || biome.key === 'river') return null;
+      if (biome.key === 'ocean' || biome.key === 'deep_ocean' || biome.key === 'river') return null;
     }
     return { key: type.key, x, z };
   }

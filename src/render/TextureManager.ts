@@ -17,7 +17,7 @@ const DEFAULT_FOLIAGE = hex('#5fa83a');
  * localement : aucun téléchargement.
  */
 /** Tuiles en niveaux de gris teintées par le biome dans le jeu vanilla. */
-const GRAY_TINTED = /^(grass_block_top|short_grass|fern|sugar_cane|(?!cherry|azalea|flowering_azalea|pale_oak)\w*_leaves)$/;
+const GRAY_TINTED = /^(grass_block_top|short_grass|fern|sugar_cane|tall_grass_bottom|tall_grass_top|large_fern_bottom|large_fern_top|lily_pad|(?!cherry|azalea|flowering_azalea|pale_oak)\w*_leaves)$/;
 /** Tuiles sans équivalent direct dans un pack (dessinées par le jeu). */
 const PACK_SKIP = new Set(['missing', 'altar_top', 'altar_side', 'bed_foot', 'bed_side', 'bed_head']);
 const PACK_RENAME: Record<string, string> = {
@@ -384,7 +384,7 @@ export class TextureManager implements SkinProvider {
 
   private tintFor(blockKey: string, tileName: string): [number, number, number] | undefined {
     if (blockKey.endsWith('leaves')) return DEFAULT_FOLIAGE;
-    if (tileName.startsWith('grass') || tileName === 'short_grass' || tileName === 'fern' || tileName === 'sugar_cane') return DEFAULT_GRASS;
+    if (tileName.startsWith('grass') || tileName === 'short_grass' || tileName === 'fern' || tileName.startsWith('tall_grass') || tileName.startsWith('large_fern') || tileName === 'sugar_cane') return DEFAULT_GRASS;
     return undefined;
   }
 

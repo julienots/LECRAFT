@@ -302,6 +302,19 @@ flower('pink_tulip', 'Tulipe rose', '#f0a0c0', '#2a8a1a');
 flower('lily_of_the_valley', 'Muguet', '#ffffff', '#e8e8e8');
 flower('wither_rose', 'Rose de Wither', '#1a1a1a', '#3a3a3a');
 flower('torchflower', 'Torche-fleur', '#f0a020', '#c03010');
+// plantes hautes (deux blocs) et nénuphar
+const SOIL = ['grass_block', 'dirt', 'podzol', 'moss_block', 'farmland', 'coarse_dirt', 'mud'];
+const tall = (key: string, name: string, color: string, o: Partial<BlockDef> = {}) =>
+  B.push({ key, name, textures: { byMeta: [`${key}_bottom`, `${key}_top`] }, hardness: 0, render: 'cross', sway: true, sound: 'grass', needsSupport: true, doublePlant: true, supportBlocks: SOIL, color, ...o });
+tall('tall_grass', 'Hautes herbes', '#79c05a', { replaceable: true, tint: 'grass', drops: [{ item: 'wheat_seeds', chance: 0.125 }] });
+tall('large_fern', 'Grande fougère', '#68a464', { replaceable: true, tint: 'grass', drops: [{ item: 'wheat_seeds', chance: 0.125 }] });
+tall('lilac', 'Lilas', '#c38fd0');
+tall('rose_bush', 'Rosier', '#d8282a');
+tall('peony', 'Pivoine', '#e6b0dc');
+B.push({ key: 'lily_pad', name: 'Nénuphar', textures: { all: 'lily_pad' }, hardness: 0, render: 'model', shape: 'lily_pad', sound: 'grass', needsSupport: true, supportBlocks: ['water', 'ice'], tint: '#208030', color: '#208030' });
+shapeless('magenta_dye_lilac', 'magenta_dye', 2, ['lilac']);
+shapeless('red_dye_rose_bush', 'red_dye', 2, ['rose_bush']);
+shapeless('pink_dye_peony', 'pink_dye', 2, ['peony']);
 tile('azalea', (t) => void paint.sapling(t, hex('#5a8a2a'), hex('#5a4a2a')));
 B.push({ key: 'azalea', name: 'Azalée', textures: { all: 'azalea' }, hardness: 0, render: 'cross', sway: true, sound: 'grass', needsSupport: true, color: '#5a8a2a' });
 

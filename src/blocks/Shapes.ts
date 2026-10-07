@@ -123,6 +123,8 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
       if (att === 0) return [[5, 0, 6, 11, d, 10]];
       return [rotate([5, 6, 0, 11, 10, d], (att - 1) & 3)];
     }
+    case 'lily_pad':
+      return [[0, 0, 0, 16, 0.25, 16]];
     case 'pane': {
       const out: Box[] = [[7, 0, 7, 9, 16, 9]];
       if (connects(nb(0, 0, -1), 'pane')) out.push([7, 0, 0, 9, 16, 7]);
@@ -167,6 +169,8 @@ export function collisionBoxes(id: number, meta: number, nb: NeighborFn): Box[] 
     }
     case 'lantern':
       return [[5, 0, 5, 11, 9, 11]];
+    case 'lily_pad':
+      return [[1, 0, 1, 15, 1.5, 15]];
     case 'custom': {
       const info = BlockRegistry.get(id).def.bedrock;
       return info?.visuals[meta]?.collision ?? info?.visuals[0]?.collision ?? [FULL];

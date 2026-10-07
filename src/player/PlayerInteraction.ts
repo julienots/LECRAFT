@@ -1,6 +1,6 @@
 import { setOpen, updatePowerAround } from '../world/Redstone';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
-import { breakTime, getDrops, blockXp, hasSupport, rollLoot } from '../blocks/BlockBehaviors';
+import { breakTime, getDrops, blockXp, hasSupport, plantSoil, rollLoot } from '../blocks/BlockBehaviors';
 import type { GameContext } from '../core/GameContext';
 import type { InputState } from '../input/InputState';
 import { ItemRegistry } from '../inventory/ItemRegistry';
@@ -297,6 +297,7 @@ export class PlayerInteraction {
       return w.isSolid(x + dx, y, z + dz);
     }
     if (b.shape === 'door' || b.shape === 'bed') return w.isSolid(x, y - 1, z);
+    if (b.def.doublePlant) return plantSoil(b, w.getBlock(x, y - 1, z));
     return hasSupport(w, x, y, z, block);
   }
 
@@ -479,6 +480,7 @@ export class PlayerInteraction {
       const f = t.ny === 0 && !replace ? facingOf(-t.nx, -t.nz) : look;
       return this.validate(mk(x, y, z, f));
     }
+    if (b.def.doublePlant) return this.validate(mk(x, y, z, 0, [[x, y + 1, z, block, 1]]));
     if (b.shape === 'door') {
       // charnière : porte voisine à gauche → double porte en miroir ; sinon côté du clic
       const [dx, dz] = FACING_DIR[look];

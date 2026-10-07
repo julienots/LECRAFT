@@ -274,6 +274,20 @@ function sapling(t: Tile, leaf: RGB, trunk: RGB) {
     }
   });
 }
+/** Moitié d'un buisson fleuri (lilas, rosier, pivoine). */
+function bushHalf(t: Tile, leaf: RGB, bloom: RGB | null, few = false) {
+  return plant(t, (t) => {
+    for (let i = 0; i < 70; i++) {
+      const x = t.rng.int(2, 13), y = bloom && !few ? t.rng.int(6, 15) : t.rng.int(0, 15);
+      t.set(x, y, mul(leaf, 0.75 + t.rng.next() * 0.5));
+    }
+    if (bloom)
+      for (let i = 0; i < (few ? 6 : 45); i++) {
+        const x = t.rng.int(3, 12), y = few ? t.rng.int(0, 8) : t.rng.int(1, 10);
+        t.set(x, y, mul(bloom, 0.8 + t.rng.next() * 0.35));
+      }
+  });
+}
 function flowerT(t: Tile, petal: RGB, center: RGB) {
   return plant(t, (t) => {
     const g = hex('#3f8f2a');
@@ -587,6 +601,54 @@ const painters: Record<string, Painter> = {
         }
       }
     }),
+  // plantes hautes (deux blocs) : moitiés basse et haute
+  tall_grass_bottom: (t) =>
+    plant(t, (t) => {
+      for (let i = 0; i < 14; i++) {
+        const x = t.rng.int(1, 14);
+        for (let y = t.rng.int(0, 4); y < 16; y++) t.set(x, y, TINT[t.rng.int(1, 4)], TINT_A);
+      }
+    }),
+  tall_grass_top: (t) =>
+    plant(t, (t) => {
+      for (let i = 0; i < 11; i++) {
+        const x = t.rng.int(1, 14), h = t.rng.int(6, 15);
+        for (let y = 16 - h; y < 16; y++) t.set(x + (y < 6 && i % 3 === 0 ? 1 : 0), y, TINT[t.rng.int(1, 4)], TINT_A);
+      }
+    }),
+  large_fern_bottom: (t) =>
+    plant(t, (t) => {
+      for (const [cx, dir] of [[7, -1], [8, 1], [4, -1], [11, 1]])
+        for (let i = 0; i < 16; i++) {
+          const x = cx + Math.round((dir * i) / 5), y = 15 - i;
+          t.set(x, y, TINT[2], TINT_A);
+          if (i % 2) t.set(x + dir, y, TINT[3], TINT_A);
+        }
+    }),
+  large_fern_top: (t) =>
+    plant(t, (t) => {
+      for (const [cx, dir] of [[7, -1], [8, 1], [5, -1], [10, 1]])
+        for (let i = 0; i < 12; i++) {
+          const x = cx + Math.round((dir * i) / 3), y = 15 - i;
+          t.set(x, y, TINT[2], TINT_A);
+          if (i % 2) t.set(x + dir, y, TINT[3], TINT_A);
+        }
+    }),
+  lilac_bottom: (t) => bushHalf(t, hex('#3f7a2a'), null),
+  lilac_top: (t) => bushHalf(t, hex('#3f7a2a'), hex('#c38fd0')),
+  rose_bush_bottom: (t) => bushHalf(t, hex('#2f6a22'), hex('#c81e1e'), true),
+  rose_bush_top: (t) => bushHalf(t, hex('#2f6a22'), hex('#d8282a')),
+  peony_bottom: (t) => bushHalf(t, hex('#3f7a2a'), null),
+  peony_top: (t) => bushHalf(t, hex('#3f7a2a'), hex('#e6b0dc')),
+  lily_pad: (t) => {
+    t.clear();
+    for (let y = 1; y < 15; y++)
+      for (let x = 1; x < 15; x++) {
+        const dx = x - 7.5, dy = y - 7.5;
+        if (dx * dx + dy * dy > 46 || (dx > 0 && Math.abs(dy) < 0.6 + dx * 0.25)) continue;
+        t.set(x, y, TINT[t.rng.int(1, 3)], TINT_A);
+      }
+  },
   dandelion: (t) => flowerT(t, hex('#ffec4f'), hex('#f2b500')),
   poppy: (t) => flowerT(t, hex('#e01c1c'), hex('#1a1a1a')),
   cornflower: (t) => flowerT(t, hex('#466aeb'), hex('#2a3a9a')),

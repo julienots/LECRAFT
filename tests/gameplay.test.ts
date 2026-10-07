@@ -176,7 +176,7 @@ describe('Données', () => {
   it('créatures et biomes cohérents', () => {
     for (const b of BiomeManager.biomes) {
       for (const k of [...b.animals, ...b.hostiles]) expect(MOB_DEFS.some((m) => m.key === k), k).toBe(true);
-      for (const v of b.vegetation) expect(BlockRegistry.has(v.block)).toBe(true);
+      for (const v of b.vegetation) expect(BlockRegistry.has(v.block) || EXTRA_BLOCKS.some((d) => d.key === v.block), v.block).toBe(true);
     }
     for (const m of MOB_DEFS) for (const d of m.drops) expect(ItemRegistry.has(d.item) || EXTRA_ITEMS.some((i) => i.key === d.item) || EXTRA_BLOCKS.some((b) => b.key === d.item), d.item).toBe(true);
     // toute créature à apparition naturelle de surface figure dans au moins un biome

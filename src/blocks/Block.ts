@@ -21,7 +21,8 @@ export type ShapeKind =
   | 'trapdoor'
   | 'fence_gate'
   | 'lever'
-  | 'button';
+  | 'button'
+  | 'lily_pad';
 
 export interface DropDef {
   item: string;
@@ -81,6 +82,8 @@ export interface BlockDef {
   redstoneOnly?: boolean;
   /** Doit reposer sur un bloc solide (plantes, torches). */
   needsSupport?: boolean;
+  /** Plante haute sur deux blocs (méta bit 0 : moitié haute). */
+  doublePlant?: boolean;
   /** Blocs autorisés sous une plante. */
   supportBlocks?: string[];
   /** Le bloc s'oriente vers le joueur lors du placement (face avant). */

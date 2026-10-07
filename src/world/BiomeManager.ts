@@ -37,16 +37,26 @@ class BiomeManagerImpl {
    * Sélection d'un biome terrestre selon température/humidité.
    * Les biomes « géographiques » (océan, plage, rivière, montagne) sont décidés par le générateur.
    */
-  selectLand(temp: number, hum: number, height: number, seaLevel: number): Biome {
-    if (temp < -0.62) return this.byName('ice_zone');
-    if (temp < -0.3) return hum > 0 ? this.byName('taiga') : this.byName('tundra');
+  selectLand(temp: number, hum: number, height: number, seaLevel: number, variant = 0): Biome {
+    // `variant` (-1..1, bruit lent indépendant) choisit les variantes comme la « bizarrerie » du jeu original
+    const high = height > seaLevel + 24;
+    // pics de glace : variante rare des plaines enneigées
+    if (temp < -0.62) return variant > 0.25 ? this.byName('ice_zone') : hum > 0.1 ? this.byName('snowy_taiga') : this.byName('tundra');
+    if (temp < -0.45) return hum > 0 ? this.byName('snowy_taiga') : this.byName('tundra');
+    if (temp < -0.25) return hum > 0 ? this.byName('taiga') : high ? this.byName('meadow') : this.byName('plains');
     if (temp > 0.42) {
-      if (hum < -0.12) return this.byName('desert');
+      if (hum < -0.12) return variant > 0.35 ? this.byName('badlands') : this.byName('desert');
       if (hum > 0.3) return this.byName('jungle');
       return this.byName('savanna');
     }
     if (hum > 0.45) return height < seaLevel + 6 ? this.byName('swamp') : this.byName('dense_forest');
-    if (hum > 0.08) return this.byName('forest');
+    if (hum > 0.08) {
+      if (height > seaLevel + 16 && variant < -0.25) return this.byName('cherry_grove');
+      if (variant > 0.3) return this.byName('birch_forest');
+      if (variant < -0.4) return this.byName('flower_forest');
+      return this.byName('forest');
+    }
+    if (high) return this.byName('meadow');
     return this.byName('plains');
   }
 }

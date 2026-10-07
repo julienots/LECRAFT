@@ -3,7 +3,7 @@
  * Ils écrivent via une fonction set() fournie : aucune dépendance au stockage.
  */
 import type { TreeType } from '../data/biomes';
-import { B } from '../blocks/BlockRegistry';
+import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { Rng } from '../util/math';
 
 export type SetFn = (x: number, y: number, z: number, block: number, onlyIfAir?: boolean) => void;
@@ -120,6 +120,22 @@ export function buildTree(type: TreeType, x: number, y: number, z: number, seed:
             set(x + dx, y + dy, z + dz, B.DARK_OAK_LEAVES, true);
           }
       }
+      break;
+    }
+    case 'cherry': {
+      // tronc puis deux branches obliques portant de larges canopées roses et plates
+      const log = BlockRegistry.has('cherry_log') ? BlockRegistry.byName('cherry_log').id : B.OAK_LOG;
+      const leaf = BlockRegistry.has('cherry_leaves') ? BlockRegistry.byName('cherry_leaves').id : B.OAK_LEAVES;
+      const h = rng.int(4, 6);
+      for (let dy = 0; dy < h; dy++) set(x, y + dy, z, log);
+      const dirs = rng.next() < 0.5 ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]];
+      for (const [dx, dz] of dirs) {
+        const bx = x + dx, bz = z + dz, by = y + h - 1 + rng.int(0, 1);
+        set(bx, by, bz, log);
+        set(bx, by + 1, bz, log);
+        blob(set, bx, by + 2, bz, 3, leaf, rng, 0.5);
+      }
+      blob(set, x, y + h + 1, z, 2.4, leaf, rng, 0.6);
       break;
     }
     case 'cactus': {

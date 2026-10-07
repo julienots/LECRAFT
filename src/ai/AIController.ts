@@ -3,6 +3,7 @@ import type { Mob } from '../entities/Mob';
 import { raycastBlocks } from '../util/Raycast';
 import { BlockRegistry } from '../blocks/BlockRegistry';
 import { AIState, StateMachine, type StateHandlers } from './StateMachine';
+import { findPath } from './Pathfinder';
 
 /**
  * Contrôleur d'IA : perception (distance, ligne de vue), déplacement (steering simple,
@@ -21,6 +22,13 @@ export class AIController {
   private stuckTimer = 0;
   speedMul = 1;
   ctx!: GameContext;
+  lastSeenY = 0;
+  private dt = 0.05;
+  /** Chemin courant (cellules) et prochaine étape. */
+  path: [number, number, number][] | null = null;
+  private pathIdx = 0;
+  private repath = 0;
+  private goal: [number, number, number] = [0, 0, 0];
 
   constructor(readonly mob: Mob, overrides: Partial<Record<AIState, StateHandlers<Mob>>> = {}) {
     this.fsm = new StateMachine<Mob>({ ...defaultHandlers(this), ...overrides }, mob);
@@ -33,6 +41,7 @@ export class AIController {
 
   update(ctx: GameContext, dt: number) {
     this.ctx = ctx;
+    this.dt = dt;
     const m = this.mob;
     if (m.dead) {
       this.fsm.set(AIState.DEAD);
@@ -46,6 +55,7 @@ export class AIController {
       if (this.canSee) {
         this.lastSeenX = ctx.player.x;
         this.lastSeenZ = ctx.player.z;
+        this.lastSeenY = ctx.player.y;
       }
     }
     this.fsm.update(dt);
@@ -111,6 +121,50 @@ export class AIController {
     return d;
   }
 
+  /**
+   * Se rend en (x, y, z) en suivant un chemin A* (recalculé régulièrement ou si la cible bouge).
+   * Les créatures volantes ou aquatiques vont en ligne droite. Retourne la distance restante.
+   */
+  navigateTo(x: number, y: number, z: number, speedMul = 1): number {
+    const m = this.mob;
+    const direct = Math.hypot(x - m.x, z - m.z);
+    if (m.has('flies') || m.has('aquatic') || !this.ctx) return this.moveTowards(x, z, speedMul, false);
+    const gx = Math.floor(x), gy = Math.floor(y), gz = Math.floor(z);
+    this.repath -= this.dt;
+    const moved = Math.abs(gx - this.goal[0]) + Math.abs(gz - this.goal[2]) + Math.abs(gy - this.goal[1]) > 1;
+    if (!this.path || this.repath <= 0 || (moved && this.repath < 0.5)) {
+      this.goal = [gx, gy, gz];
+      this.repath = 0.6 + Math.random() * 0.5;
+      const w = this.ctx.world;
+      this.path = findPath(w, Math.floor(m.x), Math.floor(m.y + 0.05), Math.floor(m.z), gx, gy, gz, {
+        height: Math.ceil(m.body.height - 0.01),
+        maxNodes: direct > 20 ? 700 : 450,
+        waterCost: m.has('burnsInSun') ? 1 : 3,
+      });
+      this.pathIdx = 0;
+    }
+    const path = this.path;
+    if (!path || this.pathIdx >= path.length) return this.moveTowards(x, z, speedMul, !path);
+    // étape suivante : on la valide quand on est sur sa case
+    let [px, py, pz] = path[this.pathIdx];
+    if (Math.floor(m.x) === px && Math.floor(m.z) === pz && Math.abs(Math.floor(m.y + 0.05) - py) <= 1) {
+      this.pathIdx++;
+      if (this.pathIdx >= path.length) return this.moveTowards(x, z, speedMul, false);
+      [px, py, pz] = path[this.pathIdx];
+    }
+    this.moveTowards(px + 0.5, pz + 0.5, speedMul, false);
+    // marche montante : saut anticipé (sans attendre de cogner le bloc)
+    const b = m.body;
+    if (py > Math.floor(m.y + 0.05) && b.onGround && Math.hypot(px + 0.5 - m.x, pz + 0.5 - m.z) < 1.3) b.vy = 8.2;
+    return direct;
+  }
+
+  /** Abandonne le chemin courant (changement d'objectif). */
+  clearPath() {
+    this.path = null;
+    this.repath = 0;
+  }
+
   stop() {
     const b = this.mob.body;
     b.vx *= 0.5;
@@ -130,6 +184,26 @@ export class AIController {
     this.targetX = tx;
     this.targetZ = tz;
     this.hasTarget = true;
+  }
+
+  /** Hauteur des pieds sur la surface en (x, z) (au plus quelques blocs au-dessus de la créature). */
+  surfaceY(x: number, z: number) {
+    return this.ctx.world.surfaceBelow(Math.floor(x), Math.floor(this.mob.y) + 4, Math.floor(z)) + 1;
+  }
+
+  /**
+   * Abri du soleil (créatures qui brûlent) : case voisine sans ciel au-dessus, sinon null.
+   * Échantillonnage autour de la créature, comme le « chercher de l'ombre » du jeu original.
+   */
+  findShade(): [number, number] | null {
+    const m = this.mob, w = this.ctx.world;
+    for (let t = 0; t < 14; t++) {
+      const x = Math.floor(m.x + (Math.random() - 0.5) * 20), z = Math.floor(m.z + (Math.random() - 0.5) * 20);
+      const y = this.surfaceY(x, z);
+      if (Math.abs(y - m.y) > 4) continue;
+      if (w.getLight(x, y, z).sky < 14) return [x + 0.5, z + 0.5];
+    }
+    return null;
   }
 
   facePlayer() {
@@ -168,13 +242,21 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
       },
     },
     [AIState.WANDER]: {
-      enter: () => ai.pickWanderTarget(),
+      enter: (m) => {
+        ai.clearPath();
+        ai.pickWanderTarget();
+        // créature qui brûle au soleil : elle cherche l'ombre (arbres, surplombs)
+        if (m.has('burnsInSun') && ai.ctx && ai.ctx.dayCycle.daylight > 0.8 && m.burnTimer > 0) {
+          const s = ai.findShade();
+          if (s) [ai.targetX, ai.targetZ] = s;
+        }
+      },
       update: (m) => {
         if (m.fleeTimer > 0) return AIState.FLEE;
         if (wantsChase(m)) return AIState.CHASE;
         if (wantsFollow(m)) return AIState.FOLLOW;
         if (!ai.hasTarget) return AIState.IDLE;
-        const d = ai.moveTowards(ai.targetX, ai.targetZ, 0.6);
+        const d = ai.navigateTo(ai.targetX, ai.surfaceY(ai.targetX, ai.targetZ), ai.targetZ, 0.6);
         if (d < 0.6 || ai.fsm.timeInState > 8) return AIState.IDLE;
         if (Math.hypot(m.x - m.homeX, m.z - m.homeZ) > 28 && m.def.category !== 'passive') return AIState.RETURN;
       },
@@ -184,7 +266,7 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
         if (m.fleeTimer > 0) return AIState.FLEE;
         if (!wantsFollow(m)) return AIState.IDLE;
         const p = ai.ctx.player;
-        if (ai.playerDist > 2.2) ai.moveTowards(p.x, p.z, 0.9);
+        if (ai.playerDist > 2.2) ai.navigateTo(p.x, p.y, p.z, 0.9);
         else {
           ai.stop();
           ai.facePlayer();
@@ -208,7 +290,7 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
         const p = ai.ctx.player;
         const range = m.def.ranged ? Math.min(m.def.ranged.range, m.def.attackRange) : m.def.attackRange;
         if (ai.playerDist <= range) return AIState.ATTACK;
-        ai.moveTowards(p.x, p.z, 1, false);
+        ai.navigateTo(p.x, p.y, p.z, 1);
       },
     },
     [AIState.ATTACK]: {
@@ -237,14 +319,14 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
     [AIState.SEARCH]: {
       update: (m) => {
         if (wantsChase(m)) return AIState.CHASE;
-        const d = ai.moveTowards(ai.lastSeenX, ai.lastSeenZ, 0.8);
-        if (d < 1 || ai.fsm.timeInState > 6) return AIState.RETURN;
+        const d = ai.navigateTo(ai.lastSeenX, ai.lastSeenY, ai.lastSeenZ, 0.8);
+        if (d < 1 || ai.fsm.timeInState > 8) return AIState.RETURN;
       },
     },
     [AIState.RETURN]: {
       update: (m) => {
         if (wantsChase(m)) return AIState.CHASE;
-        const d = ai.moveTowards(m.homeX, m.homeZ, 0.7);
+        const d = ai.navigateTo(m.homeX, ai.surfaceY(m.homeX, m.homeZ), m.homeZ, 0.7);
         if (d < 2 || ai.fsm.timeInState > 15) return AIState.WANDER;
       },
     },

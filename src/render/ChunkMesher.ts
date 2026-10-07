@@ -328,6 +328,8 @@ export class ChunkMesher {
     const tint = this.tintOf(inp, b, x, z);
     const r = (tint >> 16) & 255, g = (tint >> 8) & 255, bb = tint & 255;
     const sway = block.sway ? FLAG_SWAY : 0;
+    // moitié haute d'une plante haute : sa base suit le haut de la moitié basse
+    const swayLow = sway && block.def.doublePlant && m & 1 ? sway : 0;
     const o = 0.15, e = 0.85;
     const quads = [
       [x + o, z + o, x + e, z + e],
@@ -335,8 +337,8 @@ export class ChunkMesher {
     ];
     const B = this.opaque;
     for (const [x0, z0, x1, z1] of quads) {
-      const a = B.vertex(x0, y, z0, 0, 0, tile, 0, sl, bl, r, g, bb, 230);
-      const c = B.vertex(x1, y, z1, 16, 0, tile, 0, sl, bl, r, g, bb, 230);
+      const a = B.vertex(x0, y, z0, 0, 0, tile, swayLow, sl, bl, r, g, bb, 230);
+      const c = B.vertex(x1, y, z1, 16, 0, tile, swayLow, sl, bl, r, g, bb, 230);
       const d = B.vertex(x1, y + 1, z1, 16, 16, tile, sway, sl, bl, r, g, bb, 230);
       const f = B.vertex(x0, y + 1, z0, 0, 16, tile, sway, sl, bl, r, g, bb, 230);
       B.quad(a, c, d, f, false);

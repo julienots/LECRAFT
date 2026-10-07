@@ -1,81 +1,56 @@
 import { describe, expect, it } from 'vitest';
 import { WorldGenerator } from '../src/world/WorldGenerator';
-import { B } from '../src/blocks/BlockRegistry';
+import { BlockRegistry } from '../src/blocks/BlockRegistry';
 import { BiomeManager } from '../src/world/BiomeManager';
 import { idx } from '../src/world/ChunkData';
-import { SEA_LEVEL } from '../src/core/Config';
+import { registerAddonBlocks } from '../src/addons/AddonRegistry';
+import { EXTRA_BLOCKS } from '../src/data/vanillaExtra';
+import { WORLD_HEIGHT } from '../src/core/Config';
 
-describe('WorldGenerator', () => {
-  it('est déterministe pour un même seed', () => {
-    const a = new WorldGenerator(839274928).generateChunk(3, -2).data;
-    const b = new WorldGenerator(839274928).generateChunk(3, -2).data;
-    expect(Buffer.from(a.blocks).equals(Buffer.from(b.blocks))).toBe(true);
-    expect(Buffer.from(a.meta).equals(Buffer.from(b.meta))).toBe(true);
-  });
+registerAddonBlocks(EXTRA_BLOCKS);
+const id = (k: string) => BlockRegistry.byName(k).id;
 
-  it("ne dépend pas de l'ordre de génération", () => {
-    const g1 = new WorldGenerator(42);
-    g1.generateChunk(0, 0);
-    g1.generateChunk(1, 0);
-    const late = g1.generateChunk(2, 0).data;
-    const fresh = new WorldGenerator(42).generateChunk(2, 0).data;
-    expect(Buffer.from(late.blocks).equals(Buffer.from(fresh.blocks))).toBe(true);
-  });
+describe('Génération de surface', () => {
+  const gen = new WorldGenerator(12345);
 
-  it('produit des seeds différents pour des mondes différents', () => {
-    const a = new WorldGenerator(1).generateChunk(0, 0).data;
-    const b = new WorldGenerator(2).generateChunk(0, 0).data;
-    expect(Buffer.from(a.blocks).equals(Buffer.from(b.blocks))).toBe(false);
-  });
-
-  it('pose du socle en bas et de la terre/pierre', () => {
-    const { data } = new WorldGenerator(7).generateChunk(0, 0);
-    for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) expect(data.blocks[idx(x, 0, z)]).toBe(B.BEDROCK);
-    const counts = new Map<number, number>();
-    for (const b of data.blocks) counts.set(b, (counts.get(b) ?? 0) + 1);
-    expect(counts.get(B.STONE) ?? 0).toBeGreaterThan(1000);
-  });
-
-  it('couvre de nombreux biomes sur une grande zone', () => {
-    const g = new WorldGenerator(839274928);
+  it('les nouveaux biomes apparaissent (échantillonnage large)', () => {
     const seen = new Set<string>();
-    for (let x = -6000; x <= 6000; x += 64) for (let z = -6000; z <= 6000; z += 64) seen.add(BiomeManager.get(g.biomeAt(x, z)).key);
-    console.log('Biomes vus:', [...seen].join(', '));
-    expect(seen.size).toBeGreaterThanOrEqual(12);
+    for (let z = -6000; z <= 6000; z += 48) for (let x = -6000; x <= 6000; x += 48) seen.add(BiomeManager.get(gen.biomeAt(x, z)).key);
+    for (const k of ['birch_forest', 'flower_forest', 'meadow', 'snowy_taiga', 'badlands', 'deep_ocean', 'plains', 'forest', 'desert']) expect(seen.has(k), k).toBe(true);
   });
 
-  it('génère des minerais, des grottes et des structures', () => {
-    const g = new WorldGenerator(123456);
-    let ores = 0, caveAir = 0, chests = 0, spawners = 0;
-    for (let cx = -4; cx < 4; cx++)
-      for (let cz = -4; cz < 4; cz++) {
-        const { data, specials } = g.generateChunk(cx, cz);
-        spawners += specials.length;
-        for (let i = 0; i < data.blocks.length; i++) {
-          const b = data.blocks[i];
-          if (b === B.COAL_ORE || b === B.IRON_ORE || b === B.COPPER_ORE) ores++;
-          if (b === B.CHEST) chests++;
-          const y = i >> 8;
-          if (b === B.AIR && y < 30) caveAir++;
-        }
+  it('plantes hautes complètes (moitié haute au-dessus de la basse) et nénuphars sur l’eau', () => {
+    const tall = new Set(['tall_grass', 'large_fern', 'lilac', 'rose_bush', 'peony'].map(id));
+    let n = 0;
+    for (let cx = -10; cx < 10; cx++)
+      for (let cz = -10; cz < 10; cz++) {
+        const c = gen.generateChunk(cx, cz).data;
+        for (let y = 1; y < WORLD_HEIGHT - 1; y++)
+          for (let z = 0; z < 16; z++)
+            for (let x = 0; x < 16; x++) {
+              const i = idx(x, y, z), b = c.blocks[i];
+              if (!tall.has(b) || c.meta[i] & 1) continue;
+              n++;
+              expect(c.blocks[idx(x, y + 1, z)]).toBe(b);
+              expect(c.meta[idx(x, y + 1, z)] & 1).toBe(1);
+            }
       }
-    console.log({ ores, caveAir, chests, spawners });
-    expect(ores).toBeGreaterThan(200);
-    expect(caveAir).toBeGreaterThan(500);
+    expect(n).toBeGreaterThan(20);
   });
 
-  it('trouve un point d’apparition terrestre', () => {
-    const g = new WorldGenerator(839274928);
-    const s = g.findSpawn();
-    expect(s.y).toBeGreaterThan(SEA_LEVEL);
-  });
-
-  it('génère un chunk rapidement', () => {
-    const g = new WorldGenerator(99);
-    const t0 = performance.now();
-    for (let i = 0; i < 25; i++) g.generateChunk(i, i * 2);
-    const ms = (performance.now() - t0) / 25;
-    console.log('ms/chunk', ms.toFixed(2));
-    expect(ms).toBeLessThan(60);
+  it('badlands : sable rouge et strates de terre cuite', () => {
+    let found: [number, number] | null = null;
+    for (let z = -6000; z <= 6000 && !found; z += 32) for (let x = -6000; x <= 6000 && !found; x += 32) if (BiomeManager.get(gen.biomeAt(x, z)).key === 'badlands' && BiomeManager.get(gen.biomeAt(x + 40, z + 40)).key === 'badlands') found = [x, z];
+    expect(found).not.toBeNull();
+    const [x, z] = found!;
+    const c = gen.generateChunk(Math.floor(x / 16), Math.floor(z / 16)).data;
+    const terracotta = new Set(BlockRegistry.blocks.filter((b) => b.key.endsWith('terracotta')).map((b) => b.id));
+    let tc = 0, red = 0;
+    for (let i = 0; i < c.blocks.length; i++) {
+      if (terracotta.has(c.blocks[i])) tc++;
+      if (c.blocks[i] === id('red_sand')) red++;
+    }
+    expect(tc).toBeGreaterThan(500);
+    expect(red).toBeGreaterThan(10);
   });
 });

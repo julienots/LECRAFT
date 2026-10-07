@@ -49,6 +49,11 @@ const ORES: OreDef[] = [
   { block: B.EMERALD_ORE, minY: 40, maxY: 126, peak: 100, spread: 40, tries: 3, size: 2, deep: 'deepslate_emerald_ore' },
   { block: B.CLAY, minY: 30, maxY: 60, tries: 2, size: 10 },
 ];
+/** Identifiant d'un bloc par nom (blocs de base et blocs ajoutés). */
+function blockId(key: string, fallback: number = B.STONE): number {
+  return B[key.toUpperCase()] ?? (BlockRegistry.has(key) ? BlockRegistry.byName(key).id : fallback);
+}
+
 /** Sommet de la couche d'ardoise des abîmes (transition sur 8 blocs au-dessus). */
 export const DEEPSLATE_Y = 16;
 
@@ -67,11 +72,17 @@ export class WorldGenerator implements TerrainQuery {
   private humid: SimplexNoise;
   private river: SimplexNoise;
   private surfaceNoise: SimplexNoise;
+  private variant: SimplexNoise;
+  /** Strates des badlands (terre cuite colorée), indexées par altitude. */
+  private bands: number[] = [];
   private caves: CaveGenerator;
   readonly structures: StructureGenerator;
   private cache = new Map<number, ColumnInfo>();
   private deepslate: number;
   private deepOre = new Map<number, number>();
+  private calcite = BlockRegistry.has('calcite') ? BlockRegistry.byName('calcite').id : -1;
+  private redSand = blockId('red_sand', -1);
+  private lilyPad = BlockRegistry.has('lily_pad') ? BlockRegistry.byName('lily_pad').id : -1;
 
   constructor(seed: number) {
     this.deepslate = BlockRegistry.has('deepslate') ? BlockRegistry.byName('deepslate').id : B.STONE;
@@ -85,6 +96,15 @@ export class WorldGenerator implements TerrainQuery {
     this.humid = new SimplexNoise(seed + 6);
     this.river = new SimplexNoise(seed + 7);
     this.surfaceNoise = new SimplexNoise(seed + 8);
+    this.variant = new SimplexNoise(seed + 9);
+    const tc = (k: string) => (BlockRegistry.has(k) ? BlockRegistry.byName(k).id : B.SANDSTONE);
+    const plain = tc('terracotta'), accents = ['orange_terracotta', 'yellow_terracotta', 'brown_terracotta', 'red_terracotta', 'white_terracotta', 'light_gray_terracotta'].map(tc);
+    const br = new Rng(hash2(seed, 77, 13));
+    for (let i = 0; i < 48; i++) this.bands.push(i % 3 === 0 ? plain : tc('orange_terracotta'));
+    for (let i = 0; i < 14; i++) {
+      const at = br.int(0, 47), c = accents[br.int(0, accents.length - 1)], w = br.int(1, 3);
+      for (let k = 0; k < w; k++) this.bands[(at + k) % 48] = c;
+    }
     this.caves = new CaveGenerator(seed);
     this.structures = new StructureGenerator(seed, this);
   }
@@ -129,15 +149,23 @@ export class WorldGenerator implements TerrainQuery {
       h = lerp(target, h, t * t);
       if (h < SEA_LEVEL) river = true;
     }
+    const variant = this.variant.fbm2(x / 520, z / 520, 2) * 1.5;
+    // badlands : plateaux en terrasses qui montent progressivement depuis la bordure du biome
+    if (!river && h > SEA_LEVEL + 2 && temperature > 0.42 && humidity < -0.12 && variant > 0.35) {
+      const inside = clamp((variant - 0.35) / 0.2, 0, 1) * clamp((-0.12 - humidity) / 0.15, 0, 1);
+      const mesa = Math.max(0, this.peaks.fbm2(x / 90, z / 90, 2) + 0.15) * 30 * inside;
+      h += Math.floor(mesa / 5) * 5 + Math.min(5, mesa % 5) * 0.2;
+    }
     const height = clamp(Math.round(h), 6, WORLD_HEIGHT - 8);
+    const baseTemp = temperature;
     temperature -= Math.max(0, height - SEA_LEVEL - 20) / 60;
 
     let biome: number;
     if (river) biome = temperature < -0.5 ? BiomeManager.byName('ice_zone').id : BiomeManager.byName('river').id;
-    else if (height < SEA_LEVEL - 1) biome = temperature < -0.6 ? BiomeManager.byName('ice_zone').id : BiomeManager.byName('ocean').id;
+    else if (height < SEA_LEVEL - 1) biome = temperature < -0.6 ? BiomeManager.byName('ice_zone').id : BiomeManager.byName(height < SEA_LEVEL - 14 ? 'deep_ocean' : 'ocean').id;
     else if (height <= SEA_LEVEL + 1 && cont < -0.04) biome = temperature < -0.4 ? BiomeManager.byName('tundra').id : BiomeManager.byName('beach').id;
-    else if (height > SEA_LEVEL + 36) biome = BiomeManager.byName('mountain').id;
-    else biome = BiomeManager.selectLand(temperature, humidity, height, SEA_LEVEL).id;
+    else if (height > SEA_LEVEL + 36 && !(baseTemp > 0.42 && humidity < -0.12 && variant > 0.35)) biome = BiomeManager.byName(baseTemp > 0.3 ? 'stony_peaks' : 'mountain').id;
+    else biome = BiomeManager.selectLand(temperature, humidity, height, SEA_LEVEL, variant).id;
     return { height, biome, temperature, humidity, river };
   }
 
@@ -176,17 +204,22 @@ export class WorldGenerator implements TerrainQuery {
         const biome = BiomeManager.get(col.biome);
         // pente : roche apparente sur les versants raides
         const slope = Math.max(Math.abs(this.heightAt(wx + 1, wz) - this.heightAt(wx - 1, wz)), Math.abs(this.heightAt(wx, wz + 1) - this.heightAt(wx, wz - 1)));
-        let surface = B[biome.surfaceBlock.toUpperCase()];
-        let under = B[biome.undergroundBlock.toUpperCase()];
+        let surface = blockId(biome.surfaceBlock);
+        let under = blockId(biome.undergroundBlock);
         const sn = this.surfaceNoise.noise2(wx / 16, wz / 16);
         if (h < SEA_LEVEL) {
           surface = sn > 0.45 ? B.GRAVEL : sn < -0.55 ? B.CLAY : B.SAND;
           under = biome.key === 'river' || biome.key === 'ocean' ? B.SAND : under;
+          if (biome.key === 'deep_ocean') surface = sn > -0.2 ? B.GRAVEL : B.SAND;
           if (biome.key === 'swamp') surface = B.MUD;
         } else if (biome.key === 'mountain') {
           if (h > SEA_LEVEL + 56) surface = B.SNOW;
           else if (h > SEA_LEVEL + 46 || slope > 3) surface = B.STONE;
           else if (slope > 2 && sn > 0) surface = B.GRAVEL;
+        } else if (biome.key === 'stony_peaks') {
+          surface = sn > 0.35 && this.calcite >= 0 ? this.calcite : sn < -0.5 ? B.GRAVEL : B.STONE;
+        } else if (biome.key === 'badlands') {
+          if (slope > 2 || h > SEA_LEVEL + 18) surface = this.bands[((h % 48) + 48) % 48];
         } else if (slope > 4 && h > SEA_LEVEL + 6) {
           surface = B.STONE;
           under = B.STONE;
@@ -199,6 +232,7 @@ export class WorldGenerator implements TerrainQuery {
           let b: number;
           if (y === 0 || (y <= 2 && rng.next() < 0.5)) b = B.BEDROCK;
           else if (y === h) b = surface;
+          else if (biome.key === 'badlands' && h >= SEA_LEVEL && y >= Math.max(SEA_LEVEL - 4, h - 24)) b = this.bands[y % 48];
           else if (y >= h - underDepth) b = under;
           else if (y < DEEPSLATE_Y || (y < DEEPSLATE_Y + 8 && (hash3(this.seed, wx, y, wz) & 7) >= y - DEEPSLATE_Y)) b = this.deepslate;
           else b = B.STONE;
@@ -280,8 +314,13 @@ export class WorldGenerator implements TerrainQuery {
         if (h + 1 >= WORLD_HEIGHT) continue;
         const ground = blocks[idx(x, h, z)];
         const above = idx(x, h + 1, z);
-        if (blocks[above] !== B.AIR) continue;
         const biome = BiomeManager.get(c.biomes[x + z * CHUNK_SIZE]);
+        // nénuphars sur l'eau peu profonde des marais
+        if (biome.key === 'swamp' && this.lilyPad >= 0 && h < SEA_LEVEL && h >= SEA_LEVEL - 3 && blocks[idx(x, SEA_LEVEL, z)] === B.WATER && blocks[idx(x, SEA_LEVEL + 1, z)] === B.AIR && rng.next() < 0.06) {
+          blocks[idx(x, SEA_LEVEL + 1, z)] = this.lilyPad;
+          continue;
+        }
+        if (blocks[above] !== B.AIR) continue;
         // couche de neige sur les biomes froids et les sommets
         const cold = biome.weather === 'snow' && (biome.key !== 'mountain' || h > SEA_LEVEL + 40);
         if (cold && h >= SEA_LEVEL && BlockRegistry.opaque[ground]) {
@@ -300,9 +339,16 @@ export class WorldGenerator implements TerrainQuery {
         }
         for (const v of biome.vegetation) {
           if (rng.next() < v.chance) {
-            const bid = B[v.block.toUpperCase()];
-            const ok = ground === B.GRASS_BLOCK || ground === B.PODZOL || (v.block === 'dead_bush' && ground === B.SAND);
-            if (ok && bid !== undefined) blocks[above] = bid;
+            const bid = blockId(v.block, -1);
+            const ok = ground === B.GRASS_BLOCK || ground === B.PODZOL || (v.block === 'dead_bush' && (ground === B.SAND || ground === this.redSand));
+            if (!ok || bid < 0) break;
+            if (BlockRegistry.get(bid).def.doublePlant) {
+              // plante haute : deux blocs (moitié haute en méta 1)
+              if (h + 2 >= WORLD_HEIGHT || blocks[idx(x, h + 2, z)] !== B.AIR) break;
+              blocks[idx(x, h + 2, z)] = bid;
+              c.meta[idx(x, h + 2, z)] = 1;
+            }
+            blocks[above] = bid;
             break;
           }
         }

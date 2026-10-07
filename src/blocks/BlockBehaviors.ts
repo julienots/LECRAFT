@@ -34,11 +34,13 @@ export function canHarvest(blockId: number, itemId: string | undefined): boolean
 export function getDrops(blockId: number, meta: number, itemId: string | undefined, rng: () => number = Math.random): ItemStack[] {
   const b = BlockRegistry.get(blockId);
   if (!canHarvest(blockId, itemId)) return [];
+  // plante haute : seule la moitié basse donne quelque chose (la haute la fait tomber)
+  if (b.def.doublePlant && meta & 1) return [];
   const out: ItemStack[] = [];
   const add = (id: string, n: number) => n > 0 && ItemRegistry.has(id) && out.push(makeStack(id, n));
   const tool = itemId ? ItemRegistry.get(itemId)?.tool : undefined;
   // cisailles : feuilles, herbes, toiles... récupérées telles quelles
-  if (tool?.type === 'shears' && (b.key.endsWith('_leaves') || b.key === 'short_grass' || b.key === 'fern' || b.key === 'dead_bush' || b.key === 'glow_lichen')) {
+  if (tool?.type === 'shears' && (b.key.endsWith('_leaves') || b.key === 'short_grass' || b.key === 'fern' || b.key === 'tall_grass' || b.key === 'large_fern' || b.key === 'dead_bush' || b.key === 'glow_lichen')) {
     add(b.key, 1);
     return out;
   }
@@ -95,12 +97,24 @@ export function blockXp(blockId: number): number {
 }
 
 /** Vérifie qu'un bloc peut tenir à cet endroit (plantes, torches...). */
+/** Sol accepté sous une plante. */
+export function plantSoil(b: { supportBlocks: string[] | null }, below: number) {
+  if (!b.supportBlocks) return BlockRegistry.solid[below] === 1;
+  return b.supportBlocks.some((k) => BlockRegistry.has(k) && BlockRegistry.byName(k).id === below);
+}
+
 export function hasSupport(world: World, x: number, y: number, z: number, blockId: number): boolean {
   const b = BlockRegistry.get(blockId);
   if (!b.needsSupport) return true;
   const below = world.getBlock(x, y - 1, z);
   if (below < 0) return true;
-  if (b.supportBlocks) return b.supportBlocks.some((k) => BlockRegistry.byName(k).id === below);
+  if (b.def.doublePlant) {
+    // moitié haute : la moitié basse dessous ; moitié basse : le sol dessous et la moitié haute dessus
+    if (world.getMeta(x, y, z) & 1) return below === blockId;
+    const above = world.getBlock(x, y + 1, z);
+    return plantSoil(b, below) && (above < 0 || above === blockId);
+  }
+  if (b.supportBlocks) return plantSoil(b, below);
   if (b.shape === 'lever' || b.shape === 'button') {
     // au sol : bloc plein dessous ; au mur : bloc plein derrière (comme les torches murales)
     const att = world.getMeta(x, y, z) & 7;

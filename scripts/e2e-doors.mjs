@@ -158,6 +158,36 @@ try {
     return { atTap, atCenter };
   }, before);
   check('Visée au doigt : le bloc est posé là où on touche (pas au viseur)', !!after.atTap && !after.atCenter, JSON.stringify({ before, after }));
+
+  // ---------- plantes hautes (deux blocs) ----------
+  const tall = await G(async () => {
+    const s = window.__lecraft.session, w = s.world, a = window.__a, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const out = {};
+    for (const [k, dx] of [['lilac', -4], ['tall_grass', -6]]) {
+      const x = a.x + dx, z = a.z - 4;
+      w.setBlock(x, a.y - 1, z, I('grass_block'));
+      window.__place(k, x, a.y, z);
+      out[k] = { placed: w.getBlock(x, a.y, z) === I(k) && w.getBlock(x, a.y + 1, z) === I(k) && (w.getMeta(x, a.y + 1, z) & 1) === 1 };
+    }
+    // casser la moitié haute du lilas : les deux moitiés disparaissent, un seul lilas lâché
+    const x = a.x - 4, z = a.z - 4;
+    s.player.gameMode = 'survival';
+    s.entities.entities.forEach((e) => e.kind === 'item' && (e.removed = true));
+    await sleep(100);
+    s.interaction.breakBlock(x, a.y + 1, z, undefined);
+    await sleep(800);
+    const drops = s.entities.entities.filter((e) => e.kind === 'item' && !e.removed && e.itemId === 'lilac').reduce((n, e) => n + e.count, 0);
+    out.broken = { gone: w.getBlock(x, a.y, z) === 0 && w.getBlock(x, a.y + 1, z) === 0, drops };
+    // poser un bloc dans la moitié basse des hautes herbes (remplaçables) : la moitié haute tombe
+    s.player.gameMode = 'creative';
+    w.setBlock(a.x - 6, a.y, z, I('stone'));
+    await sleep(800);
+    out.replaced = w.getBlock(a.x - 6, a.y + 1, z) === 0;
+    return out;
+  });
+  check('Plantes hautes : le lilas et les hautes herbes se posent sur deux blocs', tall.lilac.placed && tall.tall_grass.placed, JSON.stringify(tall));
+  check('Plante haute : casser le haut retire les deux moitiés (un seul objet lâché)', tall.broken.gone && tall.broken.drops === 1, JSON.stringify(tall.broken));
+  check('Plante haute : la moitié haute tombe si la basse est remplacée', tall.replaced);
   await G(() => { const p = window.__lecraft.session.player, a = window.__a; p.body.setPos(a.x + 0.5, a.y, a.z + 2.5); p.yaw = 0; p.pitch = -0.15; p.inventory.clear(); });
   await wait(800);
   await page.screenshot({ path: `${OUT}/doors-01.png` });
