@@ -40,6 +40,8 @@ interface StructureType {
   /** Si absent : autorisé si le biome liste la structure. */
   anyBiome?: boolean;
   build(w: StructWriter, ox: number, oz: number, rng: Rng, t: TerrainQuery): void;
+  /** Emplacement acceptable (relief, eau…) ; absent : toujours. */
+  site?(t: TerrainQuery, x: number, z: number): boolean;
 }
 
 // ---------- utilitaires de construction ----------
@@ -143,6 +145,18 @@ const TYPES: StructureType[] = [
     radius: 48,
     build(w, ox, oz, rng, t) {
       buildVillage(w, ox, oz, rng, t, LOOT.VILLAGE);
+    },
+    // comme le jeu original : les villages s'installent sur un terrain assez plat et sec
+    site(t, x, z) {
+      let lo = Infinity, hi = -Infinity, wet = 0;
+      for (let dz = -28; dz <= 28; dz += 14)
+        for (let dx = -28; dx <= 28; dx += 14) {
+          const h = t.heightAt(x + dx, z + dz);
+          if (h < SEA_LEVEL) wet++;
+          lo = Math.min(lo, h);
+          hi = Math.max(hi, h);
+        }
+      return hi - lo <= 12 && wet <= 4;
     },
   },
   {
@@ -505,6 +519,7 @@ export class StructureGenerator {
       const biome = BiomeManager.get(this.terrain.biomeAt(x, z));
       if (!biome.structures.includes(type.key)) return null;
       if (this.terrain.heightAt(x, z) < SEA_LEVEL) return null;
+      if (type.site && !type.site(this.terrain, x, z)) return null;
     } else if (!type.underground) {
       const biome = BiomeManager.get(this.terrain.biomeAt(x, z));
       if (biome.key === 'ocean' || biome.key === 'deep_ocean' || biome.key === 'river') return null;

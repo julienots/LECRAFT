@@ -262,7 +262,8 @@ try {
     return { id, placed: B === id };
   });
   await wait(1200);
-  const light = await G(() => { const s = window.__lecraft.session, r = window.__rb; return s.world.getLight(r.x + 1, r.y, r.z).block; });
+  // lumière des voisins libres (le relief peut en recouvrir certains)
+  const light = await G(() => { const s = window.__lecraft.session, r = window.__rb, w = s.world; return Math.max(...[[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, -1]].filter(([a, b, c]) => !w.isSolid(r.x + a, r.y + b, r.z + c)).map(([a, b, c]) => w.getLight(r.x + a, r.y + b, r.z + c).block)); });
   check('Bloc d’add-on posé et lumineux (light_emission 10)', blk.placed && light >= 8, `id ${blk.id}, lumière voisine ${light}`);
   const drops = await G(() => {
     const s = window.__lecraft.session, r = window.__rb;

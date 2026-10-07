@@ -333,7 +333,7 @@ export function buildVillage(w: StructWriter, ox: number, oz: number, rng: Rng, 
           lo = Math.min(lo, h);
           hi = Math.max(hi, h);
         }
-        const ok = lo >= SEA_LEVEL && hi - lo <= 4 && !used.some((r) => overlaps(r, rect));
+        const ok = lo >= SEA_LEVEL && hi - lo <= 5 && !used.some((r) => overlaps(r, rect));
         if (ok) {
           used.push(rect);
           const y = kind === 'lamp' ? t.heightAt(fx, fz) + 1 : Math.round((lo + hi) / 2) + 1;

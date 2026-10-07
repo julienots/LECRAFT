@@ -13,9 +13,9 @@ await page.goto(URL);
 await page.waitForFunction(() => window.__lecraft?.state === 'menu', null, { timeout: 120000 });
 await G((s) => window.__lecraft.createWorld('Village', s, 'creative', 'peaceful'), SEED);
 await page.waitForFunction(() => window.__lecraft?.state === 'playing' && window.__lecraft.session.loaded, null, { timeout: 120000 });
-const v = await G(() => window.__lecraft.debug.findStructure('village'));
+const v = process.env.VX ? { x: +process.env.VX, z: +process.env.VZ } : await G(() => window.__lecraft.debug.findStructure('village'));
 console.log('village', JSON.stringify(v));
-const views = [['air', 0, 40, 30, 0.0, -0.9], ['street', 0, 4, 12, 0.0, -0.15], ['side', 14, 6, 14, 0.8, -0.3]];
+const views = [['air', 0, 45, 22, 0.0, -1.1], ['street', 0, 4, 12, 0.0, -0.15], ['side', 14, 6, 14, 0.8, -0.3]];
 for (const [name, dx, dy, dz, yaw, pitch] of views) {
   await G(([v, dx, dz]) => { const p = window.__lecraft.session.player; p.body.flying = true; p.body.setPos(v.x + dx + 0.5, 110, v.z + dz + 0.5); }, [v, dx, dz]);
   await page.waitForFunction(([x, z]) => window.__lecraft.session.world.getBlock(x, 0, z) > 0, [v.x, v.z], { timeout: 60000 }).catch(() => {});
