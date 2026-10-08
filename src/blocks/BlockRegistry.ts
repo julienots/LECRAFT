@@ -5,7 +5,7 @@ import { TileRegistry } from '../render/TileRegistry';
 /** Nombre maximal de blocs (identifiants sur 16 bits, tables de lookup bornées). */
 export const MAX_BLOCKS = 4096;
 const RENDER_TYPES = ['none', 'cube', 'cutout', 'cross', 'liquid', 'translucent', 'model'] as const;
-export const SHAPES: ShapeKind[] = ['slab', 'stairs', 'door', 'ladder', 'fence', 'pane', 'bed', 'torch', 'chest', 'farmland', 'snow_layer', 'cactus', 'plate', 'lantern', 'custom', 'trapdoor', 'fence_gate', 'lever', 'button', 'lily_pad'];
+export const SHAPES: ShapeKind[] = ['slab', 'stairs', 'door', 'ladder', 'fence', 'pane', 'bed', 'torch', 'chest', 'farmland', 'snow_layer', 'cactus', 'plate', 'lantern', 'custom', 'trapdoor', 'fence_gate', 'lever', 'button', 'lily_pad', 'wall', 'carpet', 'end_frame', 'end_portal'];
 
 /**
  * Registre des blocs : convertit les définitions data-driven en objets compacts

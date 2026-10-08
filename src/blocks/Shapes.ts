@@ -37,12 +37,13 @@ export function facingFromYaw(yaw: number): number {
 }
 export const opposite = (f: number) => (f + 2) & 3;
 
-function connects(id: number, kind: 'fence' | 'pane'): boolean {
+function connects(id: number, kind: 'fence' | 'pane' | 'wall'): boolean {
   if (id <= 0) return false;
   const R = BlockRegistry;
   if (R.opaque[id]) return true;
   const s = R.shape[id];
   if (kind === 'fence') return s === SHAPES.indexOf('fence') + 1 || s === SHAPES.indexOf('fence_gate') + 1;
+  if (kind === 'wall') return s === SHAPES.indexOf('wall') + 1 || s === SHAPES.indexOf('pane') + 1 || s === SHAPES.indexOf('fence_gate') + 1;
   return s === SHAPES.indexOf('pane') + 1 || R.blocks[id].key === 'glass';
 }
 
@@ -125,6 +126,24 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
     }
     case 'lily_pad':
       return [[0, 0, 0, 16, 0.25, 16]];
+    case 'carpet':
+      return [[0, 0, 0, 16, 1, 16]];
+    case 'end_frame':
+      // cadre (13/16 de haut) surmonté de l'œil quand il est posé
+      return BlockRegistry.get(id).key.endsWith('_filled') ? [[0, 0, 0, 16, 13, 16], [4, 13, 4, 12, 16, 12]] : [[0, 0, 0, 16, 13, 16]];
+    case 'end_portal':
+      return [[0, 11, 0, 16, 12, 16]];
+    case 'wall': {
+      // poteau central plus haut, murets de 14/16 vers les voisins (comme les murets du jeu)
+      const n = connects(nb(0, 0, -1), 'wall'), sth = connects(nb(0, 0, 1), 'wall'), wst = connects(nb(-1, 0, 0), 'wall'), est = connects(nb(1, 0, 0), 'wall');
+      const straight = (n && sth && !wst && !est) || (wst && est && !n && !sth);
+      const out: Box[] = straight && !connects(nb(0, 1, 0), 'wall') ? [] : [[4, 0, 4, 12, 16, 12]];
+      if (n) out.push([5, 0, 0, 11, 14, straight ? 16 : 4]);
+      if (sth) out.push([5, 0, straight ? 0 : 12, 11, 14, 16]);
+      if (wst) out.push([0, 0, 5, straight ? 16 : 4, 14, 11]);
+      if (est) out.push([straight ? 0 : 12, 0, 5, 16, 14, 11]);
+      return out.length ? out : [[4, 0, 4, 12, 16, 12]];
+    }
     case 'pane': {
       const out: Box[] = [[7, 0, 7, 9, 16, 9]];
       if (connects(nb(0, 0, -1), 'pane')) out.push([7, 0, 0, 9, 16, 7]);
@@ -169,6 +188,17 @@ export function collisionBoxes(id: number, meta: number, nb: NeighborFn): Box[] 
     }
     case 'lantern':
       return [[5, 0, 5, 11, 9, 11]];
+    case 'end_portal':
+      return [];
+    case 'wall': {
+      // 1,5 bloc de haut comme les barrières
+      const out: Box[] = [[4, 0, 4, 12, 24, 12]];
+      if (connects(nb(0, 0, -1), 'wall')) out.push([5, 0, 0, 11, 24, 4]);
+      if (connects(nb(0, 0, 1), 'wall')) out.push([5, 0, 12, 11, 24, 16]);
+      if (connects(nb(-1, 0, 0), 'wall')) out.push([0, 0, 5, 4, 24, 11]);
+      if (connects(nb(1, 0, 0), 'wall')) out.push([12, 0, 5, 16, 24, 11]);
+      return out;
+    }
     case 'lily_pad':
       return [[1, 0, 1, 15, 1.5, 15]];
     case 'custom': {

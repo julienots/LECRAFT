@@ -630,7 +630,8 @@ export class Game {
         this.renderer.render(s.perspective === 0 ? { scene: s.held.scene, camera: s.held.camera } : undefined);
         this.adaptive.update(dt, this.settings.fpsCap);
       }
-      // en pause : rendu figé (aucune simulation, aucun rendu → économie batterie)
+      // en pause : rendu figé (aucune simulation, aucun rendu → économie batterie) ; la musique continue
+      else this.audio.updateMusic(dt);
     } else if (this.state === 'menu') {
       this.audio.updateMusic(dt);
       if (this.panorama) {

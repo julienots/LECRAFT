@@ -28,7 +28,7 @@ let TALL: Set<number> | null = null;
 function shapeSets() {
   if (!OPENABLE) {
     OPENABLE = new Set([SHAPE('door'), SHAPE('fence_gate'), SHAPE('trapdoor')]);
-    TALL = new Set([SHAPE('fence'), SHAPE('fence_gate')]);
+    TALL = new Set([SHAPE('fence'), SHAPE('fence_gate'), SHAPE('wall')]);
   }
 }
 

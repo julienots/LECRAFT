@@ -5,6 +5,8 @@
  * Lecture ZIP minimale (répertoire central + inflate natif via DecompressionStream).
  */
 
+import { MusicLibrary, moodFromPath } from '../audio/Music';
+
 const DB = 'lecraft-packs';
 const STORE = 'files';
 
@@ -69,6 +71,8 @@ function openDb(): Promise<IDBDatabase> {
 export interface PackInfo {
   name: string;
   files: number;
+  /** Musiques importées depuis le pack. */
+  music?: number;
 }
 
 /** Importe un pack : extrait les PNG utiles et les enregistre localement. */
@@ -80,6 +84,19 @@ export async function importPack(file: File, onProgress?: (f: number) => void): 
     return i > 0 ? { ...e, name: e.name.slice(i) } : e;
   });
   const entries = all.filter((e) => WANTED.test(e.name));
+  // musiques du pack (assets/minecraft/sounds/music/… et records/…) : bibliothèque musicale de l'appareil
+  const music = readEntries(buf).filter((e) => /assets\/minecraft\/sounds\/(music|records)\/.+\.(ogg|mp3|wav)$/i.test(e.name));
+  let musicCount = 0;
+  if (music.length) {
+    const tracks: { name: string; mood: ReturnType<typeof moodFromPath>; blob: Blob }[] = [];
+    for (const e of music) {
+      const bytes = await extract(buf, e);
+      const rel = e.name.slice(e.name.indexOf('sounds/') + 7);
+      tracks.push({ name: rel, mood: rel.startsWith('records/') ? 'any' : moodFromPath(rel), blob: new Blob([bytes as BlobPart], { type: 'audio/ogg' }) });
+    }
+    musicCount = await MusicLibrary.add(tracks);
+  }
+  if (!entries.length && musicCount) return { name: file.name, files: 0, music: musicCount };
   if (!entries.length) throw new Error('Aucune texture trouvée (dossier assets/minecraft/textures attendu)');
   const db = await openDb();
   await new Promise<void>((res, rej) => {
@@ -106,7 +123,7 @@ export async function importPack(file: File, onProgress?: (f: number) => void): 
     onProgress?.(++n / entries.length);
   }
   await flush();
-  const info: PackInfo = { name: file.name, files: entries.length };
+  const info: PackInfo = { name: file.name, files: entries.length, music: musicCount };
   const tx = db.transaction(STORE, 'readwrite');
   tx.objectStore(STORE).put(new Blob([JSON.stringify(info)], { type: 'application/json' }), '__info');
   db.close();

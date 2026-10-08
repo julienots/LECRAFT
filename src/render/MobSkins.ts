@@ -341,6 +341,75 @@ export const SKINS: Record<string, SkinSpec> = {
       box(ctx, 32, 8, 1, 1, 1, () => '#1a2a1a');
     },
   },
+  // ---------- créatures ajoutées ----------
+  mooshroom: quadSkin({ base: ['#a8241c', '#b8302a', '#962018', '#c03a30'], spots: ['#e0e0e0', '#f0f0f0'], spotChance: 0.01, head: [0, 0, 8, 8, 6, 0], body: [18, 4, 12, 18, 10], leg: [0, 16, 4, 12, 4], face: (x, y) => (y >= 5 ? (y === 6 && (x === 2 || x === 5) ? '#4a2a2a' : '#c8a090') : eyes(2, 1, 6)(x, y)) }),
+  goat: quadSkin({ base: ['#e8e4dc', '#d8d4cc', '#f0ece4', '#cfc8bc'], head: [0, 0, 8, 8, 6, 0], body: [18, 4, 12, 18, 10], leg: [0, 16, 4, 12, 4], face: (x, y) => (y === 2 && (x === 1 || x === 6) ? '#c8a030' : y === 2 && (x === 2 || x === 5) ? '#1a1a1a' : y >= 6 && x >= 3 && x <= 4 ? '#bab4a8' : null) }),
+  horse: quadSkin({ base: ['#7a4a22', '#6a3e1a', '#86542a', '#5e3618'], spots: ['#3a2010'], spotChance: 0.004, head: [0, 0, 8, 8, 6, 0], body: [18, 4, 12, 18, 10], leg: [0, 16, 4, 12, 4], face: (x, y) => (y === 2 && (x === 1 || x === 6) ? '#1a1a1a' : y <= 1 ? '#2a1a0e' : null) }),
+  donkey: quadSkin({ base: ['#8a8078', '#7a7068', '#968c84', '#6e665e'], head: [0, 0, 8, 8, 6, 0], body: [18, 4, 12, 18, 10], leg: [0, 16, 4, 12, 4], face: (x, y) => (y === 2 && (x === 1 || x === 6) ? '#1a1a1a' : y >= 5 ? '#c8c0b8' : null) }),
+  llama: quadSkin({ base: ['#e8dcc0', '#dccfb0', '#f0e6d0', '#d0c4a4'], head: [0, 0, 8, 8, 6, 0], body: [18, 4, 12, 18, 10], leg: [0, 16, 4, 12, 4], face: (x, y) => (y === 2 && (x === 1 || x === 6) ? '#1a1a1a' : y >= 5 && x >= 2 && x <= 5 ? '#b8a888' : null) }),
+  camel: quadSkin({ base: ['#d8a860', '#c89850', '#e4b870', '#bc8c48'], head: [0, 0, 8, 8, 6, 0], body: [18, 4, 12, 18, 10], leg: [0, 16, 4, 12, 4], face: (x, y) => (y === 2 && (x === 1 || x === 6) ? '#1a1a1a' : null) }),
+  polar_bear: quadSkin({ base: ['#f4f4f0', '#e8e8e2', '#ffffff', '#dcdcd4'], head: [0, 0, 8, 8, 6, 0], body: [18, 4, 12, 18, 10], leg: [0, 16, 4, 12, 4], face: (x, y) => (y === 2 && (x === 1 || x === 6) ? '#1a1a1a' : y === 5 && x >= 3 && x <= 4 ? '#1a1a1a' : null) }),
+  panda: pigLike(['#f4f4f0', '#e8e8e4', '#ffffff'], ['#1a1a1a', '#2a2a2a'], (x, y) => ((y >= 2 && y <= 4 && (x === 1 || x === 2 || x === 5 || x === 6)) ? (y === 3 && (x === 2 || x === 5) ? '#ffffff' : '#1a1a1a') : y === 6 && x >= 3 && x <= 4 ? '#1a1a1a' : null), true),
+  hoglin: pigLike(['#b07858', '#a06a4c', '#c08864'], ['#5a3a28', '#6a4a30'], (x, y) => (y === 3 && (x === 1 || x === 6) ? '#1a1a1a' : y === 6 && (x === 1 || x === 6) ? '#f0ecd8' : null)),
+  armadillo: pigLike(['#c89a80', '#b88a70', '#d8aa90'], ['#8a5a48', '#9a6a58'], (x, y) => (y === 3 && (x === 2 || x === 5) ? '#1a1a1a' : null), true),
+  rabbit: pigLike(['#8a6a4a', '#7a5a3a', '#9a7a5a'], ['#e8e0d0', '#f0e8d8'], (x, y) => (y === 3 && (x === 1 || x === 6) ? '#1a1a1a' : y === 5 && x >= 3 && x <= 4 ? '#e8a0a0' : null)),
+  frog: pigLike(['#6a9a3a', '#5a8a2e', '#7aaa4a'], ['#e0d080', '#d0c070'], (x, y) => (y <= 1 && (x === 1 || x === 6) ? '#1a1a1a' : null)),
+  turtle: pigLike(['#4a8a3a', '#3a7a2e', '#5a9a4a'], ['#3a5a2a', '#6a8a3a', '#2a4a1e'], (x, y) => (y === 3 && (x === 1 || x === 6) ? '#1a1a1a' : null), true),
+  fox: wolfSkin('#e07a2a', '#f0f0f0'),
+  ocelot: wolfSkin('#e8c060', '#8a6a2a'),
+  parrot: chickenLike(['#d82020', '#e83030', '#c81818'], '#2a5ad8', '#f0c020'),
+  bee: batLike(['#f0c020', '#1a1a1a', '#f0c020', '#e8b018'], ['#d8f0ff', '#c0e0f0', '#e8f8ff']),
+  phantom: batLike(['#3a4a8a', '#2e3c78', '#46569a'], ['#5a6aa8', '#4a5a98', '#6a7ab8'], '#60ff60'),
+  silverfish: spiderSkin(['#8a8a90', '#7a7a80', '#9a9aa0'], '#2a2a2a'),
+  endermite: spiderSkin(['#2a1a3a', '#1e1230', '#3a2a4a'], '#c060ff'),
+  strider: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const red = ['#a83028', '#b83a30', '#982820', '#c04838'];
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && y === 3 && (x === 2 || x === 5) ? '#1a1a1a' : f === 'top' ? pick(rng, ['#d0c8b8', '#c0b8a8']) : pick(rng, red)));
+      box(ctx, 16, 16, 8, 12, 4, () => pick(rng, red));
+      box(ctx, 0, 16, 4, 6, 4, () => pick(rng, ['#6a2018', '#7a2820']));
+    },
+  },
+  cod: fishSkin(2, 3, 8, ['#a89878', '#988868', '#b8a888'], '#c8b898'),
+  salmon: fishSkin(3, 4, 11, ['#a83a2a', '#983024', '#b84a38'], '#5a6a6a'),
+  tropical_fish: fishSkin(2, 5, 6, ['#f08a20', '#f09a30', '#ffffff', '#f08a20'], '#3a5ad8'),
+  dolphin: fishSkin(6, 5, 12, ['#8a98a8', '#7a8898', '#9aa8b8'], '#6a7888'),
+  guardian: fishSkin(12, 12, 12, ['#5a9a8a', '#4a8a7a', '#6aaa9a', '#d88a3a'], '#d88a3a'),
+  axolotl: fishSkin(5, 4, 9, ['#f0a0c0', '#e890b0', '#f8b0d0'], '#d8507a'),
+  iron_golem: humanSkin({ skin: ['#d8d0c8', '#c8c0b8', '#e0d8d0', '#b8b0a8'], shirt: ['#d0c8c0', '#c0b8b0', '#5a8a3a'], pants: ['#c8c0b8', '#b8b0a8', '#d0c8c0'], shoes: '#a8a098', eyes: '#c81a0a', mouth: '#8a8278' }),
+  zombie_villager: humanSkin({ skin: ['#5a8a3a', '#4e7e32', '#66964a'], shirt: ['#6a4a2a', '#5a3a1a', '#7a5a3a'], pants: ['#4a3a2a', '#3a2a1a', '#5a4a3a'], shoes: '#2a2a2a', eyes: '#c82020', mouth: '#2a4a20' }),
+  pillager: humanSkin({ skin: ['#8a8a88', '#7a7a78', '#969694'], shirt: ['#4a3a5a', '#3a2a4a', '#5a4a6a'], pants: ['#3a3a3a', '#2a2a2a', '#4a4a4a'], shoes: '#2a1a0a', eyes: '#1a3a2a', mouth: '#3a3a3a' }),
+  vindicator: humanSkin({ skin: ['#8a8a88', '#7a7a78', '#969694'], shirt: ['#2a2a2a', '#1a1a1a', '#3a3a3a'], pants: ['#3a4a5a', '#2a3a4a', '#4a5a6a'], shoes: '#1a1a1a', eyes: '#1a3a2a', mouth: '#3a3a3a' }),
+  piglin: {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      const pink = ['#e8a0a0', '#d88e8e', '#f0b0aa'], gold = ['#f0c030', '#e0b020', '#f8d050'];
+      box(ctx, 0, 0, 10, 8, 8, (f, x, y) => (f === 'front' && y === 3 && (x === 2 || x === 7) ? '#1a1a1a' : f === 'front' && y === 3 && (x === 3 || x === 6) ? '#f0f0f0' : pick(rng, pink)));
+      box(ctx, 31, 1, 4, 4, 1, (f, x, y) => (f === 'front' && y === 2 && (x === 1 || x === 2) ? '#8a4a4a' : '#e89a9a'));
+      box(ctx, 2, 4, 1, 2, 1, () => '#f0ecd8');
+      box(ctx, 2, 0, 1, 2, 1, () => '#f0ecd8');
+      box(ctx, 51, 6, 1, 5, 4, () => pick(rng, pink));
+      box(ctx, 39, 6, 1, 5, 4, () => pick(rng, pink));
+      box(ctx, 16, 16, 8, 12, 4, (_f, _x, y) => (y < 2 ? pick(rng, gold) : y > 8 ? '#6a4a2a' : pick(rng, ['#8a5a3a', '#7a4a2a'])));
+      box(ctx, 40, 16, 4, 12, 4, () => pick(rng, pink));
+      box(ctx, 32, 48, 4, 12, 4, () => pick(rng, pink));
+      box(ctx, 0, 16, 4, 12, 4, (_f, _x, y) => (y < 8 ? '#6a4a2a' : '#3a2a1a'));
+      box(ctx, 16, 48, 4, 12, 4, (_f, _x, y) => (y < 8 ? '#6a4a2a' : '#3a2a1a'));
+    },
+  },
+  shulker: {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      const purple = ['#8a5a9a', '#7a4a8a', '#9a6aaa', '#6a3a7a'];
+      box(ctx, 0, 0, 16, 12, 16, () => pick(rng, purple));
+      box(ctx, 0, 28, 16, 8, 16, () => pick(rng, purple));
+      box(ctx, 0, 52, 6, 6, 6, (f, x, y) => (f === 'front' && y === 2 && (x === 1 || x === 4) ? '#1a1a1a' : pick(rng, ['#e8e0a0', '#d8d090'])));
+    },
+  },
 };
 
 function humanSkin(c: { skin: string[]; shirt: string[]; pants: string[]; shoes: string; eyes: string; mouth: string }): SkinSpec {
@@ -441,4 +510,64 @@ export function paintSkin(key: string): HTMLCanvasElement | null {
   const ctx = c.getContext('2d')!;
   spec.paint(ctx, new Rng(key.length * 7919 + key.charCodeAt(0)));
   return c;
+}
+
+/** Modèle du cochon (tête 8×8×8, groin, corps 10×16×8, pattes 4×6×4). */
+function pigLike(pal: string[], second: string[], face: (x: number, y: number) => string | null, patches = false): SkinSpec {
+  return {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const c = () => (patches && rng.next() < 0.35 ? pick(rng, second) : pick(rng, pal));
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' ? face(x, y) ?? pick(rng, pal) : c()));
+      box(ctx, 16, 16, 4, 3, 1, () => pick(rng, second));
+      box(ctx, 28, 8, 10, 16, 8, () => c());
+      box(ctx, 0, 16, 4, 6, 4, () => pick(rng, second));
+    },
+  };
+}
+
+function chickenLike(body: string[], wing: string, beak: string): SkinSpec {
+  return {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      box(ctx, 0, 0, 4, 6, 3, (f, x, y) => (f === 'front' && y === 2 && (x === 0 || x === 3) ? '#1a1a1a' : pick(rng, body)));
+      box(ctx, 14, 0, 4, 2, 2, () => beak);
+      box(ctx, 14, 4, 2, 2, 2, () => beak);
+      box(ctx, 0, 9, 6, 8, 6, () => pick(rng, body));
+      box(ctx, 26, 0, 3, 5, 3, () => '#5a5a5a');
+      box(ctx, 24, 13, 1, 4, 6, () => wing);
+    },
+  };
+}
+
+function batLike(fur: string[], wing: string[], eye = '#000000'): SkinSpec {
+  return {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      box(ctx, 0, 0, 6, 6, 6, (f, x, y) => (f === 'front' && y === 2 && (x === 1 || x === 4) ? eye : pick(rng, fur)));
+      box(ctx, 0, 16, 6, 12, 6, (_f, _x, y) => fur[Math.floor(y / 3) % fur.length]);
+      box(ctx, 24, 0, 3, 4, 1, () => pick(rng, fur));
+      box(ctx, 42, 0, 10, 16, 1, () => pick(rng, wing));
+    },
+  };
+}
+
+/** Poisson : corps (largeur, hauteur, longueur), nageoires (UV 0,20 et 20,20). */
+function fishSkin(w: number, h: number, len: number, pal: string[], fin: string): SkinSpec {
+  return {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      box(ctx, 0, 0, w, h, len, (f, x, y, fw) => {
+        if ((f === 'right' || f === 'left') && y === Math.max(0, Math.floor(h / 3)) && (f === 'right' ? x === 1 : x === fw - 2)) return '#101010';
+        if (f === 'bottom') return '#e8e8e0';
+        return pick(rng, pal);
+      });
+      box(ctx, 0, 20, 1, 2, Math.max(3, Math.ceil(len / 3)), () => fin);
+      box(ctx, 20, 20, 1, h, Math.max(3, Math.ceil(len / 2.5)), () => fin);
+    },
+  };
 }

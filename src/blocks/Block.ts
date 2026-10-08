@@ -22,7 +22,11 @@ export type ShapeKind =
   | 'fence_gate'
   | 'lever'
   | 'button'
-  | 'lily_pad';
+  | 'lily_pad'
+  | 'wall'
+  | 'carpet'
+  | 'end_frame'
+  | 'end_portal';
 
 export interface DropDef {
   item: string;

@@ -43,7 +43,34 @@ export class Animal extends Mob {
     return true;
   }
 
+  private guardTimer = 0;
+
   protected customUpdate(ctx: GameContext, dt: number) {
+    // golem de fer : défend le village contre les monstres proches
+    if (this.def.key === 'iron_golem' && !this.dead) {
+      this.guardTimer -= dt;
+      let foe: Mob | null = null, best = 14;
+      for (const e of (ctx as unknown as { entities: { entities: Mob[] } }).entities.entities) {
+        const m = e as Mob;
+        if (e.kind !== 'mob' || m.dead || m.def.category !== 'hostile' || m.def.key === 'creeper') continue;
+        const d = Math.hypot(m.x - this.x, m.z - this.z);
+        if (d < best) {
+          best = d;
+          foe = m;
+        }
+      }
+      if (foe) {
+        if (best > 2.2) this.ai.moveTowards(foe.x, foe.z, 1.1, true);
+        else if (this.guardTimer <= 0) {
+          this.guardTimer = 1.2;
+          this.attackAnim = 1;
+          const d = best || 1;
+          ctx.combat.damageMob(foe, 7 + Math.random() * 7, { kind: 'bot', knockX: ((foe.x - this.x) / d) * 3, knockZ: ((foe.z - this.z) / d) * 3, attacker: this as never });
+          foe.body.vy = 7;
+          ctx.audio.play('stone_hit', { x: this.x, y: this.y, z: this.z });
+        }
+      } else if (Math.hypot(this.homeX - this.x, this.homeZ - this.z) > 24) this.ai.moveTowards(this.homeX, this.homeZ, 0.6, true);
+    }
     // la laine repousse en broutant l'herbe
     if (this.sheared && Math.random() < dt / 40) {
       const bx = Math.floor(this.x), by = Math.floor(this.y - 0.5), bz = Math.floor(this.z);

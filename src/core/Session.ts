@@ -1080,7 +1080,9 @@ export class Session implements GameContext {
       },
       dt,
     );
-    this.audio.setMusicMood(night ? 'night' : 'day');
+    this.audio.setMusicMood(
+      this.dimension === 'nether' ? 'nether' : this.dimension === 'end' ? 'end' : underwater ? 'underwater' : underground ? 'cave' : p.creative ? 'creative' : night ? 'night' : 'day',
+    );
     this.audio.updateMusic(dt);
     game.hud.update(this, dt);
   }

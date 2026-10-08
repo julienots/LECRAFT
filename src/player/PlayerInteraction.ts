@@ -3,6 +3,7 @@ import { BlockRegistry, B } from '../blocks/BlockRegistry';
 import { breakTime, getDrops, blockXp, hasSupport, plantSoil, rollLoot } from '../blocks/BlockBehaviors';
 import type { GameContext } from '../core/GameContext';
 import type { InputState } from '../input/InputState';
+import { STRIPPED } from '../data/vanillaMore';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { EntityManager } from '../entities/EntityManager';
 import { Animal } from '../entities/Animal';
@@ -237,10 +238,40 @@ export class PlayerInteraction {
       this.breakBlock(t.x, t.y, t.z, itemId);
       hooks.afterBreak?.(t.x, t.y, t.z, t.block, meta, stack);
       this.host.afterBreak?.(t.x, t.y, t.z, t.block, itemId);
+      this.breakArea(t, itemId);
       this.resetMining();
       // en créatif, petit délai entre deux cassages
       if (p.creative) this.hitSoundTimer = 0.2;
     }
+  }
+
+  /**
+   * Marteau / excavateur : casse aussi les 8 blocs autour du bloc miné, dans le plan de la face
+   * visée (3×3), s'ils se minent avec ce type d'outil et ne sont pas beaucoup plus durs.
+   * Accroupi : un seul bloc (pour les finitions).
+   */
+  private breakArea(t: { x: number; y: number; z: number; block: number; nx: number; ny: number; nz: number }, itemId: string | undefined) {
+    const def = itemId ? ItemRegistry.get(itemId) : undefined;
+    if (!def?.area || !def.tool || this.ctx.player.sneaking) return;
+    const w = this.ctx.world, p = this.ctx.player;
+    const center = BlockRegistry.get(t.block);
+    // axes du plan perpendiculaire à la face
+    const [ux, uy, uz, vx, vy, vz] = t.ny !== 0 ? [1, 0, 0, 0, 0, 1] : t.nx !== 0 ? [0, 1, 0, 0, 0, 1] : [1, 0, 0, 0, 1, 0];
+    for (let a = -1; a <= 1; a++)
+      for (let b = -1; b <= 1; b++) {
+        if (!a && !b) continue;
+        const x = t.x + ux * a + vx * b, y = t.y + uy * a + vy * b, z = t.z + uz * a + vz * b;
+        const id = w.getBlock(x, y, z);
+        if (id <= 0 || BlockRegistry.liquid[id]) continue;
+        const bd = BlockRegistry.get(id);
+        if (bd.hardness < 0 || bd.def.tool !== def.tool.type || bd.hardness > Math.max(center.hardness, 0.5) * 1.5 + 0.5) continue;
+        if (this.host.canEdit && !this.host.canEdit(x, y, z, 'break', id)) continue;
+        if (!p.inventory.selectedStack || p.inventory.selectedStack.id !== itemId) return; // outil cassé
+        const meta = w.getMeta(x, y, z);
+        this.breakBlock(x, y, z, itemId);
+        hooks.afterBreak?.(x, y, z, id, meta, { ...p.inventory.selectedStack });
+        this.host.afterBreak?.(x, y, z, id, itemId);
+      }
   }
 
   breakBlock(x: number, y: number, z: number, itemId: string | undefined) {
@@ -379,6 +410,15 @@ export class PlayerInteraction {
     // objet utilisé dans le vide (ou sur un bloc sans pose) : événements de script
     if (!repeat && hooks.useItem && (!t || !def.place) && hooks.useItem({ ...held })) return;
     // 3) utilisations spéciales
+    // hache sur une bûche : écorce
+    if (!repeat && def.tool?.type === 'axe' && t && STRIPPED[BlockRegistry.get(t.block).key] && BlockRegistry.has(STRIPPED[BlockRegistry.get(t.block).key])) {
+      ctx.world.setBlock(t.x, t.y, t.z, BlockRegistry.byName(STRIPPED[BlockRegistry.get(t.block).key]).id, ctx.world.getMeta(t.x, t.y, t.z));
+      ctx.audio.blockSound('place', 'wood', t.x + 0.5, t.y + 0.5, t.z + 0.5);
+      ctx.particles.blockHit(t.x, t.y, t.z, t.block, t.nx, t.ny, t.nz);
+      if (!p.creative) inv.damageSelected(1);
+      this.entities.combat.swing = 1;
+      return;
+    }
     if (!repeat && def.use === 'till' && t && t.ny === 1 && (t.block === B.DIRT || t.block === B.GRASS_BLOCK || t.block === B.DIRT_PATH)) {
       if (ctx.world.getBlock(t.x, t.y + 1, t.z) === B.AIR || BlockRegistry.replaceable[ctx.world.getBlock(t.x, t.y + 1, t.z)]) {
         ctx.world.setBlock(t.x, t.y + 1, t.z, B.AIR);

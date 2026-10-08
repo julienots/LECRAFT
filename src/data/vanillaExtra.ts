@@ -10,6 +10,7 @@ import type { ItemDef } from '../inventory/Item';
 import type { CraftingRecipe, SmeltingRecipe } from '../crafting/Recipe';
 import { WOOL_COLORS } from './blocks';
 import { hex, registerPainter, paint, type Tile } from '../render/TextureGenerator';
+import { MORE_BLOCKS, MORE_ITEMS, MORE_RECIPES, MORE_SMELTING } from './vanillaMore';
 
 const B: BlockDef[] = [];
 const I: ItemDef[] = [];
@@ -576,14 +577,14 @@ tile('end_portal_frame_eye', (t) => {
   t.rect(6, 6, 4, 4, hex('#b0f0a0'));
   t.rect(7, 7, 2, 2, hex('#0a1a10'));
 });
-B.push({ key: 'end_portal_frame', name: "Cadre de portail de l'End", textures: { top: 'end_portal_frame_top', bottom: 'end_stone', side: 'end_portal_frame_side' }, hardness: -1, sound: 'stone', light: 1, drops: [], color: '#3a6a5a' });
-B.push({ key: 'end_portal_frame_filled', name: "Cadre de portail de l'End (œil)", textures: { top: 'end_portal_frame_eye', bottom: 'end_stone', side: 'end_portal_frame_side' }, hardness: -1, sound: 'stone', light: 1, drops: [], color: '#3a6a5a' });
+B.push({ key: 'end_portal_frame', name: "Cadre de portail de l'End", textures: { top: 'end_portal_frame_top', bottom: 'end_stone', side: 'end_portal_frame_side' }, hardness: -1, render: 'model', shape: 'end_frame', sound: 'stone', light: 1, drops: [], color: '#3a6a5a' });
+B.push({ key: 'end_portal_frame_filled', name: "Cadre de portail de l'End (œil)", textures: { top: 'end_portal_frame_eye', bottom: 'end_stone', side: 'end_portal_frame_side' }, hardness: -1, render: 'model', shape: 'end_frame', sound: 'stone', light: 1, drops: [], color: '#3a6a5a' });
 tile('end_portal', (t) => {
   t.rect(0, 0, 16, 16, hex('#05040a'));
   const c = ['#1a3a3a', '#2a6a6a', '#5ad0c0', '#a0f0e0', '#e8e0ff'].map(hex);
   for (let i = 0; i < 26; i++) t.set(t.rng.int(0, 15), t.rng.int(0, 15), c[t.rng.int(0, 4)]);
 });
-B.push({ key: 'end_portal', name: "Portail de l'End", textures: { all: 'end_portal' }, hardness: -1, render: 'translucent', solid: false, light: 15, lightFilter: 0, sound: 'glass', drops: [], color: '#05040a' });
+B.push({ key: 'end_portal', name: "Portail de l'End", textures: { all: 'end_portal' }, hardness: -1, render: 'model', shape: 'end_portal', solid: false, light: 15, lightFilter: 0, sound: 'glass', drops: [], color: '#05040a' });
 tile('dragon_egg', (t) => {
   t.clear();
   const c = ['#0c0610', '#1a0e22', '#2a1636', '#5a2a7a'].map(hex);
@@ -682,7 +683,7 @@ shaped('lever', 'lever', 1, ['S', 'C'], { S: 'stick', C: 'cobblestone' });
 B.push({ key: 'stone_button', name: 'Bouton de pierre', textures: { all: 'stone' }, hardness: 0.5, render: 'model', shape: 'button', sound: 'stone', interact: 'button', needsSupport: true, color: '#8a8a8a' });
 shapeless('stone_button', 'stone_button', 1, ['stone']);
 
-export const EXTRA_BLOCKS: BlockDef[] = B;
-export const EXTRA_ITEMS: ItemDef[] = I;
-export const EXTRA_RECIPES = R;
-export const EXTRA_SMELTING = S;
+export const EXTRA_BLOCKS: BlockDef[] = [...B, ...MORE_BLOCKS];
+export const EXTRA_ITEMS: ItemDef[] = [...I, ...MORE_ITEMS];
+export const EXTRA_RECIPES = [...R, ...MORE_RECIPES];
+export const EXTRA_SMELTING = [...S, ...MORE_SMELTING];

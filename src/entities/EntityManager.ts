@@ -161,7 +161,8 @@ export class EntityManager implements EntitySpawner {
 
   count(category: string): number {
     let n = 0;
-    for (const e of this.entities) if (e.kind === 'mob' && (e as Mob).def.category === category && !(e as Mob).dead) n++;
+    // seules les créatures proches comptent (celles des chunks lointains sont gelées)
+    for (const e of this.entities) if (e.kind === 'mob' && (e as Mob).def.category === category && !(e as Mob).dead && e.distToPlayer < 72 && !(e as Mob).def.key.startsWith('bot:')) n++;
     return n;
   }
 
@@ -183,7 +184,8 @@ export class EntityManager implements EntitySpawner {
       // bots joueurs : simulés partout où le terrain est chargé (pas de gel à distance)
       const player = e.kind === 'mob' && (e as Mob).def.key.startsWith('bot:');
       if (!roaming && !ctx.world.isLoaded(Math.floor(e.x), Math.floor(e.z))) {
-        if (e.kind !== 'mob') e.removed = true;
+        // créatures sauvages très loin (non apprivoisées, non nommées) : libérées pour laisser apparaître les nouvelles
+        if (e.kind !== 'mob' || (!(e as Mob).persistent && !player && e.distToPlayer > 160)) e.removed = true;
         continue;
       }
       if (e.kind === 'mob') {
@@ -315,46 +317,58 @@ export class EntityManager implements EntitySpawner {
       const a = Math.random() * Math.PI * 2, r = minR + Math.random() * (maxR - minR);
       return [Math.floor(p.x + Math.cos(a) * r), Math.floor(p.z + Math.sin(a) * r)];
     };
-    // animaux (rarement, ils persistent)
-    if (this.count('passive') + this.count('neutral') < passiveCap && Math.random() < 0.15) {
-      const [x, z] = pick(24, 48);
-      if (w.isLoaded(x, z)) {
-        const y = w.heightAt(x, z);
-        const ground = w.getBlock(x, y, z);
-        if ((ground === B.GRASS_BLOCK || ground === B.SNOWY_GRASS_BLOCK || ground === B.PODZOL) && w.getBlock(x, y + 1, z) === B.AIR && w.getBlock(x, y + 2, z) === B.AIR) {
-          const biome = w.biomeAt(x, z);
-          const list = biome.animals.map((k) => MOB_BY_KEY.get(k)!.def).filter(Boolean);
-          const def = weighted(list);
-          if (def?.spawn) {
-            const n = def.spawn.group[0] + Math.floor(Math.random() * (def.spawn.group[1] - def.spawn.group[0] + 1));
-            for (let i = 0; i < n; i++) this.spawnMob(def.key, x + 0.5 + (Math.random() - 0.5) * 3, y + 1, z + 0.5 + (Math.random() - 0.5) * 3);
-          }
-        }
+    // animaux : plusieurs essais par seconde tant que la population est basse (ils persistent)
+    const passives = this.count('passive') + this.count('neutral');
+    const animalTries = passives < passiveCap * 0.5 ? 3 : passives < passiveCap ? 1 : 0;
+    for (let t = 0; t < animalTries; t++) {
+      if (Math.random() > 0.6) continue;
+      const [x, z] = pick(20, 52);
+      if (!w.isLoaded(x, z)) continue;
+      const y = groundY(w, x, z);
+      if (y < 0) continue;
+      const ground = w.getBlock(x, y, z);
+      const biome = w.biomeAt(x, z);
+      const list = biome.animals.map((k) => MOB_BY_KEY.get(k)?.def).filter((d): d is MobDef => !!d && !!d.spawn && !d.traits?.includes('waterSpawn'));
+      if (!list.length || !ANIMAL_GROUND.has(ground)) continue;
+      const def = weighted(list);
+      if (!def?.spawn) continue;
+      const n = def.spawn.group[0] + Math.floor(Math.random() * (def.spawn.group[1] - def.spawn.group[0] + 1));
+      for (let i = 0; i < n; i++) {
+        const ox = x + Math.round((Math.random() - 0.5) * 4), oz = z + Math.round((Math.random() - 0.5) * 4);
+        const oy = groundY(w, ox, oz);
+        if (oy >= 0 && Math.abs(oy - y) <= 2) this.spawnMob(def.key, ox + 0.5, oy + 1, oz + 0.5);
       }
+    }
+    // phantoms : la nuit, au-dessus des joueurs à l'air libre
+    if (!peaceful && ctx.dayCycle.isNight && Math.random() < 0.04 && this.mobs.filter((m) => m.def.key === 'phantom' && !m.dead).length < 3) {
+      const l = w.getLight(Math.floor(p.x), Math.floor(p.y + 1.6), Math.floor(p.z));
+      if (l.sky >= 14 && p.y > SEA_LEVEL - 2) this.spawnMob('phantom', p.x + (Math.random() - 0.5) * 20, p.y + 18 + Math.random() * 6, p.z + (Math.random() - 0.5) * 20);
     }
     // créatures aquatiques (calamars ; noyés la nuit) et chauves-souris / calamars luisants des grottes
     if (Math.random() < 0.25) this.waterAndCaveSpawns(ctx, peaceful);
     if (peaceful || this.count('hostile') >= hostileCap) return;
     // monstres de surface (nuit ou obscurité)
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       const [x, z] = pick(20, 44);
       if (!w.isLoaded(x, z)) continue;
       const surface = Math.random() < 0.5;
       let y: number;
-      if (surface) y = w.heightAt(x, z) + 1;
-      else {
+      if (surface) {
+        y = groundY(w, x, z) + 1;
+        if (y <= 0) continue;
+      } else {
         y = 5 + Math.floor(Math.random() * Math.max(6, Math.min(60, p.y + 12) - 5));
         // remonte jusqu'à une cellule d'air posée sur un sol
         let found = false;
         for (let k = 0; k < 12; k++, y++) {
-          if (w.getBlock(x, y, z) === B.AIR && w.getBlock(x, y + 1, z) === B.AIR && w.isSolid(x, y - 1, z)) {
+          if (passable(w.getBlock(x, y, z)) && passable(w.getBlock(x, y + 1, z)) && w.isSolid(x, y - 1, z)) {
             found = true;
             break;
           }
         }
         if (!found) continue;
       }
-      if (y < 2 || w.getBlock(x, y, z) !== B.AIR || w.getBlock(x, y + 1, z) !== B.AIR || !w.isSolid(x, y - 1, z)) continue;
+      if (y < 2 || !passable(w.getBlock(x, y, z)) || !passable(w.getBlock(x, y + 1, z)) || !w.isSolid(x, y - 1, z)) continue;
       const below = w.getBlock(x, y - 1, z);
       if (below === B.WATER || BlockRegistry.blocks[below]?.liquid) continue;
       const l = w.getLight(x, y, z);
@@ -389,7 +403,16 @@ export class EntityManager implements EntitySpawner {
     if (w.getBlock(x, SEA_LEVEL, z) === B.WATER && w.getBlock(x, SEA_LEVEL - 3, z) === B.WATER) {
       const night = ctx.dayCycle.daylight < 0.35;
       if (!peaceful && night && biome.hostiles.includes('drowned') && count('drowned') < 4) this.spawnMob('drowned', x + 0.5, SEA_LEVEL - 4, z + 0.5);
-      else if (biome.animals.includes('squid') && count('squid') < 5) for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) this.spawnMob('squid', x + 0.5 + Math.random() * 2, SEA_LEVEL - 2 - Math.random() * 3, z + 0.5 + Math.random() * 2);
+      else if (!peaceful && biome.hostiles.includes('guardian') && count('guardian') < 2 && Math.random() < 0.15 && w.getBlock(x, SEA_LEVEL - 10, z) === B.WATER) this.spawnMob('guardian', x + 0.5, SEA_LEVEL - 8, z + 0.5);
+      else {
+        // poissons, calamars, dauphins (un groupe par essai, population limitée par espèce)
+        const list = biome.animals.map((k) => MOB_BY_KEY.get(k)?.def).filter((d): d is MobDef => !!d?.spawn && !!d.traits?.includes('waterSpawn') && count(d.key) < (d.key === 'dolphin' ? 3 : 6));
+        const def = weighted(list);
+        if (def?.spawn) {
+          const n = def.spawn.group[0] + Math.floor(Math.random() * (def.spawn.group[1] - def.spawn.group[0] + 1));
+          for (let i = 0; i < n; i++) this.spawnMob(def.key, x + 0.5 + Math.random() * 2, SEA_LEVEL - 1.5 - Math.random() * 2.5, z + 0.5 + Math.random() * 2);
+        }
+      }
       return;
     }
     // grottes : chauves-souris dans l'obscurité, calamars luisants dans l'eau profonde
@@ -399,7 +422,7 @@ export class EntityManager implements EntitySpawner {
     const l = w.getLight(x, y, z);
     if (l.sky > 3 || l.block > 3) return;
     if (b === B.AIR && w.getBlock(x, y + 1, z) === B.AIR && count('bat') < 4) this.spawnMob('bat', x + 0.5, y, z + 0.5);
-    else if (b === B.WATER && w.getBlock(x, y + 1, z) === B.WATER && y < 45 && count('glow_squid') < 3) this.spawnMob('glow_squid', x + 0.5, y, z + 0.5);
+    else if (b === B.WATER && w.getBlock(x, y + 1, z) === B.WATER && y < 45 && count('glow_squid') < 3) this.spawnMob(Math.random() < 0.5 && count('axolotl') < 3 ? 'axolotl' : 'glow_squid', x + 0.5, y, z + 0.5);
   }
 
   /** Nether : apparitions selon le biome à toute hauteur (pas de cycle jour/nuit). */
@@ -486,6 +509,14 @@ export class EntityManager implements EntitySpawner {
             v.homeX = s.x;
             v.homeZ = s.z;
             n++;
+            // un golem de fer protège chaque village
+            if (n === 1) {
+              const g = this.spawnMob('iron_golem', x + 1.5, y, z + 0.5, { persistent: true });
+              if (g) {
+                g.homeX = s.x;
+                g.homeZ = s.z;
+              }
+            }
           }
         }
         s.spawned = Math.max(1, n);
@@ -563,6 +594,26 @@ export class EntityManager implements EntitySpawner {
     this.pool.forEach((l) => l.forEach((m) => m.dispose()));
     this.pool.clear();
   }
+}
+
+/** Sols où les animaux apparaissent. */
+const ANIMAL_GROUND = new Set<number>([B.GRASS_BLOCK, B.SNOWY_GRASS_BLOCK, B.PODZOL, B.SAND, B.SNOW_BLOCK, B.MUD, B.MOSS_BLOCK, B.DIRT, B.STONE]);
+
+/** Case traversable pour une apparition : air, herbes, fleurs, neige fine (pas de liquide). */
+function passable(id: number): boolean {
+  if (id === B.AIR) return true;
+  if (id < 0 || BlockRegistry.liquid[id]) return false;
+  return !BlockRegistry.solid[id] && (!!BlockRegistry.replaceable[id] || BlockRegistry.get(id).render === 'cross');
+}
+
+/** Bloc de sol le plus haut de la colonne sous lequel on peut se tenir (herbes hautes ignorées), -1 si eau/feuilles. */
+function groundY(w: GameContext['world'], x: number, z: number): number {
+  let y = w.heightAt(x, z) + 2;
+  while (y > 1 && passable(w.getBlock(x, y, z))) y--;
+  const g = w.getBlock(x, y, z);
+  if (g < 0 || BlockRegistry.liquid[g] || !BlockRegistry.solid[g] || BlockRegistry.get(g).key.endsWith('leaves')) return -1;
+  if (!passable(w.getBlock(x, y + 1, z)) || !passable(w.getBlock(x, y + 2, z))) return -1;
+  return y;
 }
 
 function weighted<T extends { spawn?: { weight: number } }>(list: T[]): T | null {

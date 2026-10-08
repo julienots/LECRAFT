@@ -49,6 +49,8 @@ export const SKIN_PATHS: Record<string, string[]> = {
   ...Object.fromEntries(PLAYER_SKINS.map((n) => [`player_${n}`, [`entity/player/wide/${n}.png`, 'entity/player/wide/steve.png', 'entity/steve.png']])),
   creeper: ['entity/creeper/creeper.png'],
   zombified_piglin: ['entity/piglin/zombified_piglin.png'],
+  piglin: ['entity/piglin/piglin.png'],
+  mooshroom: ['entity/cow/red_mooshroom.png', 'entity/cow/mooshroom.png'],
   ghast: ['entity/ghast/ghast.png'],
   magma_cube: ['entity/slime/magmacube.png'],
   blaze: ['entity/blaze.png'],

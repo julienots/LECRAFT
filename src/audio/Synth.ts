@@ -140,6 +140,13 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.bark = s.mix({ buf: s.tone(0.12, 420, 300, { wave: 'saw', decay: 14, gain: 0.3 }) }, { buf: s.noise(0.12, { lp: 1200, decay: 14, gain: 0.3 }) });
   out.whine = s.tone(0.5, 900, 700, { wave: 'sine', decay: 4, gain: 0.25, vibrato: 0.05, vibRate: 10 });
   out.squeak = s.tone(0.08, 3200, 2600, { wave: 'square', decay: 20, gain: 0.08 });
+  // créatures ajoutées : hennissement, grognement, miaulement, gazouillis, bourdonnement
+  out.neigh = s.mix({ buf: s.tone(0.7, 520, 380, { wave: 'saw', decay: 3, attack: 0.04, gain: 0.18, vibrato: 0.12, vibRate: 18 }) }, { buf: s.noise(0.7, { lp: 1400, hp: 300, decay: 4, gain: 0.12 }) });
+  out.growl = s.mix({ buf: s.tone(0.8, 85, 60, { wave: 'saw', decay: 2, attack: 0.1, gain: 0.3, vibrato: 0.06, vibRate: 9 }) }, { buf: s.noise(0.8, { lp: 300, decay: 2.5, gain: 0.3 }) });
+  out.meow = s.tone(0.35, 700, 520, { wave: 'tri', decay: 5, attack: 0.04, gain: 0.18, vibrato: 0.05, vibRate: 6 });
+  out.chirp = s.mix({ buf: s.tone(0.07, 2600, 3400, { wave: 'sine', decay: 25, gain: 0.12 }) }, { buf: s.tone(0.07, 2800, 3600, { wave: 'sine', decay: 25, gain: 0.1 }), at: 0.1 });
+  out.buzz = s.tone(0.6, 210, 200, { wave: 'saw', decay: 2, attack: 0.1, gain: 0.08, vibrato: 0.04, vibRate: 30 });
+  out.snow = s.noise(0.2, { lp: 1500, hp: 400, decay: 14, gain: 0.5 });
   out.cackle = s.mix(...[0, 0.09, 0.18, 0.27].map((at) => ({ buf: s.tone(0.08, 700, 500, { wave: 'saw', decay: 15, gain: 0.2 }), at })));
   out.hmm = s.tone(0.45, 160, 140, { wave: 'saw', decay: 3, attack: 0.05, gain: 0.25, vibrato: 0.05, vibRate: 6 });
   out.hmm_hurt = s.tone(0.3, 220, 150, { wave: 'saw', decay: 8, gain: 0.3 });

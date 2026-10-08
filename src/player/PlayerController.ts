@@ -64,7 +64,8 @@ export class PlayerController {
     const mx = mag > 1 ? i.moveX / mag : i.moveX, my = mag > 1 ? i.moveY / mag : i.moveY;
     mag = Math.min(1, mag);
     // nage rapide : sprint avec la tête sous l'eau ; on rampe si le plafond empêche de se relever
-    p.swimming = !b.flying && b.inWater && (p.swimming ? b.inWater : b.headInWater) && i.sprint && my > 0.3 && (p.hunger > 6 || p.creative);
+    // sous l'eau, avancer suffit pour nager (sur mobile le sprint est difficile à tenir) ; le sprint nage plus vite
+    p.swimming = !b.flying && b.inWater && (p.swimming ? b.inWater : b.headInWater) && my > 0.3 && (i.sprint || b.headInWater) && (p.hunger > 6 || p.creative || !i.sprint);
     const wantH = p.swimming ? LOW_HEIGHT : i.sneak && !b.flying ? PLAYER_SNEAK_HEIGHT : PLAYER_HEIGHT;
     if (wantH > b.height && b.collides(world, b.x, b.y, b.z, wantH)) {
       p.crawling = !(i.sneak && !b.collides(world, b.x, b.y, b.z, PLAYER_SNEAK_HEIGHT));
@@ -76,7 +77,7 @@ export class PlayerController {
     p.sneaking = i.sneak && !b.flying && !p.swimming && !p.crawling;
     p.sprinting = i.sprint && my > 0.3 && !p.sneaking && !p.crawling && (p.hunger > 6 || p.creative);
     let speed = b.flying ? FLY * (p.sprinting ? 1.8 : 1) : p.sneaking || p.crawling ? SNEAK : p.sprinting ? SPRINT : WALK;
-    if (b.inWater || b.inLava) speed = b.inLava ? 1.5 : p.swimming ? SWIM_FAST : SWIM * (p.sprinting ? 1.3 : 1);
+    if (b.inWater || b.inLava) speed = b.inLava ? 1.5 : p.swimming ? (i.sprint ? SWIM_FAST : SWIM * 1.5) : SWIM * (p.sprinting ? 1.3 : 1);
     if (p.slowTimer > 0) speed *= 0.55;
     if (!b.flying) speed *= p.effects.speedMul();
     // friction du bloc sous les pieds
@@ -104,8 +105,13 @@ export class PlayerController {
       b.vy += (ty - b.vy) * ks;
       b.vy += b.gravity * 0.18 * dt; // annule la gravité de l'eau appliquée par la physique
       if (i.jump) b.vy = Math.min(b.vy + 22 * dt, 3.2);
+      else if (i.sneak) b.vy = Math.max(b.vy - 22 * dt, -3.2);
     } else if (b.inWater || b.inLava) {
       if (i.jump) b.vy = Math.min(b.vy + 22 * dt, 3.2);
+      // accroupi : on plonge
+      else if (i.sneak) b.vy = Math.max(b.vy - 18 * dt, -2.6);
+      // à la surface sans toucher : on flotte (la tête reste hors de l'eau)
+      else if (b.inWater && !b.headInWater && mag > 0.1) b.vy = Math.max(b.vy, 0);
     } else if (i.jump && b.onGround) {
       b.vy = JUMP_V * Math.sqrt(1 + 0.75 * p.effects.level('jump_boost'));
       // saut en sprint : élan vers l'avant (≈ 0,2 bloc/tick dans le jeu de référence)
@@ -133,6 +139,13 @@ export class PlayerController {
 
     const ox = b.x, oz = b.z;
     b.step(world, dt);
+    // contre un bord en nageant : on se hisse hors de l'eau (comme un saut depuis l'eau)
+    if ((b.inWater || b.inLava) && b.collidedH && mag > 0.3 && !b.flying && !i.sneak) {
+      const fy = Math.floor(b.y + 0.2);
+      const ax = Math.floor(b.x + (tvx / (speed || 1)) * 0.6), az = Math.floor(b.z + (tvz / (speed || 1)) * 0.6);
+      // obstacle d'au plus un bloc au-dessus de la surface, avec de l'espace libre au-dessus
+      if (!world.isSolid(ax, fy + 1, az) && !world.isSolid(ax, fy + 2, az)) b.vy = Math.max(b.vy, 5.2);
+    }
 
     // saut automatique (option mobile) : obstacle d'un bloc devant
     if (this.settings.autoJump && b.collidedH && b.onGround && mag > 0.3 && !p.sneaking) {

@@ -48,6 +48,8 @@ export interface ItemDef {
   /** Nom de texture dans un pack de ressources (sinon = clé). */
   packTexture?: string;
   description?: string;
+  /** Outil de zone : marteau (minage 3×3) ou excavateur (pelletage 3×3). */
+  area?: 'hammer' | 'excavator';
   /** Add-ons : composants personnalisés (scripts) → paramètres. */
   scriptComponents?: Record<string, unknown>;
   /** Add-ons : étiquettes d'objet (minecraft:tags). */

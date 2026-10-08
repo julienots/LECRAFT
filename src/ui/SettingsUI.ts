@@ -5,6 +5,7 @@ import type { Screen } from './UIManager';
 import { button, el } from './dom';
 import { mcButton, mcCycle, mcGrid, mcLabel, mcRow, mcScreen, mcSlider, mcToggle } from './Mc';
 import { importPack, loadInstalledPack, removePack, declineBundledPack } from '../render/ResourcePack';
+import { MusicLibrary, moodFromPath } from '../audio/Music';
 import { importAddon, listAddons, removeAddon, setAddonEnabled } from '../addons/AddonManager';
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
@@ -78,11 +79,51 @@ function videoScreen(game: Game): Screen {
 function audioScreen(game: Game): Screen {
   const s = game.settings;
   const apply = () => game.applySettings(false);
+  const musicInfo = mcLabel('', 'white');
+  const musicStatus = mcLabel('');
+  const musicFile = el('input', { type: 'file', accept: 'audio/*,.ogg,.mp3,.wav,.m4a', multiple: '', style: 'display:none' }) as HTMLInputElement;
+  const showMusic = () => {
+    void MusicLibrary.list().then((l) => {
+      const now = game.audio.nowPlaying;
+      musicInfo.textContent = `${now ? `En cours : « ${now} » · ` : ''}${l.length ? `${l.length} musique(s) importée(s)` : 'Compositions du jeu (piano, nappes, cloches)'}`;
+    });
+  };
+  musicFile.addEventListener('change', async () => {
+    const files = [...(musicFile.files ?? [])];
+    if (!files.length) return;
+    musicStatus.textContent = 'Import…';
+    try {
+      const n = await MusicLibrary.add(files.map((f) => ({ name: f.name, mood: moodFromPath(f.name), blob: f })));
+      await game.audio.reloadTracks();
+      musicStatus.textContent = `${n} musique(s) importée(s). Elles restent sur cet appareil ; l'ambiance est déduite du nom (nether, end, menu, creative, water, night…).`;
+    } catch (e) {
+      musicStatus.textContent = `Échec de l'import : ${(e as Error).message}`;
+    }
+    musicFile.value = '';
+    showMusic();
+  });
+  showMusic();
   return mcScreen({
     title: 'Musique et sons',
     bg: game.session ? 'dim' : 'dirt',
     body: [
       mcSlider((v) => `Musique : ${v === 0 ? 'NON' : pct(v)}`, 0, 1, 0.05, s.musicVolume, (v) => ((s.musicVolume = v), apply()), 310),
+      mcGrid(
+        mcButton('Morceau suivant', () => {
+          game.audio.skipMusic();
+          setTimeout(showMusic, 1500);
+        }),
+        mcButton('Importer des musiques...', () => musicFile.click()),
+      ),
+      mcButton('Retirer mes musiques', async () => {
+        await MusicLibrary.clear();
+        await game.audio.reloadTracks();
+        musicStatus.textContent = 'Musiques importées retirées : seules les compositions du jeu sont jouées.';
+        showMusic();
+      }, { w: 150 }),
+      musicInfo,
+      musicStatus,
+      musicFile,
       mcGrid(
         mcSlider((v) => `Blocs et créatures : ${v === 0 ? 'NON' : pct(v)}`, 0, 1, 0.05, s.sfxVolume, (v) => ((s.sfxVolume = v), apply(), game.audio.play('pop'))),
         mcSlider((v) => `Ambiance/environnement : ${v === 0 ? 'NON' : pct(v)}`, 0, 1, 0.05, s.ambientVolume, (v) => ((s.ambientVolume = v), apply())),
@@ -164,9 +205,10 @@ function packsScreen(game: Game): Screen {
     try {
       const info = await importPack(f, (x) => (bar.style.width = `${Math.round(x * 100)}%`));
       status.textContent = `${info.files} textures importées. Application…`;
-      const pack = await loadInstalledPack();
-      game.applyPack(pack);
-      status.textContent = `${info.files} textures importées depuis « ${info.name} ».`;
+      if (info.music) await game.audio.reloadTracks();
+      const pack = info.files ? await loadInstalledPack() : null;
+      if (info.files) game.applyPack(pack);
+      status.textContent = `${info.files} textures${info.music ? ` et ${info.music} musiques` : ''} importées depuis « ${info.name} ».`;
     } catch (e) {
       status.textContent = `Échec de l'import : ${(e as Error).message}`;
     }

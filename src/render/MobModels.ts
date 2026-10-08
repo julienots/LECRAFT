@@ -291,6 +291,67 @@ const VANILLA: Record<string, VanillaModel> = {
   },
 };
 
+// ---------- créatures ajoutées : modèles du jeu réutilisés avec leurs propres skins ----------
+Object.assign(VANILLA, {
+  mooshroom: reuse('cow', 'mooshroom'),
+  goat: reuse('cow', 'goat'),
+  horse: reuse('cow', 'horse'),
+  donkey: reuse('cow', 'donkey'),
+  llama: reuse('cow', 'llama'),
+  camel: reuse('cow', 'camel'),
+  polar_bear: reuse('cow', 'polar_bear'),
+  panda: reuse('pig', 'panda'),
+  hoglin: reuse('pig', 'hoglin'),
+  armadillo: reuse('pig', 'armadillo'),
+  rabbit: reuse('pig', 'rabbit'),
+  frog: reuse('pig', 'frog'),
+  turtle: reuse('pig', 'turtle'),
+  fox: reuse('wolf', 'fox'),
+  ocelot: reuse('wolf', 'ocelot'),
+  parrot: reuse('chicken', 'parrot'),
+  bee: reuse('bat', 'bee'),
+  phantom: reuse('bat', 'phantom'),
+  silverfish: reuse('spider', 'silverfish'),
+  endermite: reuse('spider', 'endermite'),
+  strider: reuse('creeper', 'strider'),
+  cod: fishModel('cod', 8, 3, 2),
+  salmon: fishModel('salmon', 11, 4, 3),
+  tropical_fish: fishModel('tropical_fish', 6, 5, 2),
+  dolphin: fishModel('dolphin', 12, 5, 6),
+  guardian: fishModel('guardian', 12, 12, 12),
+  axolotl: fishModel('axolotl', 9, 4, 5),
+  iron_golem: humanoid('iron_golem', 64, 64, 4),
+  zombie_villager: humanoid('zombie_villager', 64, 64, 4),
+  pillager: humanoid('pillager', 64, 64, 4),
+  vindicator: humanoid('vindicator', 64, 64, 4),
+  piglin: piglinModel('piglin'),
+  shulker: {
+    skin: 'shulker', texW: 64, texH: 64,
+    parts: [P([0, 28], [-8, -8, -8, 16, 8, 16], [0, 24, 0]), P([0, 0], [-8, -16, -8, 16, 12, 16], [0, 24, 0], { inflate: 0.05 }), P([0, 52], [-3, -14, -3, 6, 6, 6], [0, 24, 0], { anim: 'head' })],
+  },
+});
+
+/** Même géométrie qu'un modèle existant, avec une autre skin. */
+function reuse(base: string, skin: string): VanillaModel {
+  return { ...VANILLA[base], skin };
+}
+
+/** Poisson (corps, nageoire dorsale, queue qui ondule) : longueur, hauteur, largeur en pixels. */
+function fishModel(skin: string, len: number, h: number, w: number): VanillaModel {
+  return {
+    skin, texW: 64, texH: 32,
+    parts: [
+      P([0, 0], [-w / 2, -h, -len / 2, w, h, len], [0, 22, 0], {
+        anim: 'body',
+        children: [
+          P([0, 20], [-0.5, -2, 0, 1, 2, Math.max(3, len / 3)], [0, -h, -len / 6]),
+          P([20, 20], [-0.5, -h, 0, 1, h, Math.max(3, len / 2.5)], [0, 0, len / 2], { anim: 'fishTail' }),
+        ],
+      }),
+    ],
+  };
+}
+
 function humanoid(skin: string, texW: number, texH: number, limb: number): VanillaModel {
   const lo = limb === 4 ? -2 : -1;
   return {
@@ -612,6 +673,7 @@ export class MobModel {
       this.rot('dragonLeg', (b, o) => (o.rotation.x = b.x + (Math.sin(a) + 1) * 0.05));
     }
     this.rot('tail', (b, o) => (o.rotation.z = b.z + Math.sin(t * 3) * 0.1 * (1 + amp)));
+    this.rot('fishTail', (b, o) => (o.rotation.y = b.y + Math.sin(t * 8) * 0.45));
     this.rot('tentacle', (b, o) => (o.rotation.x = b.x + 0.15 + Math.sin(t * 2.2 + o.position.x * 3 + o.position.z * 5) * 0.25));
     for (let r = 0; r < 3; r++) this.rot(`spin${r}`, (b, o) => (o.rotation.y = b.y + t * (r === 1 ? -1.4 : 1.1 + r * 0.3)));
     this.rot('squash', (_b, o) => {

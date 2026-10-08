@@ -50,6 +50,7 @@ export const PROJECTILE_DEFS = new Map<string, ProjectileDef>([
   ['lecraft:stray_arrow', { id: 'lecraft:stray_arrow', color: '#7a8a8a', size: 0.1, gravity: 12, damage: 3, stick: true, effect: { id: 'slowness', duration: 600, amplifier: 0 } }],
   ['lecraft:witch_potion', { id: 'lecraft:witch_potion', color: '#6a2a9a', size: 0.25, gravity: 12, damage: 2, effect: { id: 'poison', duration: 140, amplifier: 0 } }],
   ['lecraft:eye_of_ender', { id: 'lecraft:eye_of_ender', color: '#3aa070', size: 0.3, gravity: 3, damage: 0, life: 1.8, dropItem: 'ender_eye', dropChance: 0.8 }],
+  ['lecraft:guardian_beam', { id: 'lecraft:guardian_beam', color: '#f0a040', size: 0.15, gravity: 0, damage: 6 }],
   ['minecraft:arrow', { id: 'minecraft:arrow', color: '#8a6a3c', size: 0.1, gravity: 12, damage: 4, stick: true }],
 ]);
 

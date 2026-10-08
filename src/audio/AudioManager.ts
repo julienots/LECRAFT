@@ -3,11 +3,7 @@ import type { Settings } from '../core/Settings';
 import { buildAmbience, buildSounds, SynthContext } from './Synth';
 import { mapSound } from './SoundMap';
 
-const SCALES = {
-  day: [0, 2, 4, 7, 9, 12, 14, 16],
-  night: [0, 3, 5, 7, 10, 12, 15],
-  menu: [0, 2, 4, 7, 9, 11, 12],
-};
+import { composePiece, MusicLibrary, type MusicMood, type MusicNote, type TrackInfo } from './Music';
 
 /**
  * Gestionnaire audio (WebAudio) : effets spatialisés (panoramique + atténuation),
@@ -23,9 +19,18 @@ export class AudioManager implements SoundFx {
   private buffers = new Map<string, AudioBuffer>();
   private ambNodes = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>();
   private listener = { x: 0, y: 0, z: 0, yaw: 0 };
-  private musicTimer = 20;
-  private musicMood: keyof typeof SCALES = 'menu';
+  private musicTimer = 4;
+  private musicMood: MusicMood = 'menu';
   private musicPlaying = false;
+  /** Pièce en cours : bus dédié (fondu de sortie), fin prévue, ambiance. */
+  private current: { gain: GainNode; end: number; mood: MusicMood; title: string; sources: AudioScheduledSourceNode[]; queue?: MusicNote[]; t0?: number } | null = null;
+  private reverb: ConvolverNode | null = null;
+  private pieceSeed = (Math.random() * 1e6) | 0;
+  /** Musiques importées par l'utilisateur (titres par ambiance). */
+  private tracks: TrackInfo[] = [];
+  private trackBuffers = new Map<string, AudioBuffer>();
+  /** Titre en cours (affiché dans les options et utilisé par les tests). */
+  nowPlaying = '';
   private recent = new Map<string, number>();
   ready = false;
   /** Sons fournis par les add-ons : identifiant → fichiers audio (une variante tirée au hasard). */
@@ -62,6 +67,7 @@ export class AudioManager implements SoundFx {
       }
       this.applyVolumes();
       this.ready = true;
+      void this.reloadTracks();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
   }
@@ -226,57 +232,220 @@ export class AudioManager implements SoundFx {
     this.ambNodes.clear();
   }
 
-  setMusicMood(m: keyof typeof SCALES) {
+  /** Change l'ambiance musicale ; un changement de dimension coupe la pièce en cours (fondu). */
+  setMusicMood(m: MusicMood) {
+    if (m === this.musicMood) return;
+    const big = (x: MusicMood) => (x === 'nether' || x === 'end' || x === 'menu' ? x : 'overworld');
+    const prev = this.musicMood;
     this.musicMood = m;
+    if (big(prev) !== big(m) && this.current) {
+      this.stopMusic(2);
+      this.musicTimer = m === 'menu' ? 1.5 : 6 + Math.random() * 10;
+    }
   }
 
-  /** Musique générative : de courtes pièces pentatoniques espacées de silences. */
+  /** Recharge la liste des musiques importées. */
+  async reloadTracks() {
+    this.tracks = await MusicLibrary.list();
+    this.trackBuffers.clear();
+    return this.tracks;
+  }
+
+  /** Arrête la musique en cours (fondu en secondes). */
+  stopMusic(fade = 1) {
+    const c = this.ctx, cur = this.current;
+    if (!c || !cur) return;
+    const now = c.currentTime;
+    cur.gain.gain.cancelScheduledValues(now);
+    cur.gain.gain.setValueAtTime(cur.gain.gain.value, now);
+    cur.gain.gain.linearRampToValueAtTime(0, now + fade);
+    setTimeout(() => {
+      for (const src of cur.sources)
+        try {
+          src.stop();
+        } catch {
+          /* déjà arrêté */
+        }
+      cur.gain.disconnect();
+    }, fade * 1000 + 100);
+    this.current = null;
+    this.musicPlaying = false;
+    this.nowPlaying = '';
+  }
+
+  /** Passe immédiatement à une autre pièce (options : « Morceau suivant »). */
+  skipMusic() {
+    this.stopMusic(0.5);
+    this.musicTimer = 0.6;
+  }
+
+  /** Musique : pièce importée (si l'ambiance en a) ou composée, puis un silence de 1 à 3 minutes. */
   updateMusic(dt: number) {
     if (!this.ctx || !this.ready || this.settings.musicVolume <= 0) return;
-    this.musicTimer -= dt;
-    if (this.musicTimer > 0 || this.musicPlaying) return;
-    this.musicPlaying = true;
-    const c = this.ctx;
-    const scale = SCALES[this.musicMood];
-    const root = this.musicMood === 'night' ? 196 : this.musicMood === 'menu' ? 220 : 261.6;
-    const t0 = c.currentTime + 0.1;
-    const notes = 28 + Math.floor(Math.random() * 16);
-    let t = t0;
-    let deg = Math.floor(Math.random() * 4);
-    for (let i = 0; i < notes; i++) {
-      deg = Math.max(0, Math.min(scale.length - 1, deg + Math.floor(Math.random() * 5) - 2));
-      const f = root * Math.pow(2, scale[deg] / 12);
-      this.note(f, t, 1.8, 0.09);
-      if (i % 4 === 0) this.note(root / 2 * Math.pow(2, scale[(deg + 2) % scale.length] / 12), t, 3.2, 0.06);
-      t += [0.5, 0.75, 1, 1, 1.5][Math.floor(Math.random() * 5)];
-    }
-    const total = t - t0 + 3;
-    setTimeout(() => {
+    if (this.current && this.ctx.currentTime >= this.current.end) {
+      this.current = null;
       this.musicPlaying = false;
-      this.musicTimer = 90 + Math.random() * 150;
-    }, total * 1000);
+      this.nowPlaying = '';
+      this.musicTimer = this.musicMood === 'menu' ? 8 + Math.random() * 8 : 60 + Math.random() * 120;
+    }
+    // notes de la pièce composée programmées par petites fenêtres (pas de pic de création de nœuds)
+    const cur = this.current;
+    if (cur?.queue?.length) {
+      const horizon = this.ctx.currentTime + 2.5;
+      const late = this.ctx.currentTime - 0.05;
+      while (cur.queue.length && cur.t0! + cur.queue[0].t < horizon) {
+        const n = cur.queue.shift()!;
+        if (cur.t0! + n.t >= late) this.voice(n, cur.t0!, cur.gain, cur.sources);
+      }
+      // les sources terminées sont oubliées
+      if (cur.sources.length > 400) cur.sources.splice(0, cur.sources.length - 200);
+    }
+    if (this.musicPlaying) return;
+    this.musicTimer -= dt;
+    if (this.musicTimer > 0) return;
+    this.musicPlaying = true;
+    const mood = this.musicMood;
+    const own = this.tracks.filter((t) => t.mood === mood || (t.mood === 'any' && mood !== 'nether' && mood !== 'end') || (t.mood === 'day' && (mood === 'night' || mood === 'creative')));
+    if (own.length && Math.random() < 0.75) void this.playImported(own[Math.floor(Math.random() * own.length)], mood);
+    else this.playPiece(mood);
   }
 
-  private note(freq: number, at: number, dur: number, gain: number) {
+  private musicBus(): GainNode {
     const c = this.ctx!;
-    const o1 = c.createOscillator(), o2 = c.createOscillator();
-    o1.type = 'sine';
-    o2.type = 'triangle';
-    o1.frequency.value = freq;
-    o2.frequency.value = freq * 2.001;
+    if (!this.reverb) {
+      // réverbération de salle (réponse impulsionnelle générée : bruit à décroissance exponentielle)
+      const len = Math.floor(c.sampleRate * 3.2);
+      const ir = c.createBuffer(2, len, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = ir.getChannelData(ch);
+        let seed = 1234 + ch * 77;
+        for (let i = 0; i < len; i++) {
+          seed = (seed * 1664525 + 1013904223) >>> 0;
+          d[i] = ((seed / 4294967296) * 2 - 1) * Math.pow(1 - i / len, 3.2);
+        }
+      }
+      this.reverb = c.createConvolver();
+      this.reverb.buffer = ir;
+      const wet = c.createGain();
+      wet.gain.value = 0.32;
+      this.reverb.connect(wet).connect(this.music);
+    }
     const g = c.createGain();
-    g.gain.setValueAtTime(0, at);
-    g.gain.linearRampToValueAtTime(gain, at + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-    const g2 = c.createGain();
-    g2.gain.value = 0.25;
-    o1.connect(g);
-    o2.connect(g2).connect(g);
+    g.gain.value = 1;
     g.connect(this.music);
-    o1.start(at);
-    o2.start(at);
-    o1.stop(at + dur + 0.05);
-    o2.stop(at + dur + 0.05);
+    g.connect(this.reverb);
+    return g;
+  }
+
+  private playPiece(mood: MusicMood) {
+    const c = this.ctx!;
+    const piece = composePiece(mood, this.pieceSeed++);
+    const bus = this.musicBus();
+    const t0 = c.currentTime + 0.2;
+    this.current = { gain: bus, end: t0 + piece.length + 3, mood, title: piece.title, sources: [], queue: piece.notes.slice(), t0 };
+    this.nowPlaying = piece.title;
+  }
+
+  private async playImported(t: TrackInfo, mood: MusicMood) {
+    const c = this.ctx!;
+    let buf = this.trackBuffers.get(t.name);
+    if (!buf) {
+      const blob = await MusicLibrary.get(t.name);
+      if (!blob) return this.playPiece(mood);
+      try {
+        buf = await c.decodeAudioData(await blob.arrayBuffer());
+      } catch {
+        return this.playPiece(mood);
+      }
+      if (this.trackBuffers.size > 3) this.trackBuffers.clear();
+      this.trackBuffers.set(t.name, buf);
+    }
+    if (this.musicMood !== mood || !this.musicPlaying) return;
+    const g = c.createGain();
+    g.connect(this.music);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.connect(g);
+    src.start(c.currentTime + 0.1);
+    this.current = { gain: g, end: c.currentTime + buf.duration + 1, mood, title: t.name, sources: [src] };
+    this.nowPlaying = t.name.replace(/^.*\//, '').replace(/\.[a-z0-9]+$/i, '');
+  }
+
+  /** Instruments synthétisés : piano feutré, nappe, basse, cloche. */
+  private voice(n: MusicNote, t0: number, out: AudioNode, sources: AudioScheduledSourceNode[]) {
+    const c = this.ctx!;
+    const at = t0 + n.t;
+    const f = 440 * Math.pow(2, (n.n - 69) / 12);
+    const g = c.createGain();
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    g.connect(lp).connect(out);
+    const mine: OscillatorNode[] = [];
+    const osc = (type: OscillatorType, freq: number, gain: number, detune = 0) => {
+      const o = c.createOscillator();
+      o.type = type;
+      o.frequency.value = freq;
+      o.detune.value = detune;
+      const og = c.createGain();
+      og.gain.value = gain;
+      o.connect(og).connect(g);
+      sources.push(o);
+      mine.push(o);
+      return o;
+    };
+    let stopAt = at + n.dur + 0.1;
+    if (n.voice === 'piano') {
+      // attaque franche, décroissance plus rapide dans l'aigu, harmoniques qui s'éteignent vite
+      const decay = Math.max(1.2, 5.5 - (n.n - 48) * 0.07);
+      const v = 0.11 * n.vel;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(v, at + 0.006);
+      g.gain.exponentialRampToValueAtTime(v * 0.35, at + 0.25);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + Math.min(decay, n.dur + 1.5));
+      lp.frequency.setValueAtTime(Math.min(9000, f * 8), at);
+      lp.frequency.exponentialRampToValueAtTime(Math.max(400, f * 2), at + 1.2);
+      osc('sine', f, 1, -3);
+      osc('sine', f, 0.6, 4);
+      osc('triangle', f * 2, 0.22);
+      osc('sine', f * 3, 0.08);
+      stopAt = at + Math.min(decay, n.dur + 1.5) + 0.05;
+    } else if (n.voice === 'pad') {
+      const v = 0.035 * n.vel;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(v, at + Math.min(1.5, n.dur * 0.4));
+      g.gain.setValueAtTime(v, at + n.dur * 0.7);
+      g.gain.linearRampToValueAtTime(0, at + n.dur + 1);
+      lp.frequency.value = 900;
+      osc('sawtooth', f, 0.5, -7);
+      osc('sawtooth', f, 0.5, 7);
+      osc('sine', f / 2, 0.6);
+      stopAt = at + n.dur + 1.1;
+    } else if (n.voice === 'bass') {
+      const v = 0.09 * n.vel;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(v, at + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + n.dur + 0.5);
+      lp.frequency.value = 500;
+      osc('sine', f, 1);
+      osc('triangle', f, 0.3);
+      stopAt = at + n.dur + 0.55;
+    } else {
+      // cloche : partiels inharmoniques
+      const v = 0.07 * n.vel;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(v, at + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + Math.max(2.5, n.dur));
+      lp.frequency.value = 7000;
+      osc('sine', f, 1);
+      osc('sine', f * 2.76, 0.25);
+      osc('sine', f * 5.4, 0.08);
+      stopAt = at + Math.max(2.5, n.dur) + 0.05;
+    }
+    for (const o of mine) {
+      o.start(at);
+      o.stop(stopAt);
+      o.onended = () => o.disconnect();
+    }
   }
 
   dispose() {
