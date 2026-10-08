@@ -18,6 +18,13 @@ export interface WorldMeta {
   server?: boolean;
   /** Monde du serveur de survie moddé (masqué de la liste Solo). */
   smp?: boolean;
+  /** Bots joueurs dans un monde ordinaire (option « Bots joueurs »). */
+  bots?: boolean;
+  /** Partie en réseau rejointe (monde de l'hôte, jamais enregistré localement). */
+  remote?: boolean;
+  /** Partie en réseau : point d'apparition et dimension de l'hôte. */
+  netSpawn?: [number, number, number];
+  netDim?: 'overworld' | 'nether' | 'end';
 }
 
 interface StateRecord {

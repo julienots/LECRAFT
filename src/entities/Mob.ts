@@ -123,8 +123,40 @@ export class Mob extends Entity {
     ctx.audio.play(r.projectile === 'arrow' ? 'bow' : this.def.key === 'ghast' ? 'ghast_shoot' : 'cast', { x: sx, y: sy, z: sz });
   }
 
+  /** Multijoueur (invité) : créature de l'hôte, position imposée par le réseau (pas d'IA ni de physique). */
+  net: { x: number; y: number; z: number; yaw: number; f: number } | null = null;
+  /** Multijoueur (invité) : identifiant de la créature chez l'hôte. */
+  netId = 0;
+  /** Multijoueur : les coups portés à cette créature sont envoyés à l'hôte au lieu d'être appliqués. */
+  onNetHit: ((dmg: number, info: { kx: number; kz: number; crit: boolean; item: string }) => void) | null = null;
+
+  private netUpdate(dt: number) {
+    const n = this.net!;
+    const b = this.body;
+    const k = 1 - Math.exp(-12 * dt);
+    const ox = b.x, oz = b.z;
+    if (Math.hypot(n.x - b.x, n.y - b.y, n.z - b.z) > 8) b.setPos(n.x, n.y, n.z);
+    else b.setPos(b.x + (n.x - b.x) * k, b.y + (n.y - b.y) * k, b.z + (n.z - b.z) * k);
+    b.vx = (b.x - ox) / Math.max(dt, 1e-3);
+    b.vz = (b.z - oz) / Math.max(dt, 1e-3);
+    this.walkPhase += Math.hypot(b.vx, b.vz) * dt * 3.2;
+    let d = n.yaw - this.yaw;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    this.yaw += d * k;
+    this.attackAnim = Math.max(0, this.attackAnim - dt * 3);
+    this.hurtTimer = Math.max(0, this.hurtTimer - dt);
+    if (n.f & 2) this.attackAnim = 1;
+    if (n.f & 1 && this.hurtTimer <= 0) this.hurtTimer = 0.3;
+    if (n.f & 4) {
+      this.dead = true;
+      this.deathTimer += dt;
+      if (this.deathTimer > 1) this.removed = true;
+    }
+  }
+
   /** Mise à jour par tick (physique + IA). */
   update(ctx: GameContext, dt: number) {
+    if (this.net) return this.netUpdate(dt);
     this.age += dt;
     this.hurtTimer = Math.max(0, this.hurtTimer - dt);
     this.iframes = Math.max(0, this.iframes - dt);

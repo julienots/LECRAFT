@@ -38,6 +38,10 @@ export interface Settings {
   haptics: boolean;
   /** Échelle de résolution trouvée par la qualité automatique (reprise au lancement suivant). */
   dynScale?: number;
+  /** Multijoueur : pseudo, skin et dernière adresse de serveur saisie. */
+  playerName?: string;
+  playerSkin?: string;
+  servers?: string[];
 }
 
 const KEY = 'lecraft.settings.v1';

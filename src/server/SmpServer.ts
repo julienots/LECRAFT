@@ -43,7 +43,7 @@ interface PlayerData {
   home: [number, number, number] | null;
 }
 
-type Task = 'wood' | 'mine' | 'build' | 'home' | 'idle' | 'follow' | 'fight' | 'site' | 'wander';
+type Task = 'wood' | 'mine' | 'build' | 'home' | 'idle' | 'follow' | 'fight' | 'site' | 'wander' | 'farm' | 'flee' | 'help';
 const TIER_NAMES = ['mains nues', 'bois', 'pierre', 'fer', 'diamant'];
 const TOOL_SPEED = [1, 2, 4, 6, 8];
 const SELL: Record<string, number> = { coal: 2, raw_iron: 4, iron_ingot: 5, gold_ingot: 8, raw_gold: 6, diamond: 40, emerald: 25, lapis_lazuli: 2, redstone: 1, copper_ingot: 2, raw_copper: 1, oak_log: 1, wheat: 1, rotten_flesh: 1, bone: 1, string: 1, gunpowder: 3, ender_pearl: 10 };
@@ -73,6 +73,12 @@ interface Mind {
   wanderFor: number;
   buildWait: number;
   why?: string;
+  /** Temps avant la prochaine bouchée / régénération. */
+  eatTimer: number;
+  /** Monstre qui attaque le joueur (le bot vient l'aider). */
+  helpTarget: Monster | null;
+  /** Ramassage des objets au sol. */
+  pickTimer: number;
 }
 
 const P1 = ['Alex', 'Nico', 'Lucas', 'Emma', 'Hugo', 'Lea', 'Mathis', 'Jade', 'Theo', 'Chloe', 'Nathan', 'Ines', 'Tom', 'Lina', 'Enzo', 'Zoe', 'Noah', 'Sarah', 'Maxime', 'Clara'];
@@ -91,7 +97,10 @@ export class SmpServer {
   /** Dernière téléportation acceptée (tests). */
   lastTpa = '';
 
-  constructor(readonly s: Session) {
+  /** Mode « bots joueurs » d'un monde ordinaire : pas de mods, d'économie ni de spawn protégé. */
+  readonly lite: boolean;
+  constructor(readonly s: Session, opts: { lite?: boolean } = {}) {
+    this.lite = !!opts.lite;
     this.data = this.load<PlayerData>('player', { coins: 0, home: null });
     this.roster = this.load<BotProfile[]>('bots', []);
     while (this.roster.length < 10) this.roster.push(this.newProfile());
@@ -135,6 +144,12 @@ export class SmpServer {
   // ---------- démarrage ----------
   start() {
     const s = this.s;
+    if (this.lite) {
+      this.chat('§7Des §ebots joueurs§7 vont rejoindre la partie. Parlez-leur dans le chat (« suis-moi », « tu fais quoi ? », « donne-moi du bois »…).');
+      const off = [...this.roster].sort(() => this.rng.next() - 0.5);
+      for (let i = 0; i < 3; i++) setTimeout(() => this.join(off[i], i === 0), 2000 + i * 3000);
+      return;
+    }
     s.player.difficulty = 'normal';
     this.chat(`§7Connexion à §a${SMP_NAME}§7…`);
     this.chat('§a§l» §r§aBienvenue sur §2§lLeCraft SMP §r§a(survie moddée) !');
@@ -175,7 +190,7 @@ export class SmpServer {
     bot.setTag(`${bot.rank.tag}${bot.rank.color}${p.name}`);
     bot.blocks = 0;
     s.entities.addMob(bot);
-    const m: Mind = { p, bot, task: 'idle', timer: 0, target: null, mining: null, stairs: null, plan: null, follow: 0, placeTimer: 0, talkTimer: 20 + Math.random() * 40, onlineFor: 0, stuck: 0, lastPos: [bot.x, bot.z], avoid: new Map(), wanderFor: 0, buildWait: 0 };
+    const m: Mind = { p, bot, task: 'idle', timer: 0, target: null, mining: null, stairs: null, plan: null, follow: 0, placeTimer: 0, talkTimer: 20 + Math.random() * 40, onlineFor: 0, stuck: 0, lastPos: [bot.x, bot.z], avoid: new Map(), wanderFor: 0, buildWait: 0, eatTimer: 4, helpTarget: null, pickTimer: 1 };
     bot.brain = (_b, _ctx, dt) => this.think(m, dt);
     bot.weapon = this.toolFor(p, 'sword');
     this.online.push(m);
@@ -246,7 +261,7 @@ export class SmpServer {
       }
     }
     this.sidebarTimer -= dt;
-    if (this.sidebarTimer <= 0) {
+    if (this.sidebarTimer <= 0 && !this.lite) {
       this.sidebarTimer = 0.5;
       const t = (s.dayCycle.time * 24 + 6) % 24;
       s.hud.setSidebar('§2§lLECRAFT SMP', [
@@ -286,6 +301,9 @@ export class SmpServer {
       case 'follow': return 'je te suis';
       case 'fight': return 'je tape des monstres';
       case 'site': return 'je cherche un terrain pour ma maison';
+      case 'farm': return 'je m’occupe de mon champ de blé';
+      case 'help': return 'je t’aide contre les monstres';
+      case 'flee': return 'je fuis !';
       default: return this.rng.pick(['rien de spécial', 'je me balade', 'je range mes coffres']);
     }
   }
@@ -343,7 +361,7 @@ export class SmpServer {
     if (m.timer <= 0) {
       m.timer = 3;
       const moved = Math.hypot(b.x - m.lastPos[0], b.z - m.lastPos[1]);
-      m.stuck = moved < 0.5 && m.task !== 'idle' && m.task !== 'build' && !m.mining ? m.stuck + 1 : 0;
+      m.stuck = moved < 0.5 && m.task !== 'idle' && m.task !== 'build' && m.task !== 'farm' && m.task !== 'help' && !m.mining ? m.stuck + 1 : 0;
       m.lastPos = [b.x, b.z];
       if (m.stuck >= 3) {
         // bloqué : cible mise de côté une minute, petite balade avant de réessayer
@@ -372,10 +390,56 @@ export class SmpServer {
       }
       return;
     }
+    // survie : se nourrir et récupérer hors combat ; ramasser les objets au sol
+    this.survive(m, dt);
+    // creeper proche : on s'écarte (un vrai joueur ne le frappe pas au corps à corps quand il siffle)
+    const creeper = this.nearestMonster(b, 7, 'creeper') as (Monster & { fuse: number }) | null;
+    if (creeper && (creeper.fuse > 0 || Math.hypot(creeper.x - b.x, creeper.z - b.z) < 4)) {
+      const dx = b.x - creeper.x, dz = b.z - creeper.z, d = Math.hypot(dx, dz) || 1;
+      b.ai.moveTowards(b.x + (dx / d) * 6, b.z + (dz / d) * 6, 1.3, true);
+      if (m.task !== 'flee') this.say(m, this.rng.pick(['CREEPER !', 'attention creeper', 'aaah un creeper']));
+      m.task = 'flee';
+      return;
+    }
+    // vie basse : fuite (vers la maison si elle existe), on ne se bat plus
+    if (b.health <= 6 && this.nearestMonster(b, 10)) {
+      const foe0 = this.nearestMonster(b, 10)!;
+      const dx = b.x - foe0.x, dz = b.z - foe0.z, d = Math.hypot(dx, dz) || 1;
+      if (m.p.home) b.goTo(m.p.home.x + 0.5, m.p.home.y, m.p.home.z + 2.5, true);
+      else b.ai.moveTowards(b.x + (dx / d) * 8, b.z + (dz / d) * 8, 1.3, true);
+      if (m.task !== 'flee') this.say(m, this.rng.pick(['à l’aide, j’ai plus de vie', 'je fuis', 'je vais mourir aidez-moi']));
+      m.task = 'flee';
+      return;
+    }
+    if (m.task === 'flee') m.task = 'idle';
+    // le joueur se fait attaquer près du bot : il vient l'aider
+    if (!m.helpTarget || m.helpTarget.dead) {
+      m.helpTarget = null;
+      const pl = s.player;
+      if (!pl.dead && Math.hypot(pl.x - b.x, pl.z - b.z) < 20 && p.tier >= 1) {
+        const threat = this.nearestMonsterTo(pl.x, pl.y, pl.z, 6);
+        if (threat && threat.def.key !== 'creeper') {
+          m.helpTarget = threat;
+          this.say(m, this.rng.pick(['je viens t’aider !', 'tiens bon j’arrive', 'je m’en occupe']));
+        }
+      }
+    }
+    if (m.helpTarget) {
+      const h = m.helpTarget;
+      m.task = 'help';
+      b.weapon = this.toolFor(p, 'sword') || this.toolFor(p, 'axe');
+      b.fight(s, h, dt, (dmg, kx, kz) => s.combat.damageMob(h, dmg, { kind: 'bot', knockX: kx, knockZ: kz, attacker: b as never }));
+      if (h.dead) {
+        m.helpTarget = null;
+        m.task = 'idle';
+        if (Math.random() < 0.5) this.sayLater(m, this.rng.pick(['c’est bon il est mort', 'de rien ;)', 'ça va ?']));
+      }
+      return;
+    }
     // menace : monstre proche → combat (avec une arme), sinon fuite vers la maison
     // en train de suivre le joueur : on ne se bat que si le monstre est collé à nous
     const foe = this.nearestMonster(b, m.follow > 0 ? 3.5 : 9);
-    if (foe) {
+    if (foe && foe.def.key !== 'creeper') {
       if (p.tier >= 1 || b.health > 12) {
         if (m.task !== 'fight' && Math.random() < 0.3) this.say(m, this.rng.pick(['un zombie !', 'au secours', 'viens là toi', 'encore un creeper…']));
         m.task = 'fight';
@@ -427,8 +491,88 @@ export class SmpServer {
       case 'build': return this.doBuild(m, dt);
       case 'home': return this.doHome(m);
       case 'wander': return this.doWander(m, dt);
+      case 'farm': return this.doFarm(m);
       default:
     }
+  }
+
+  /** Manger, se soigner, ramasser les objets proches (comme un joueur). */
+  private survive(m: Mind, dt: number) {
+    const b = m.bot, p = m.p, s = this.s;
+    m.eatTimer -= dt;
+    if (m.eatTimer <= 0) {
+      m.eatTimer = 4;
+      if (b.health < 20 && m.task !== 'fight' && m.task !== 'help') {
+        const food = ['cooked_beef', 'bread', 'cooked_porkchop', 'apple', 'carrot', 'baked_potato'].find((k) => (p.inv[k] ?? 0) > 0);
+        if (food && b.health < 14) {
+          this.take(p, food, 1);
+          b.health = Math.min(20, b.health + 6);
+          s.audio.play('eat', { x: b.x, y: b.y, z: b.z, volume: 0.5 });
+        } else b.health = Math.min(20, b.health + 1);
+      }
+    }
+    m.pickTimer -= dt;
+    if (m.pickTimer <= 0) {
+      m.pickTimer = 0.8;
+      for (const e of s.entities.entities) {
+        if (e.kind !== 'item' || e.removed) continue;
+        if (Math.hypot(e.x - b.x, e.y - b.y, e.z - b.z) > 1.8) continue;
+        const it = e as unknown as { itemId: string; count: number; pickupDelay: number };
+        if (it.pickupDelay > 0) continue;
+        const k = /_log$|_stem$/.test(it.itemId) ? 'log' : /_planks$/.test(it.itemId) ? 'planks' : it.itemId;
+        this.add(p, k, it.count);
+        e.removed = true;
+        s.audio.play('pop', { x: b.x, y: b.y, z: b.z, volume: 0.3 });
+      }
+    }
+  }
+
+  /** Fermier : petit champ de blé à côté de sa maison (labour, semis, récolte, resemis). */
+  private doFarm(m: Mind) {
+    const b = m.bot, p = m.p, w = this.s.world;
+    const h = p.home;
+    if (!h) {
+      m.task = 'idle';
+      return;
+    }
+    const fx = h.x + 5, fz = h.z + 1;
+    // 3×3 cases : on traite la première qui a besoin de quelque chose
+    for (let dz = 0; dz < 3; dz++)
+      for (let dx = 0; dx < 3; dx++) {
+        const x = fx + dx, z = fz + dz;
+        if (!w.isLoaded(x, z)) continue;
+        const y = this.groundAt(x, z);
+        const g = w.getBlock(x, y, z), above = w.getBlock(x, y + 1, z);
+        const ripe = above === B.WHEAT && w.getMeta(x, y + 1, z) >= 7;
+        const todo = ripe || ((g === B.GRASS_BLOCK || g === B.DIRT) && (above === B.AIR || BlockRegistry.replaceable[above])) || (g === B.FARMLAND && above === B.AIR);
+        if (!todo) continue;
+        if (Math.hypot(x + 0.5 - b.x, z + 0.5 - b.z) > 2.5) {
+          b.goTo(x + 0.5, y + 1, z + 0.5);
+          return;
+        }
+        if (m.placeTimer > 0) return;
+        m.placeTimer = 0.6;
+        b.attackAnim = 1;
+        b.yaw = Math.atan2(x + 0.5 - b.x, z + 0.5 - b.z);
+        if (ripe) {
+          w.setBlock(x, y + 1, z, B.AIR);
+          this.add(p, 'wheat', 1);
+          this.add(p, 'wheat_seeds', 1 + this.rng.int(0, 2));
+          if ((p.inv.wheat ?? 0) >= 3 && this.take(p, 'wheat', 3)) this.add(p, 'bread', 1);
+        } else if (g !== B.FARMLAND) {
+          if (above > 0) w.setBlock(x, y + 1, z, B.AIR);
+          w.setBlock(x, y, z, B.FARMLAND, 0);
+        } else {
+          // graines : celles de la récolte, sinon trouvées en coupant l'herbe
+          this.take(p, 'wheat_seeds', 1);
+          w.setBlock(x, y + 1, z, B.WHEAT, 0);
+        }
+        this.s.audio.blockSound('place', 'grass', x + 0.5, y + 1, z + 0.5);
+        return;
+      }
+    // rien à faire au champ : on passe à autre chose
+    m.task = 'wander';
+    m.wanderFor = 10;
   }
 
   private chooseTask(m: Mind) {
@@ -444,6 +588,7 @@ export class SmpServer {
     else if (!p.houseDone && planks < 40) next = 'wood';
     else if (!p.houseDone && (p.inv.cobblestone ?? 0) < 20) next = 'mine';
     else if (!p.houseDone) next = 'build';
+    else if (p.role === 'fermier' && !night) next = 'farm';
     else if (p.tier < 3 || (p.role === 'mineur' && Math.random() < 0.6)) next = 'mine';
     else next = Math.random() < 0.5 ? 'wander' : 'wood';
     if (next !== m.task) {
@@ -495,11 +640,15 @@ export class SmpServer {
     } else if (key === 'dirt' || key === 'grass_block') this.add(m.p, 'dirt');
   }
 
-  private nearestMonster(b: Bot, r: number): Monster | null {
+  private nearestMonster(b: Bot, r: number, key?: string): Monster | null {
+    return this.nearestMonsterTo(b.x, b.y, b.z, r, key);
+  }
+
+  private nearestMonsterTo(x: number, y: number, z: number, r: number, key?: string): Monster | null {
     let best: Monster | null = null, bd = r;
     for (const e of this.s.entities.mobs) {
-      if (!(e instanceof Monster) || e.dead) continue;
-      const d = Math.hypot(e.x - b.x, e.y - b.y, e.z - b.z);
+      if (!(e instanceof Monster) || e.dead || (key && e.def.key !== key)) continue;
+      const d = Math.hypot(e.x - x, e.y - y, e.z - z);
       if (d < bd) {
         bd = d;
         best = e;
@@ -865,6 +1014,7 @@ export class SmpServer {
     const [cmd, ...args] = line.trim().split(/\s+/);
     const c = cmd.toLowerCase();
     const s = this.s, p = s.player;
+    if (this.lite && !['/list', '/msg', '/tell', '/w', '/tpa'].includes(c)) return false;
     const tp = (x: number, y: number, z: number) => {
       p.body.setPos(x, y, z);
       p.body.vx = p.body.vy = p.body.vz = 0;
@@ -993,7 +1143,7 @@ export class SmpServer {
   /** Mods : arbre abattu entier, filon de minerai ; pièces pour les minerais. */
   afterBreak(x: number, y: number, z: number, block: number, itemId: string | undefined) {
     const s = this.s, p = s.player;
-    if (p.creative || p.sneaking) return;
+    if (p.creative || p.sneaking || this.lite) return;
     const key = BlockRegistry.get(block).key;
     const drop = (bx: number, by: number, bz: number) => {
       const id = s.world.getBlock(bx, by, bz);
@@ -1033,6 +1183,7 @@ export class SmpServer {
 
   /** Mort du joueur : ses objets vont dans une tombe (coffre) à l'endroit de la mort. */
   makeGrave(): boolean {
+    if (this.lite) return false;
     const s = this.s, p = s.player, w = s.world;
     const items = [...p.inventory.slots, ...Object.values(p.inventory.armor)].filter((x): x is NonNullable<typeof x> => !!x);
     if (!items.length) return false;
@@ -1056,6 +1207,7 @@ export class SmpServer {
 
   /** Spawn protégé (rayon 8) : pas de casse ni de pose près du point d'apparition. */
   canEdit(x: number, _y: number, z: number): boolean {
+    if (this.lite) return true;
     const [sx, , sz] = this.s.player.spawn;
     if (Math.hypot(x - sx, z - sz) <= 8 && !this.s.player.creative) {
       this.s.hud.showTitle('§cZone protégée (spawn)', 'actionbar');
@@ -1065,7 +1217,7 @@ export class SmpServer {
   }
 
   mobKilled(m: Mob) {
-    if (m instanceof Monster) {
+    if (m instanceof Monster && !this.lite) {
       this.data.coins += 3;
       this.s.hud.showTitle('§6+3 pièces', 'actionbar');
     }

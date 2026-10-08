@@ -54,7 +54,16 @@ export function serversScreen(game: Game): Screen {
   refresh();
   return mcScreen({
     title: 'Jouer en multijoueur',
-    body: [el('div', { class: 'col', style: 'align-items:center;gap:calc(var(--gs) * 2px)' }, ...rows.map((r) => r.entry), mcLabel('Serveurs intégrés : fonctionnent hors ligne, les autres joueurs sont des bots.'))],
+    body: [
+      el(
+        'div',
+        { class: 'col', style: 'align-items:center;gap:calc(var(--gs) * 2px)' },
+        mcButton('Parties en réseau (vrais joueurs)...', () => game.showJoinRemote(), { w: 300 }),
+        mcLabel('Jouez avec vos amis : un joueur ouvre son monde (Menu du jeu › Ouvrir au multijoueur), les autres le rejoignent ici.'),
+        ...rows.map((r) => r.entry),
+        mcLabel('Serveurs intégrés : fonctionnent hors ligne, les autres joueurs sont des bots.'),
+      ),
+    ],
     list: true,
     footer: [mcRow(join, mcButton('Actualiser', refresh, { w: 72 }), mcButton('Retour', () => game.ui.back(), { w: 72 }))],
   });

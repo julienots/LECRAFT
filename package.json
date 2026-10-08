@@ -30,7 +30,9 @@
     "e2e:wither": "node scripts/e2e-wither.mjs",
     "e2e:doors": "node scripts/e2e-doors.mjs",
     "e2e:server": "node scripts/e2e-server.mjs",
-    "e2e:smp": "node scripts/e2e-smp.mjs"
+    "e2e:smp": "node scripts/e2e-smp.mjs",
+    "e2e:multi": "node scripts/e2e-multi.mjs",
+    "server": "node server/lecraft-server.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

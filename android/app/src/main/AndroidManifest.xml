@@ -7,9 +7,9 @@
 
     <!-- Vibrations (retour haptique). -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Permission « normale » (aucune demande à l'utilisateur) requise par le WebView pour servir
-         les fichiers locaux de l'application via https://localhost. Le jeu n'effectue AUCUNE requête
-         réseau : une Content-Security-Policy (index.html) interdit toute connexion externe. -->
+    <!-- Permission « normale » (aucune demande à l'utilisateur) : fichiers locaux servis par le
+         WebView (https://localhost) et multijoueur (connexion WebSocket au relais LeCraft choisi par
+         le joueur, en général sur le réseau local). Aucune autre requête réseau n'est faite. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -23,6 +23,7 @@
         android:largeHeap="true"
         android:appCategory="game"
         android:isGame="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
 
         <activity

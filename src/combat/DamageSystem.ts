@@ -33,6 +33,17 @@ export class DamageSystem {
   damageMob(m: Mob, amount: number, src: DamageInfo): number {
     const ctx = this.ctx();
     if (m.dead || (m.iframes > 0 && src.kind !== 'environment')) return 0;
+    // multijoueur : créature de l'hôte (invité) ou joueur distant : le coup part sur le réseau
+    if (m.onNetHit) {
+      if (src.kind === 'environment') return 0;
+      const dmg = amount * this.multiplier(m, src);
+      m.onNetHit(dmg, { kx: src.knockX ?? 0, kz: src.knockZ ?? 0, crit: !!src.crit, item: src.itemId ?? '' });
+      m.iframes = 0.45;
+      m.hurtTimer = 0.3;
+      ctx.particles.burst('damage', m.x, m.y + m.body.height * 0.7, m.z, Math.min(10, 3 + Math.round(dmg)));
+      ctx.audio.play(m.def.sounds.hurt || 'hurt', { x: m.x, y: m.y, z: m.z });
+      return dmg;
+    }
     // Wither : invulnérable pendant sa charge ; son armure arrête les projectiles
     const w = m as unknown as { invulnerable?: boolean; armored?: boolean };
     if (w.invulnerable) return 0;

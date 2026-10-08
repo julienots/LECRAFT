@@ -5,8 +5,8 @@ const config: CapacitorConfig = {
   appName: 'LeCraft',
   webDir: 'dist',
   android: {
-    // Aucune ressource distante : tout est embarqué dans l'APK.
-    allowMixedContent: false,
+    // Tout est embarqué dans l'APK ; le multijoueur se connecte en ws:// au relais du réseau local.
+    allowMixedContent: true,
     backgroundColor: '#10151c',
     webContentsDebuggingEnabled: false,
   },

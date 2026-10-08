@@ -7,6 +7,7 @@ import { MobModel } from '../render/MobModels';
 import { rayAABB } from '../util/Raycast';
 import type { Entity } from './Entity';
 import { Mob, type EntitySpawner } from './Mob';
+import type { Player } from '../player/Player';
 import { Animal } from './Animal';
 import { Enderman, Wolf, Villager } from './Creatures';
 import { EnderDragon, EndCrystal } from './EnderDragon';
@@ -56,6 +57,28 @@ export class EntityManager implements EntitySpawner {
   readonly combat: CombatSystem;
   activeBoss: Boss | null = null;
   ctx!: GameContext;
+  /** Multijoueur (hôte) : joueurs distants que les créatures peuvent cibler. */
+  remotes: { proxy: Player; ctx: GameContext }[] = [];
+  /** Multijoueur (invité) : les créatures viennent de l'hôte (pas d'apparition locale). */
+  netClient = false;
+  /** Multijoueur (hôte) : butin redirigé vers un joueur distant (créature tuée par lui). */
+  dropRedirect: ((id: string, count: number, durability?: number) => void) | null = null;
+
+  /** Contexte vu par une créature : celui du joueur (local ou distant) le plus proche. */
+  private ctxFor(m: Mob, ctx: GameContext): GameContext {
+    if (!this.remotes.length) return ctx;
+    const p = ctx.player;
+    let best = p.dead ? Infinity : Math.hypot(m.x - p.x, m.y - p.y, m.z - p.z), c = ctx;
+    for (const r of this.remotes) {
+      if (r.proxy.dead) continue;
+      const d = Math.hypot(m.x - r.proxy.x, m.y - r.proxy.y, m.z - r.proxy.z);
+      if (d < best - 2) {
+        best = d;
+        c = r.ctx;
+      }
+    }
+    return c;
+  }
 
   constructor(getCtx: () => GameContext) {
     this.damage = new DamageSystem(getCtx, this);
@@ -123,6 +146,7 @@ export class EntityManager implements EntitySpawner {
 
   spawnItem(id: string, count: number, x: number, y: number, z: number, durability?: number) {
     if (!ItemRegistry.has(id) || count <= 0) return;
+    if (this.dropRedirect) return this.dropRedirect(id, count, durability);
     const e = new ItemEntity(id, count, x, y, z, this.ctx.droppedItem(id), durability);
     this.entities.push(e);
     this.group.add(e.object3d);
@@ -179,6 +203,7 @@ export class EntityManager implements EntitySpawner {
     for (const e of this.entities) {
       if (e.removed) continue;
       e.distToPlayer = Math.hypot(e.x - p.x, e.y - p.y, e.z - p.z);
+      for (const r of this.remotes) e.distToPlayer = Math.min(e.distToPlayer, Math.hypot(e.x - r.proxy.x, e.y - r.proxy.y, e.z - r.proxy.z));
       // les entités hors des chunks chargés sont gelées
       const roaming = e.kind === 'mob' && ((e as Mob).def.key === 'ender_dragon' || (e as Mob).def.key === 'wither');
       // bots joueurs : simulés partout où le terrain est chargé (pas de gel à distance)
@@ -195,7 +220,7 @@ export class EntityManager implements EntitySpawner {
         const far = e.distToPlayer > simDist;
         const mid = e.distToPlayer > 32;
         m.sim = roaming || player || (!far && (!mid || (this.lodTick + m.id) % 4 === 0));
-        if (m.sim) m.update(ctx, mid && !roaming && !player ? dt * 4 : dt);
+        if (m.sim) m.update(this.ctxFor(m, ctx), mid && !roaming && !player ? dt * 4 : dt);
         // disparition des monstres
         if (m instanceof Monster && !m.persistent && (e.distToPlayer > 80 || m.farTime > 60) && !m.origin) m.removed = true;
         if (m instanceof Boss && !roaming && (e.distToPlayer > 48 || p.dead) && !m.dead) {
@@ -247,9 +272,9 @@ export class EntityManager implements EntitySpawner {
     this.activeBoss = boss ?? null;
     if (boss && !boss.dead) ctx.hud.setBoss(boss.def.name, boss.healthFrac, boss.phase);
     else ctx.hud.setBoss(null);
-    // apparitions
+    // apparitions (l'invité d'une partie en réseau reçoit les créatures de l'hôte)
     this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0) {
+    if (this.spawnTimer <= 0 && !this.netClient) {
       this.spawnTimer = 1;
       this.naturalSpawns(ctx, prof.maxEntities);
       this.specialSpawns(ctx);
@@ -258,6 +283,17 @@ export class EntityManager implements EntitySpawner {
 
   private projectileHits(ctx: GameContext, pr: Projectile) {
     const p = ctx.player;
+    if (!pr.fromPlayer)
+      for (const r of this.remotes) {
+        const q = r.proxy;
+        if (q.dead || pr.owner === (q as unknown)) continue;
+        if (pr.x > q.x - 0.4 && pr.x < q.x + 0.4 && pr.z > q.z - 0.4 && pr.z < q.z + 0.4 && pr.y > q.y && pr.y < q.y + 1.8) {
+          const v = Math.hypot(pr.body.vx, pr.body.vz) || 1;
+          if (pr.damage > 0) q.damage(pr.damage, 'projectile', (pr.body.vx / v) * 4, (pr.body.vz / v) * 4);
+          pr.removed = true;
+          return;
+        }
+      }
     if (!pr.fromPlayer) {
       const b = p.body;
       if (pr.x > b.x - 0.4 && pr.x < b.x + 0.4 && pr.z > b.z - 0.4 && pr.z < b.z + 0.4 && pr.y > b.y && pr.y < b.y + b.height) {
@@ -304,7 +340,9 @@ export class EntityManager implements EntitySpawner {
 
   /** Apparitions naturelles autour du joueur selon l'heure, la lumière et le biome. */
   private naturalSpawns(ctx: GameContext, cap: number) {
-    const p = ctx.player;
+    // autour d'un joueur tiré au hasard (hôte ou joueur distant)
+    const pick0 = Math.floor(Math.random() * (this.remotes.length + 1));
+    const p = pick0 === 0 || this.remotes[pick0 - 1].proxy.dead ? ctx.player : this.remotes[pick0 - 1].proxy;
     const w = ctx.world;
     const peaceful = ctx.player.difficulty === 'peaceful';
     if (!ctx.gamerules.doMobSpawning) return;
@@ -557,7 +595,7 @@ export class EntityManager implements EntitySpawner {
 
   serialize(): SavedMob[] {
     return this.mobs
-      .filter((m) => !m.dead && !m.removed && m.def.category !== 'boss' && (m.def.category === 'passive' || m.def.category === 'neutral' || m.persistent || m.nameTag || m.tags.size || m.dynProps.size))
+      .filter((m) => !m.dead && !m.removed && !m.net && !m.def.key.startsWith('bot:') && m.def.category !== 'boss' && (m.def.category === 'passive' || m.def.category === 'neutral' || m.persistent || m.nameTag || m.tags.size || m.dynProps.size))
       .map((m) => ({
         key: m.def.key, x: m.x, y: m.y, z: m.z, health: m.health, baby: m.baby, wool: m instanceof Animal ? m.woolColor : undefined, sheared: m instanceof Animal ? m.sheared : undefined,
         ...(m.tags.size ? { tags: [...m.tags] } : {}), ...(m.dynProps.size ? { dp: Object.fromEntries(m.dynProps) } : {}), ...(m.nameTag ? { name: m.nameTag } : {}),

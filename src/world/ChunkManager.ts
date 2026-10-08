@@ -45,6 +45,10 @@ export class ChunkManager {
   private centerCX = 0;
   private centerCZ = 0;
   disposed = false;
+  /** Multijoueur (invité) : chunks fournis par l'hôte (null = non modifié, généré localement). */
+  remote: ((cx: number, cz: number) => Promise<{ blocks: Uint16Array; meta: Uint8Array } | null>) | null = null;
+  /** Multijoueur (hôte) : positions des joueurs distants, autour desquelles le terrain reste chargé. */
+  extraCenters: { x: number; z: number }[] = [];
 
   constructor(
     private world: World,
@@ -131,10 +135,24 @@ export class ChunkManager {
       this.applyMesh(this.pendingMeshes.shift()!);
       budget--;
     }
+    // 1 bis) terrain autour des joueurs distants (simulation, pas d'affichage)
+    const EXTRA_R = 3;
+    for (const e of this.extraCenters) {
+      if (this.loadsInFlight >= this.opts.jobsInFlight + 2) break;
+      const ex = Math.floor(e.x / CHUNK_SIZE), ez = Math.floor(e.z / CHUNK_SIZE);
+      for (let dz = -EXTRA_R; dz <= EXTRA_R && this.loadsInFlight < this.opts.jobsInFlight + 2; dz++)
+        for (let dx = -EXTRA_R; dx <= EXTRA_R; dx++) {
+          const k = chunkKey(ex + dx, ez + dz);
+          if (this.world.chunks.has(k) || this.loading.has(k)) continue;
+          this.requestLoad(ex + dx, ez + dz, k);
+          if (this.loadsInFlight >= this.opts.jobsInFlight + 2) break;
+        }
+    }
     // 4) déchargement
+    const nearExtra = (c: Chunk) => this.extraCenters.some((e) => Math.max(Math.abs(c.cx - Math.floor(e.x / CHUNK_SIZE)), Math.abs(c.cz - Math.floor(e.z / CHUNK_SIZE))) <= EXTRA_R + 1);
     for (const c of this.world.chunks.values()) {
       const d = Math.max(Math.abs(c.cx - ccx), Math.abs(c.cz - ccz));
-      if (d > R + 1) this.unload(c);
+      if (d > R + 1 && !nearExtra(c)) this.unload(c);
       else if (d > this.opts.renderDistance && (c.opaqueMesh || c.transMesh)) this.disposeMeshes(c, true);
     }
   }
@@ -150,7 +168,14 @@ export class ChunkManager {
     let saved: SavedChunk | null = null;
     const pendingSave = this.unloadedToSave.get(k);
     if (pendingSave) saved = { cx, cz, blocks: pendingSave.blocks.slice(), meta: pendingSave.meta.slice() };
-    else if (this.saves && this.worldId) {
+    else if (this.remote) {
+      try {
+        const r = await this.remote(cx, cz);
+        if (r) saved = { cx, cz, blocks: r.blocks, meta: r.meta };
+      } catch (e) {
+        console.warn('Chunk de l’hôte indisponible', e);
+      }
+    } else if (this.saves && this.worldId) {
       try {
         saved = await this.saves.loadChunk(this.worldId, cx, cz);
       } catch (e) {
@@ -299,6 +324,27 @@ export class ChunkManager {
     for (const k of c.specialKeys) this.world.specials.delete(k);
     this.post({ type: 'unload', cx: c.cx, cz: c.cz });
     if (c.modified && c.unsaved) this.unloadedToSave.set(c.key, c);
+  }
+
+  /**
+   * Multijoueur (hôte) : données actuelles d'un chunk s'il diffère de la génération (chargé et
+   * modifié, en attente d'écriture, ou sauvegardé), sinon null.
+   */
+  async modifiedChunk(cx: number, cz: number): Promise<{ blocks: Uint16Array; meta: Uint8Array } | null> {
+    const k = chunkKey(cx, cz);
+    const c = this.world.chunks.get(k);
+    if (c) return c.modified ? { blocks: c.blocks, meta: c.meta } : null;
+    const pending = this.unloadedToSave.get(k);
+    if (pending) return { blocks: pending.blocks, meta: pending.meta };
+    if (this.saves && this.worldId) {
+      try {
+        const s = await this.saves.loadChunk(this.worldId, cx, cz);
+        if (s) return { blocks: s.blocks, meta: s.meta };
+      } catch {
+        /* illisible : généré */
+      }
+    }
+    return null;
   }
 
   /** Récupère les chunks à sauvegarder (déchargés + chargés modifiés). */

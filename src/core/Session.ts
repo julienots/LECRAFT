@@ -57,6 +57,9 @@ import { updatePowerAround } from '../world/Redstone';
 import { ServerNetwork } from '../server/ServerNetwork';
 import { SmpServer } from '../server/SmpServer';
 import { HUB } from '../server/ServerMaps';
+import { MultiplayerHost, type HostOptions } from '../net/MultiplayerHost';
+import type { MultiplayerClient } from '../net/MultiplayerClient';
+import type { NetLink } from '../net/Protocol';
 
 export interface WorldState {
   version: number;
@@ -157,13 +160,22 @@ export class Session implements GameContext {
   readonly stats: StatsApi;
   /** Serveur de mini-jeux (monde du serveur intégré), sinon null. */
   readonly server: ServerNetwork | null;
-  /** Serveur de survie moddé, sinon null. */
-  readonly smp: SmpServer | null;
+  /** Serveur de survie moddé (ou bots joueurs d'un monde ordinaire), sinon null. */
+  smp: SmpServer | null;
+  /** Partie en réseau : hôte (monde partagé) ou invité (monde de l'hôte), sinon null. */
+  mp: MultiplayerHost | MultiplayerClient | null = null;
+  /** Invité d'une partie en réseau. */
+  get netClient(): MultiplayerClient | null {
+    return this.mp?.kind === 'client' ? this.mp : null;
+  }
+  get netHost(): MultiplayerHost | null {
+    return this.mp?.kind === 'host' ? this.mp : null;
+  }
 
   constructor(readonly game: Game, readonly meta: WorldMeta, state: WorldState | null) {
     const r = game.renderer;
     this.scene = r.scene;
-    this.dimension = state?.dimension ?? 'overworld';
+    this.dimension = state?.dimension ?? meta.netDim ?? 'overworld';
     this.world = new World(meta.seed);
     this.world.voidBelow = this.dimension === 'end' || !!meta.server;
     this.player = new Player(meta.gameMode, meta.difficulty);
@@ -175,7 +187,8 @@ export class Session implements GameContext {
     this.entities.ctx = this;
     this.ticker = new WorldTicker(this.entities);
     this.world.events.on('blockChanged', (e) => this.ticker.blockChanged(e, this.world));
-    this.chunks = new ChunkManager(this.world, r.materials, meta.server ? null : game.saves, meta.server ? null : this.chunkPrefix, {
+    const noSave = meta.server || meta.remote;
+    this.chunks = new ChunkManager(this.world, r.materials, noSave ? null : game.saves, noSave ? null : this.chunkPrefix, {
       renderDistance: game.settings.renderDistance,
       jobsInFlight: this.profile.workerJobsInFlight,
       meshUploadsPerFrame: this.profile.chunkBudgetPerFrame,
@@ -221,7 +234,7 @@ export class Session implements GameContext {
     this.controller.onJump = () => this.audio.play('jump', { volume: 0.4 });
     this.interaction = new PlayerInteraction(this, game.input, this.entities, {
       openStation: (k, x, y, z) => game.openInventory(k === 'crafting' ? 'table' : 'furnace', { x, y, z }),
-      openChest: (x, y, z) => game.openInventory('chest', { x, y, z }),
+      openChest: (x, y, z) => (this.netClient ? void this.netClient.requestChest(x, y, z).then(() => game.openInventory('chest', { x, y, z })) : game.openInventory('chest', { x, y, z })),
       useCompass: (t) => this.useCompass(t),
       primeTnt: (x, y, z) => this.explosions.prime(this, x, y, z),
       sleep: (x, y, z) => this.trySleep(x, y, z),
@@ -239,7 +252,7 @@ export class Session implements GameContext {
       mobInteract: (m) => !!this.server?.mobInteract(m),
     });
     this.server = meta.server ? new ServerNetwork(this) : null;
-    this.smp = meta.smp ? new SmpServer(this) : null;
+    this.smp = meta.smp ? new SmpServer(this) : meta.bots && !meta.remote ? new SmpServer(this, { lite: true }) : null;
     if (this.smp) {
       const prev = this.entities.damage.onKill;
       this.entities.damage.onKill = (m) => {
@@ -284,7 +297,13 @@ export class Session implements GameContext {
     this.weather.onThunder = (delay) => setTimeout(() => this.audio.play('thunder', { volume: 1 }), delay * 1000);
     // état initial
     if (state) this.restore(state);
-    else if (meta.server) {
+    else if (meta.remote && meta.netSpawn) {
+      // invité : au point d'apparition de l'hôte
+      const [x, y, z] = meta.netSpawn;
+      this.restored = true;
+      this.player.spawn = [x, y, z];
+      this.player.body.setPos(x, y, z);
+    } else if (meta.server) {
       this.player.spawn = [HUB.spawn.x, HUB.spawn.y, HUB.spawn.z];
       this.player.body.setPos(HUB.spawn.x, HUB.spawn.y, HUB.spawn.z);
       this.player.yaw = HUB.spawn.yaw;
@@ -544,7 +563,7 @@ export class Session implements GameContext {
 
   /** Sauvegarde atomique (état + chunks modifiés + miniature). */
   async save(withThumbnail = true): Promise<void> {
-    if (!this.loaded || this.server) return;
+    if (!this.loaded || this.server || this.meta.remote) return;
     this.smp?.save();
     if (this.saving) await this.saving;
     const list = this.chunks.collectUnsaved();
@@ -600,6 +619,7 @@ export class Session implements GameContext {
     for (let i = 0; i < steps; i++) this.simulate(dt / steps, i === 0 ? remaining : []);
     this.server?.update(dt);
     this.smp?.update(dt);
+    this.mp?.update(dt);
     this.chunks.update(p.x, p.z);
     this.particles.update(dt);
     this.entities.render(this, this.elapsed);
@@ -660,6 +680,14 @@ export class Session implements GameContext {
   /** Portail : 4 s dedans (1 s en créatif) pour changer de dimension ; il faut en sortir pour repartir. */
   private updatePortal(dt: number) {
     const p = this.player;
+    // invité : seule la dimension de l'hôte est partagée
+    if (this.meta.remote) {
+      if (!this.portalBlocked && (Portals.touchesEndPortal(this.world, p.x, p.y, p.z, p.body.halfWidth) || Portals.touchesPortal(this.world, p.x, p.y, p.z, p.body.halfWidth, p.body.height))) {
+        this.portalBlocked = true;
+        this.hud.toast("Partie en réseau : seul l'hôte peut changer de dimension", 'warn');
+      } else if (!Portals.touchesPortal(this.world, p.x, p.y, p.z, p.body.halfWidth, p.body.height)) this.portalBlocked = false;
+      return;
+    }
     // portail de l'End : passage immédiat (aller vers l'End, ou retour à la surface)
     if (!p.dead && !this.portalBlocked && Portals.touchesEndPortal(this.world, p.x, p.y, p.z, p.body.halfWidth)) {
       this.portalBlocked = true;
@@ -856,7 +884,8 @@ export class Session implements GameContext {
     p.fallDamage = this.gamerules.fallDamage;
     p.tick(dt);
     this.entities.update(this, dt);
-    this.ticker.tick(this);
+    // invité : liquides, cultures et gravité sont simulés par l'hôte
+    if (!this.meta.remote) this.ticker.tick(this);
     this.tickFurnaces(dt);
     this.explosions.update(this, this.entities, dt);
     // fonctions « tick » des add-ons
@@ -864,7 +893,7 @@ export class Session implements GameContext {
     this.falling.update(this, this.entities, dt);
     this.scripts?.update();
     this.checkPressurePlate(dt);
-    if (this.pendingMobs && this.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) {
+    if (this.pendingMobs && !this.meta.remote && this.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) {
       this.entities.load(this.pendingMobs.filter((m) => this.world.isLoaded(Math.floor(m.x), Math.floor(m.z))));
       this.pendingMobs = null;
     }
@@ -1240,7 +1269,28 @@ export class Session implements GameContext {
     if (this.perspective === 2) cam.rotation.set(-p.pitch, p.yaw + Math.PI, 0);
   }
 
+  /** Ouvre ce monde aux autres joueurs (via le relais). */
+  startHosting(link: NetLink, room: string, opts: HostOptions) {
+    this.mp?.dispose();
+    this.mp = new MultiplayerHost(this, link, room, opts);
+    if (opts.bots && !this.smp && !this.server) {
+      this.smp = new SmpServer(this, { lite: true });
+      this.smp.start();
+    }
+  }
+
+  /** Ferme la partie en réseau (l'hôte reste dans son monde). */
+  stopMultiplayer(notify = true) {
+    if (!this.mp) return;
+    if (notify && this.mp.kind === 'host') this.mp.sys('§cL’hôte a fermé la partie.');
+    this.mp.dispose();
+    this.mp = null;
+    this.chunks.extraCenters = [];
+    this.entities.remotes = [];
+  }
+
   dispose() {
+    this.stopMultiplayer();
     this.scripts?.dispose();
     this.game.hud.setSidebar(null);
     this.dropped.dispose();

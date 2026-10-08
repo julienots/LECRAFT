@@ -118,6 +118,7 @@ export class ChatUI {
         this.add(`<${game.session?.player.name ?? 'Joueur'}> ${v}`, 'chat');
         game.session?.server?.playerChat(v);
         game.session?.smp?.playerChat(v);
+        game.session?.mp?.chat(v);
       }
       this.close();
     };

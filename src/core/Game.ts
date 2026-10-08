@@ -6,6 +6,9 @@ import type { Screen } from '../ui/UIManager';
 import { applyQuality, loadSettings, saveSettings, type Settings } from './Settings';
 import { GameLoop } from './GameLoop';
 import { Session, type WorldState } from './Session';
+import { NetLink, relayUrl, type NetMsg, type Welcome } from '../net/Protocol';
+import { MultiplayerClient } from '../net/MultiplayerClient';
+import { hostScreen, joinScreen } from '../ui/NetUI';
 import { TextureManager } from '../render/TextureManager';
 import { loadInstalledPack, loadBundledPack, type LoadedPack } from '../render/ResourcePack';
 import { installPixelFont } from '../ui/FontBuilder';
@@ -278,6 +281,77 @@ export class Game {
     this.session?.smp?.start();
   }
 
+  // ---------- multijoueur en réseau ----------
+  saveSettings() {
+    saveSettings(this.settings);
+  }
+
+  showJoinRemote() {
+    this.ui.push(joinScreen(this));
+  }
+
+  showHostScreen() {
+    if (this.session) this.ui.push(hostScreen(this));
+  }
+
+  /** Ouvre le monde en cours aux autres joueurs via le relais. */
+  async hostWorld(address: string, opts: { pvp: boolean; bots: boolean; max: number }) {
+    const s = this.session;
+    if (!s || s.meta.remote || s.server) throw new Error('Ce monde ne peut pas être partagé');
+    if (this.settings.playerName) s.player.name = this.settings.playerName;
+    const link = new NetLink(relayUrl(address));
+    await link.connect();
+    link.send({ t: 'host', name: s.player.name, world: s.meta.name, mode: s.player.creative ? 'creative' : 'survival', max: opts.max, motd: opts.bots ? 'avec des bots joueurs' : '' });
+    const r = await link.waitFor('hosted');
+    link.myId = r.id;
+    s.startHosting(link, r.room, opts);
+    this.chat.add(`§aPartie ouverte ! §7Les autres joueurs : Multijoueur › Parties en réseau${address ? ` (serveur ${address})` : ''}.`, 'info');
+  }
+
+  /** Rejoint la partie d'un autre joueur (monde de l'hôte, rien n'est enregistré). */
+  async joinRemote(address: string, room: string) {
+    const link = new NetLink(relayUrl(address));
+    await link.connect();
+    const name = this.settings.playerName || `Joueur${Math.floor(Math.random() * 900 + 100)}`;
+    link.send({ t: 'join', room, name, skin: this.settings.playerSkin ?? 'steve' });
+    const j = await link.waitFor('joined');
+    link.myId = j.id;
+    await this.enterRemote(link, j.name, room, false);
+  }
+
+  /** Entre dans le monde de l'hôte (première connexion, ou changement de dimension de l'hôte). */
+  async enterRemote(link: NetLink, playerName: string, room: string, hello: boolean) {
+    // messages reçus avant la création de la partie (positions, créatures…) : mis de côté
+    const early: NetMsg[] = [];
+    link.onMessage = (m) => early.push(m);
+    if (hello) link.send({ t: 'hello', name: playerName, skin: this.settings.playerSkin ?? 'steve' });
+    const w = (await link.waitFor('welcome', 15000)) as Welcome;
+    const now = Date.now();
+    const meta: WorldMeta = {
+      id: `__net__${room}`, name: w.world, seed: w.seed, creationDate: now, lastPlayed: now, playTime: 0, thumbnail: null,
+      gameMode: w.mode, difficulty: w.difficulty, version: SAVE_VERSION, cheats: false, remote: true, netSpawn: w.spawn, netDim: w.dim,
+    };
+    await this.startWorld(meta, null, false, hello ? 'Changement de dimension' : `Connexion à la partie de ${w.hostName}`, (s) => {
+      s.player.name = playerName;
+      s.dayCycle.time = w.time;
+      s.dayCycle.day = w.day;
+      s.mp = new MultiplayerClient(s, link, w);
+      for (const m of early) link.onMessage(m);
+    });
+    if (!hello) this.chat.add(`§aConnecté à la partie de ${w.hostName} §7(${w.players.length} autre(s) joueur(s))`, 'info');
+  }
+
+  /** Partie en réseau interrompue (hôte parti, connexion perdue). */
+  disconnected(msg: string) {
+    if (!this.session?.meta.remote) return;
+    this.closeInventory();
+    this.chat.close();
+    this.session.dispose();
+    this.session = null;
+    this.showMainMenu();
+    void this.ui.confirm('Déconnecté', msg, 'OK', true);
+  }
+
   /** Boutique du serveur de survie (/shop). */
   openServerShop(items: [string, number, number][], coins: () => number, buy: (id: string, n: number, price: number) => boolean) {
     openShop(this, items, coins, buy);
@@ -287,12 +361,14 @@ export class Game {
     openGameSelector(this, net);
   }
 
-  async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty, bonusChest = false, cheats = true) {
+  async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty, bonusChest = false, cheats = true, bots = false) {
     const seed = seedText.trim() ? seedFromString(seedText) : (Math.random() * 2 ** 31) | 0;
     const meta = await this.saves.createWorld(name.trim() || 'Nouveau monde', seed, mode, difficulty);
     meta.cheats = cheats;
+    if (bots) meta.bots = true;
     await this.saves.updateMeta(meta);
     await this.startWorld(meta, null, bonusChest);
+    if (bots) this.session?.smp?.start();
   }
 
   async playWorld(meta: WorldMeta) {
@@ -309,6 +385,7 @@ export class Game {
       console.error(e);
     }
     await this.startWorld(meta, state);
+    if (meta.bots) this.session?.smp?.start();
   }
 
   /** Nouveau monde avec la même graine et les mêmes options (bouton « Recréer »). */
@@ -323,7 +400,7 @@ export class Game {
     else this.showNewWorld();
   }
 
-  private async startWorld(meta: WorldMeta, state: WorldState | null, bonusChest = false, travel?: string) {
+  private async startWorld(meta: WorldMeta, state: WorldState | null, bonusChest = false, travel?: string, setup?: (s: Session) => void) {
     this.stopPanorama();
     this.audio.unlock();
     this.state = 'loading';
@@ -334,6 +411,8 @@ export class Game {
     this.chat.clear();
     this.session = new Session(this, meta, state);
     this.session.bonusChest = bonusChest;
+    if (this.settings.playerName) this.session.player.name = this.settings.playerName;
+    setup?.(this.session);
     this.hud.markHotbarDirty();
     this.session.player.inventory.onChange(() => this.hud.markHotbarDirty());
     await this.session.waitForSpawn((f) => loading.progress(f));
@@ -383,7 +462,11 @@ export class Game {
     };
     // la nouvelle dimension est enregistrée tout de suite (un arrêt pendant le chargement reste cohérent)
     await this.saves.save(s.meta, newState, []).catch((e) => console.error(e));
+    // partie en réseau : la salle reste ouverte, les invités suivent l'hôte dans la dimension
+    const hosting = s.netHost?.detach(target) ?? null;
     await this.startWorld(s.meta, newState, false, target === 'nether' ? 'Entrée dans le Nether' : target === 'end' ? "Entrée dans l'End" : 'Retour à la surface');
+    if (hosting && this.session) this.session.startHosting(hosting.link, hosting.room, hosting.opts);
+    if (s.meta.bots && target === 'overworld') this.session?.smp?.start();
   }
 
   pause() {
@@ -551,14 +634,21 @@ export class Game {
     this.keyboard.exitPointerLock();
     this.touch.setVisible(false);
     this.inventoryUI = new InventoryUI(this, this.session, mode, chest);
+    this.openChestPos = mode === 'chest' ? chest ?? null : null;
     this.ui.push(this.inventoryUI.screen);
   }
+
+  private openChestPos: { x: number; y: number; z: number } | null = null;
 
   closeInventory() {
     if (!this.inventoryUI) return;
     const ui = this.inventoryUI;
     this.inventoryUI = null;
     ui.dispose();
+    // partie en réseau : le coffre refermé repart chez l'hôte
+    const cp = this.openChestPos;
+    if (cp) this.session?.netClient?.sendChest(cp.x, cp.y, cp.z);
+    this.openChestPos = null;
     this.ui.remove(ui.screen);
     if (this.state === 'playing') this.touch.setVisible(true);
     this.hud.markHotbarDirty();

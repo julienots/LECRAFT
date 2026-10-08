@@ -152,6 +152,7 @@ export function newWorldScreen(game: Game): Screen {
   let diff: Difficulty = game.settings.difficulty === 'peaceful' ? 'normal' : game.settings.difficulty;
   let bonus = false;
   let cheats = true;
+  let bots = false;
   const desc = mcLabel(MODE_DESC[mode]);
   return mcScreen({
     title: 'Créer un nouveau monde',
@@ -170,8 +171,10 @@ export function newWorldScreen(game: Game): Screen {
       seed,
       mcRow(mcToggle('Coffre bonus', bonus, (v) => (bonus = v), 150), mcToggle('Activer les triches', cheats, (v) => (cheats = v), 150)),
       mcLabel('Les triches autorisent les commandes comme /give, /tp, /time ou /gamemode.'),
+      mcToggle('Bots joueurs', bots, (v) => (bots = v), 300),
+      mcLabel('Des bots joueurs rejoignent votre monde : ils coupent du bois, minent, construisent leur maison, cultivent, vous aident contre les monstres et discutent.'),
     ],
-    footer: [mcRow(mcButton('Créer un nouveau monde', () => game.createWorld(name.value, seed.value, mode, diff, bonus, cheats), { w: 150 }), mcButton('Annuler', () => game.ui.back(), { w: 150 }))],
+    footer: [mcRow(mcButton('Créer un nouveau monde', () => game.createWorld(name.value, seed.value, mode, diff, bonus, cheats, bots), { w: 150 }), mcButton('Annuler', () => game.ui.back(), { w: 150 }))],
   });
 }
 
@@ -201,7 +204,10 @@ export function pauseScreen(game: Game): Screen {
           status.textContent = `Sauvegardé à ${new Date().toLocaleTimeString('fr-FR')}`;
         }, { w: 100 }),
       ),
-      mcButton(game.session?.meta.server ? 'Se déconnecter' : 'Sauvegarder et quitter', () => game.quitToMenu(), { w: 204 }),
+      game.session && !game.session.meta.server && !game.session.meta.remote
+        ? mcButton(game.session.netHost ? `Multijoueur (${game.session.netHost.playerCount} joueurs)...` : 'Ouvrir au multijoueur...', () => game.showHostScreen(), { w: 204 })
+        : null,
+      mcButton(game.session?.meta.server || game.session?.meta.remote ? 'Se déconnecter' : 'Sauvegarder et quitter', () => game.quitToMenu(), { w: 204 }),
       status,
       el('div', { style: 'flex:1' }),
     ],
@@ -221,6 +227,7 @@ const CAUSES: Record<string, string> = {
   projectile: 'a été abattu par une flèche',
   boss: 'a été vaincu par un boss',
   fire: 'est parti en fumée',
+  player: 'a été tué par un autre joueur',
   explosion: 'a explosé',
 };
 

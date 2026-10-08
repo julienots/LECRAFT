@@ -7,7 +7,7 @@ import { EffectList, type ActiveEffect } from '../entities/Effects';
 import { hooks, damageCause, type Actor } from '../scripting/Hooks';
 import type { Entity } from '../entities/Entity';
 
-export type DamageSource = 'mob' | 'fall' | 'lava' | 'drown' | 'starve' | 'contact' | 'void' | 'projectile' | 'boss' | 'fire' | 'explosion';
+export type DamageSource = 'mob' | 'fall' | 'lava' | 'drown' | 'starve' | 'contact' | 'void' | 'projectile' | 'boss' | 'fire' | 'explosion' | 'player';
 
 export interface PlayerSnapshot {
   x: number; y: number; z: number; yaw: number; pitch: number;
