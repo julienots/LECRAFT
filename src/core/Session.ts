@@ -55,6 +55,7 @@ import { DroppedItemModels } from '../render/DroppedItems';
 import { ShadowMap } from '../render/ShadowMap';
 import { updatePowerAround } from '../world/Redstone';
 import { ServerNetwork } from '../server/ServerNetwork';
+import { TileRegistry } from '../render/TileRegistry';
 import { SmpServer } from '../server/SmpServer';
 import { HUB } from '../server/ServerMaps';
 import { MultiplayerHost, type HostOptions } from '../net/MultiplayerHost';
@@ -1029,6 +1030,8 @@ export class Session implements GameContext {
     else r.sky.update(this.dayCycle.time, cam.position, rain, this.weather.flash, this.elapsed, s.clouds);
     const u = r.materials.uniforms;
     u.uTime.value = this.elapsed;
+    u.uPortalTile.value = TileRegistry.has('end_portal') ? TileRegistry.index('end_portal') : -1;
+    u.uResolution.value.set(r.gl.domElement.width, r.gl.domElement.height);
     u.uDaylight.value = nether ? 0 : Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
     u.uAmbient.value = this.dimension === 'end' ? 0.7 : nether ? 0.3 : 0.035;
     u.uSkyColor.value.copy(r.sky.skyLightColor);

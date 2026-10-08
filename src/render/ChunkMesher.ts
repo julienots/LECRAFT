@@ -374,7 +374,11 @@ export class ChunkMesher {
     const tr = (tint >> 16) & 255, tg = (tint >> 8) & 255, tb = tint & 255;
     const builder = this.opaque;
     const flags = 0;
-    for (const bx of boxes) {
+    // cadre du portail de l'End : socle avec le dessus du cadre vide, œil (texture à transparence
+    // dans les packs) sur la boîte du dessus uniquement — sinon le dessus du socle serait percé
+    const frame = kind === 'end_frame' && R.has('end_portal_frame') ? R.byName('end_portal_frame') : null;
+    for (let bi = 0; bi < boxes.length; bi++) {
+      const bx = boxes[bi];
       const x0 = bx[0] / 16, y0 = bx[1] / 16, z0 = bx[2] / 16, x1 = bx[3] / 16, y1 = bx[4] / 16, z1 = bx[5] / 16;
       for (let d = 0; d < 6; d++) {
         const [dx, dy, dz] = DIRS[d];
@@ -395,6 +399,10 @@ export class ChunkMesher {
         else if (kind === 'bed' && block.metaTiles && d === 2) tile = block.metaTiles[(m >> 2) & 1];
         else if (kind === 'farmland' && block.metaTiles && d === 2) tile = block.metaTiles[m & 1];
         else if (block.orientable && d !== 2 && d !== 3) tile = d === FRONT_FACE[m & 3] ? block.faceTiles[4] : block.faceTiles[0];
+        if (frame) {
+          if (bi === 0 && d === 2) tile = frame.faceTiles[2];
+          else if (bi === 1) tile = block.faceTiles[2];
+        }
         const sl = li < blocks.length ? sky[li] * 16 : 240, bl = li < blocks.length ? blk[li] * 16 : 0;
         const shade = Math.round(255 * FACE_SHADE[d]);
         // sommets (même ordre CCW que les liquides) et UV en pixels de texture

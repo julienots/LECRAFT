@@ -245,6 +245,44 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   plus réactive (baisse de résolution en 3 s) et mémorisée d'un lancement à l'autre, shaders
   désactivés par défaut en profil Bas. Créatures : saut à 1,3 bloc (comme le joueur), nage pour
   sortir de l'eau, peuvent sauter dans l'eau depuis plus haut.
+- **Vrai multijoueur en réseau (v2.19)** — jouez avec de **vrais joueurs** (Wi-Fi local ou Internet) :
+  un joueur ouvre son monde (*Menu du jeu › Ouvrir au multijoueur* : JcJ, bots joueurs, 4 à 16 joueurs),
+  les autres le rejoignent (*Multijoueur › Parties en réseau*). Un petit **serveur relais sans
+  dépendance** fait le lien : `npm run server` (port 25580 ; sert aussi le jeu aux navigateurs du
+  réseau) ou `npm run dev`/`npm run preview` (relais à la même adresse). L'hôte reste maître du monde :
+  **chunks modifiés** transmis à l'arrivée, **blocs en direct** dans les deux sens, **joueurs** visibles
+  (skin, pseudo, objet en main, accroupi/nage), **créatures et bots** de l'hôte affichés chez les invités,
+  coups sur les créatures (le **butin va au joueur** qui tue), créatures qui **poursuivent n'importe quel
+  joueur**, terrain simulé autour de chaque joueur, **JcJ**, **chat**, **coffres partagés**, temps et
+  météo synchronisés, les invités **suivent l'hôte** dans le Nether et l'End. Limites : les fourneaux
+  et les objets au sol de l'hôte restent locaux ; seul l'hôte change de dimension.
+- **Bots joueurs dans n'importe quel monde** (option *Bots joueurs* à la création ou à l'ouverture
+  au multijoueur) et **bots plus logiques** : ils **mangent** et récupèrent, **ramassent** les objets,
+  **fuient les creepers** et se replient quand leur vie est basse, **viennent aider** un joueur attaqué,
+  et les **fermiers** cultivent un champ de blé près de leur maison (labour, semis, récolte, pain).
+- **Créatures (v2.19)** : apparitions corrigées (herbe haute et fleurs acceptées, plusieurs essais par
+  seconde, seules les créatures proches comptent dans la limite, les lointaines sont libérées, autour
+  de chaque joueur) et **30 nouvelles créatures** : meuh-champi, chèvre, cheval, âne, lama, dromadaire,
+  ours polaire, panda, lapin, renard, ocelot, grenouille, tortue, perroquet, abeille, tatou, morue,
+  saumon, poisson tropical, dauphin, axolotl, gardien, golem de fer (protège les villages), golem de
+  neige, zombie villageois, pillard, vindicateur, phantom (la nuit, en piqué), poisson d'argent,
+  endermite, piglin, hoglin, arpenteur, shulker — et un **œuf d'apparition** par créature.
+- **~290 nouveaux blocs** : escaliers/dalles/barrières de toutes les essences, **murets** et escaliers
+  de toutes les pierres, **bûches écorcées** (hache : clic droit) et bois, **tapis**, **terre cuite
+  émaillée**, boîtes de shulker, **coraux**, champignons géants, sculk, lanternes de grenouille, cuivre
+  sculpté, ardoise, pierre noire, tuf, glace bleue, éponge, miel, ruches, pistons, observateurs…
+- **Nouveaux objets** : **marteaux** (minage **3×3**) et **excavateurs** (pelletage 3×3) du bois à la
+  netherite (accroupi : un seul bloc), outils et armures en **netherite** et en **mailles**, carapace
+  de tortue, poissons, lapin, ragoût, miel, algues, longue-vue, brochette de champignons…
+- **Nage facilitée** : sous l'eau, avancer suffit pour nager (le sprint nage plus vite), accroupi pour
+  plonger, on flotte à la surface et on **se hisse hors de l'eau** contre un bord.
+- **Portail de l'End corrigé** : cadres à la vraie hauteur (13/16) avec l'**œil posé dessus** (les
+  cadres ne deviennent plus transparents avec un pack), portail fin rendu en **ciel étoilé animé**
+  (couches d'étoiles en espace écran, comme le jeu original).
+- **Musique** : pièces **composées** dans l'esprit des musiques calmes du jeu (piano feutré, accords
+  de septième, nappes, cloches, réverbération) selon l'ambiance (menu, jour, nuit, grottes, sous l'eau,
+  créatif, Nether, End) ; *Options › Musique et sons* : **importer vos propres musiques** (.ogg/.mp3)
+  et morceau suivant ; les musiques d'un pack de ressources (`sounds/music`) sont aussi importées.
 - **Petites touches LeCraft** : des **feuilles tombent** des arbres ; à la mort, la **position** est
   affichée et, après la réapparition, une **boussole** guide 5 minutes vers le lieu de la mort.
 
@@ -771,6 +809,9 @@ npm run e2e:server               # 20 vérifications : file d'attente, arc des b
                                  # de scores, hub protégé), menu des jeux, Duel (le bot frappe, victoire,
                                  # pièces), SkyWars (cages, coffres, bots armés et ponts), Spleef, carte
                                  # restaurée, TNT Run, Parkour (record), réponses des bots au chat
+npm run e2e:multi                # 22 vérifications : deux navigateurs (hôte + invité), liste des parties,
+                                 # chunks modifiés, blocs dans les deux sens, chat, créatures, butin, bots,
+                                 # coffre partagé, JcJ, déconnexion, serveur autonome
 npm run e2e:smp                  # 17 vérifications : connexion, bots qui rejoignent et travaillent, maison
                                  # construite, chat (tu fais quoi, donne, suis-moi), /sethome /home /tpa
                                  # /sell /shop, abattage d'arbre, filon, tombe, sauvegarde des bots

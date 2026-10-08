@@ -67,6 +67,8 @@ uniform vec3 uSkyHorizon;
 uniform vec3 uSunGlow;
 uniform sampler2D uShadowMap;
 uniform float uShadowTexel;
+uniform float uPortalTile;
+uniform vec2 uResolution;
 varying vec2 vUv;
 varying float vTile;
 varying vec2 vLight;
@@ -92,8 +94,45 @@ float shadowAt(float ndl) {
   return lit / 9.0;
 }
 
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+
+/**
+ * Portail de l'End : ciel étoilé en espace écran (comme le jeu original) — plusieurs couches
+ * d'étoiles colorées qui défilent à des vitesses et angles différents, indépendantes de la face.
+ */
+vec3 endPortalSky() {
+  vec2 sp = gl_FragCoord.xy / max(uResolution.y, 1.0);
+  vec3 c = vec3(0.02, 0.035, 0.05);
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    float a = fi * 1.3 + 0.4;
+    mat2 r = mat2(cos(a), -sin(a), sin(a), cos(a));
+    float scale = 7.0 + fi * 5.0;
+    vec2 q = r * sp * scale + vec2(uTime * (0.08 + fi * 0.02), uTime * 0.03 * fi);
+    vec2 cell = floor(q), f = fract(q);
+    float h = hash21(cell + fi * 17.0);
+    vec2 pos = vec2(hash21(cell + 3.1 + fi), hash21(cell + 7.7 + fi));
+    float d = length(f - pos);
+    float star = smoothstep(0.09 - fi * 0.008, 0.0, d) * step(0.62, h);
+    vec3 tint = mix(vec3(0.15, 0.55, 0.5), vec3(0.55, 0.9, 0.85), hash21(cell + 11.0));
+    if (i > 3) tint = mix(tint, vec3(0.6, 0.45, 0.85), 0.5);
+    c += tint * star * (1.2 - fi * 0.12);
+  }
+  return c;
+}
+
 void main() {
   float tile = floor(vTile + 0.5);
+  if (uPortalTile >= 0.0 && abs(tile - uPortalTile) < 0.5) {
+    vec3 sky = endPortalSky();
+    float fogP = smoothstep(uFogNear, uFogFar, vDist);
+    gl_FragColor = vec4(mix(sky, uFogColor, fogP), 1.0);
+    return;
+  }
   float col = mod(tile, ${ATLAS_COLS}.0);
   float row = floor(tile / ${ATLAS_COLS}.0);
   vec2 f = clamp(fract(vUv), 0.0005, 0.9995);
@@ -189,6 +228,8 @@ export interface ChunkUniforms {
   uShadowMap: THREE.IUniform<THREE.Texture | null>;
   uShadowMatrix: THREE.IUniform<THREE.Matrix4>;
   uShadowTexel: THREE.IUniform<number>;
+  uPortalTile: THREE.IUniform<number>;
+  uResolution: THREE.IUniform<THREE.Vector2>;
 }
 
 /** Matériaux partagés par tous les chunks (opaque/cutout et translucide). */
@@ -214,6 +255,8 @@ export function createChunkMaterials(atlas: THREE.Texture) {
     uShadowMap: { value: null },
     uShadowMatrix: { value: new THREE.Matrix4() },
     uShadowTexel: { value: 1 / 1024 },
+    uPortalTile: { value: -1 },
+    uResolution: { value: new THREE.Vector2(1, 1) },
   };
   const opaque = new THREE.ShaderMaterial({
     uniforms: { ...uniforms, uAlphaMode: { value: 0 } },
