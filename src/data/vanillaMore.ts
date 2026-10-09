@@ -259,7 +259,9 @@ for (const [c, n, h] of WOOL_COLORS) {
   smelt(`${c}_terracotta`, `${c}_glazed_terracotta`);
   tile(`${c}_shulker_box`, (t) => { t.grain(paint.ramp(h, 4, 0.15), 0.3, 2); t.hline(0, 15, 9, hex(shade(h, 0.6))); t.border(hex(shade(h, 0.7))); });
   B.push({ key: `${c}_shulker_box`, name: `Boîte de shulker ${n}`, textures: { all: `${c}_shulker_box` }, hardness: 2, tool: 'pickaxe', minTier: 0, sound: 'stone', color: h });
-  shaped(`${c}_shulker_box`, `${c}_shulker_box`, 1, ['S', 'C', 'S'], { S: 'shulker_shell', C: 'chest' });
+  // boîte de shulker de base (shulker + coffre), puis teinte avec un colorant
+  if (c === 'white') shaped('shulker_box_base', `${c}_shulker_box`, 1, ['S', 'C', 'S'], { S: 'shulker_shell', C: 'chest' });
+  else shapeless(`${c}_shulker_box`, `${c}_shulker_box`, 1, ['white_shulker_box', `${c}_dye`]);
 }
 B.push({ key: 'moss_carpet', name: 'Tapis de mousse', textures: { all: 'moss_block' }, hardness: 0.1, render: 'model', shape: 'carpet', solid: false, sound: 'grass', color: '#596e2d' });
 shaped('moss_carpet', 'moss_carpet', 3, ['MM'], { M: 'moss_block' });

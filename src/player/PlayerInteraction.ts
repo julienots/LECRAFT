@@ -1,4 +1,5 @@
 import { setOpen, updatePowerAround } from '../world/Redstone';
+import { ArmorStand } from '../entities/ArmorStand';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
 import { breakTime, getDrops, blockXp, hasSupport, plantSoil, rollLoot } from '../blocks/BlockBehaviors';
 import type { GameContext } from '../core/GameContext';
@@ -117,6 +118,7 @@ export class PlayerInteraction {
   private mobInteractable(m: Mob, held: string | null): boolean {
     if ((m as unknown as { npc?: unknown }).npc) return true;
     if (m instanceof Villager) return !m.baby;
+    if (m instanceof ArmorStand) return true;
     if (m instanceof Wolf) return held === 'bone' || (m as unknown as { tamed?: boolean }).tamed === true;
     if (m instanceof Animal) {
       if (held && m.def.food?.includes(held)) return true;
@@ -284,11 +286,9 @@ export class PlayerInteraction {
     const meta = w.getMeta(x, y, z);
     const b = BlockRegistry.get(id);
     // contenu des coffres
-    if (id === B.CHEST) {
-      this.ensureChestLoot(x, y, z);
-      const inv = w.getChest(x, y, z, false);
-      inv?.slots.forEach((s) => s && this.entities.spawnItem(s.id, s.count, x + 0.5, y + 0.5, z + 0.5, s.durability));
-    }
+    if (b.interact === 'chest') this.ensureChestLoot(x, y, z);
+    // contenu des coffres, tonneaux, boîtes de shulker et fourneaux (entrée, combustible, résultat)
+    for (const s of w.containerItems(x, y, z)) this.entities.spawnItem(s.id, s.count, x + 0.5, y + 0.5, z + 0.5, s.durability);
     w.setBlock(x, y, z, B.AIR);
     ctx.particles.blockBreak(x, y, z, id);
     ctx.audio.blockSound('break', b.sound, x + 0.5, y + 0.5, z + 0.5);
@@ -370,6 +370,37 @@ export class PlayerInteraction {
       }
       if (r === 'sit') return;
     }
+    // support d'armure : une pièce d'armure en main s'y équipe (échange), main vide : on la reprend
+    if (!repeat && this.targetMob instanceof ArmorStand) {
+      const st = this.targetMob;
+      const slot = def?.armor?.slot;
+      if (held && slot) {
+        const old = st.armor[slot];
+        st.armor[slot] = { id: held.id, durability: held.durability };
+        if (!p.creative) {
+          inv.slots[inv.selected] = old ? { id: old.id, count: 1, durability: old.durability } : held.count > 1 ? { ...held, count: held.count - 1 } : null;
+          inv.changed();
+        }
+      } else if (!held) {
+        const s = (['head', 'chest', 'legs', 'feet'] as const).find((k) => st.armor[k]);
+        if (!s) return;
+        const it = st.armor[s]!;
+        delete st.armor[s];
+        if (inv.add({ id: it.id, count: 1, durability: it.durability }) > 0) this.entities.spawnItem(it.id, 1, p.x, p.y + 1, p.z, it.durability);
+        inv.changed();
+      } else return;
+      ctx.audio.play('equip', { x: st.x, y: st.y, z: st.z });
+      return;
+    }
+    // pose d'un support d'armure sur le dessus d'un bloc, face au joueur
+    if (!repeat && held?.id === 'armor_stand' && t && t.ny > 0) {
+      const x = t.x + 0.5, y = t.y + 1, z = t.z + 0.5;
+      if (ctx.world.isSolid(t.x, t.y + 1, t.z) || ctx.world.isSolid(t.x, t.y + 2, t.z)) return;
+      this.entities.spawnArmorStand(x, y, z, Math.round((p.yaw + Math.PI) / (Math.PI / 4)) * (Math.PI / 4));
+      ctx.audio.blockSound('place', 'wood', x, y, z);
+      if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+      return;
+    }
     if (!repeat && this.targetMob instanceof Villager && !this.targetMob.baby) {
       this.host.trade?.(this.targetMob);
       return;
@@ -393,6 +424,15 @@ export class PlayerInteraction {
         return this.toggleOpenable(t.x, t.y, t.z);
       }
       if (b.interact === 'lever') return this.toggleLever(t.x, t.y, t.z);
+      // cisailles sur une citrouille : citrouille sculptée + 4 graines (comme le jeu original)
+      if (held?.id === 'shears' && b.key === 'pumpkin' && BlockRegistry.has('carved_pumpkin')) {
+        const w = ctx.world;
+        w.setBlock(t.x, t.y, t.z, BlockRegistry.byName('carved_pumpkin').id, opposite(facingFromYaw(p.yaw)));
+        this.entities.spawnItem('pumpkin_seeds', 4, t.x + 0.5, t.y + 1.1, t.z + 0.5);
+        ctx.audio.play('shear', { x: t.x, y: t.y, z: t.z });
+        if (!p.creative) inv.damageSelected(1);
+        return;
+      }
       if (b.interact === 'button') return this.pressButton(t.x, t.y, t.z, b.sound === 'wood' ? 1.5 : 1);
       if (b.interact === 'bed') return this.host.sleep(t.x, t.y, t.z);
       if (b.interact === 'tnt' && held && (held.id === 'flint_and_steel' || held.id === 'fire_charge')) {

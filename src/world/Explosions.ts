@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
-import { getDrops } from '../blocks/BlockBehaviors';
+import { getDrops, rollLoot } from '../blocks/BlockBehaviors';
+import { hash3 } from '../util/math';
 import type { GameContext } from '../core/GameContext';
 import type { EntityManager } from '../entities/EntityManager';
 import { Mob } from '../entities/Mob';
@@ -121,8 +122,10 @@ export class Explosions {
         chain.push([x, y, z]);
         continue;
       }
+      // coffre de structure jamais ouvert : son butin est tiré et lâché lui aussi
       const meta = w.getMeta(x, y, z);
-      if (id === B.CHEST) w.getChest(x, y, z, false)?.slots.forEach((s) => s && entities.spawnItem(s.id, s.count, x + 0.5, y + 0.5, z + 0.5, s.durability));
+      if (id === B.CHEST && meta >> 2 > 0) for (const st of rollLoot(meta >> 2, hash3(w.seed, x, y, z))) entities.spawnItem(st.id, st.count, x + 0.5, y + 0.5, z + 0.5, st.durability);
+      for (const s of w.containerItems(x, y, z)) entities.spawnItem(s.id, s.count, x + 0.5, y + 0.5, z + 0.5, s.durability);
       w.setBlock(x, y, z, B.AIR);
       // comme dans le jeu de référence : chaque bloc détruit a 1 chance sur `power` de lâcher son objet
       if (Math.random() < 1 / power) for (const d of getDrops(id, meta, 'diamond_pickaxe')) entities.spawnItem(d.id, d.count, x + 0.5, y + 0.5, z + 0.5);

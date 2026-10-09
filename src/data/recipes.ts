@@ -74,7 +74,7 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
   // boussoles et objets propres à LeCraft (boss)
   shaped('compass_golem', 1, [' I ', 'IDI', ' I '], { I: 'iron_ingot', D: 'amethyst_shard' }),
   shaped('compass_lich', 1, [' I ', 'ICI', ' I '], { I: 'iron_ingot', C: 'golem_core' }),
-  shaped('golem_mace', 1, [' C ', ' B ', ' S '], { C: 'golem_core', B: 'iron_block', S: 'stick' }),
+  shaped('golem_mace', 1, ['C', 'B', 'S'], { C: 'golem_core', B: 'iron_block', S: 'stick' }),
 ];
 
 // blocs de minerais ↔ lingots

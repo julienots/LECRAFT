@@ -91,6 +91,8 @@ export function applyQuality(s: Settings, q: QualityLevel) {
   s.clouds = p.clouds;
   s.particles = q === 'LOW' ? 'low' : 'high';
   s.fpsCap = q === 'LOW' ? 30 : q === 'MEDIUM' ? 45 : 60;
+  // profil Bas : shaders coupés (les plus coûteux)
+  if (q === 'LOW') s.shaders = 'off';
 }
 
 export function loadSettings(fallbackQuality: QualityLevel): { settings: Settings; fresh: boolean } {

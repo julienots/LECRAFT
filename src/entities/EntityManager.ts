@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { ArmorStand } from './ArmorStand';
+import type { ArmorSlot } from '../inventory/Item';
 import type { GameContext } from '../core/GameContext';
 import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { MOB_BY_KEY, MOB_DEFS, type MobDef } from '../data/mobs';
@@ -39,6 +41,8 @@ export interface SavedMob {
   name?: string;
   effects?: import('./Effects').ActiveEffect[];
   yaw?: number;
+  /** Support d'armure : pièces portées. */
+  armor?: Partial<Record<ArmorSlot, { id: string; durability?: number }>>;
 }
 
 /**
@@ -108,6 +112,7 @@ export class EntityManager implements EntitySpawner {
       m.dispose();
       return;
     }
+    m.clearArmor();
     let list = this.pool.get(m.type);
     if (!list) this.pool.set(m.type, (list = []));
     if (list.length < 8) list.push(m);
@@ -138,6 +143,13 @@ export class EntityManager implements EntitySpawner {
   }
 
   /** Ajoute une créature construite ailleurs (bots du serveur). */
+  /** Support d'armure posé (objet « Support d'armure ») ou rechargé. */
+  spawnArmorStand(x: number, y: number, z: number, yaw: number) {
+    const a = this.addMob(new ArmorStand(x, y, z, this));
+    a.yaw = yaw;
+    return a;
+  }
+
   addMob<T extends Mob>(m: T): T {
     this.entities.push(m);
     this.group.add(m.object3d);
@@ -624,11 +636,17 @@ export class EntityManager implements EntitySpawner {
         key: m.def.key, x: m.x, y: m.y, z: m.z, health: m.health, baby: m.baby, wool: m instanceof Animal ? m.woolColor : undefined, sheared: m instanceof Animal ? m.sheared : undefined,
         ...(m.tags.size ? { tags: [...m.tags] } : {}), ...(m.dynProps.size ? { dp: Object.fromEntries(m.dynProps) } : {}), ...(m.nameTag ? { name: m.nameTag } : {}),
         ...(m.effects.map.size ? { effects: m.effects.serialize() } : {}), yaw: m.yaw,
+        ...(m instanceof ArmorStand ? { armor: { ...m.armor } } : {}),
       }));
   }
 
   load(list: SavedMob[]) {
     for (const s of list) {
+      if (s.key === 'armor_stand') {
+        const a = this.spawnArmorStand(s.x, s.y + 0.05, s.z, s.yaw ?? 0);
+        a.armor = { ...(s.armor ?? {}) };
+        continue;
+      }
       const m = this.spawnMob(s.key, s.x, s.y + 0.1, s.z, { baby: s.baby, persistent: true, cause: 'Loaded' });
       if (!m) continue;
       m.health = s.health;

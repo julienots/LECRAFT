@@ -1,4 +1,5 @@
 import type { DamageInfo, GameContext } from '../core/GameContext';
+import { ArmorStand } from '../entities/ArmorStand';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { Mob, EntitySpawner } from '../entities/Mob';
 import { Boss } from '../entities/Boss';
@@ -120,6 +121,12 @@ export class DamageSystem {
     m.ai.fsm.set(AIState.DEAD);
     ctx.audio.play(m.def.sounds.death, { x: m.x, y: m.y, z: m.z });
     ctx.particles.burst('smoke', m.x, m.y + m.body.height / 2, m.z, 12);
+    // support d'armure : rend son armure et disparaît aussitôt (pas d'animation de mort)
+    if (m instanceof ArmorStand) {
+      m.dropExtra();
+      m.removed = true;
+      ctx.particles.burst('dust', m.x, m.y + 1, m.z, 16);
+    }
     if (!m.baby) {
       for (const d of m.def.drops) {
         if (d.chance !== undefined && Math.random() > d.chance) continue;

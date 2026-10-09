@@ -197,6 +197,10 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.pop = s.tone(0.09, 520, 980, { decay: 25, gain: 0.35 });
   out.eat = s.mix(...[0, 0.12, 0.24].map((at, i) => ({ buf: s.noise(0.08, { lp: 2500, hp: 400, decay: 30, gain: 0.6, seed: i + 3, crackle: 0.5 }), at })));
   out.chest_open = s.mix({ buf: s.tone(0.35, 110, 160, { wave: 'saw', decay: 4, gain: 0.15, vibrato: 0.1, vibRate: 30 }) }, { buf: mat.wood(0.12, 0.6, 2), at: 0.25 });
+  // pièce d'armure équipée : cliquetis métallique bref
+  out.equip = s.mix({ buf: s.tone(0.08, 900, 700, { wave: 'square', decay: 30, gain: 0.08 }) }, { buf: s.noise(0.12, { hp: 2500, decay: 25, gain: 0.25 }), at: 0.04 }, { buf: s.tone(0.07, 1300, 1100, { wave: 'tri', decay: 35, gain: 0.08 }), at: 0.09 });
+  // couvercle qui retombe : grincement court puis choc du bois
+  out.chest_close = s.mix({ buf: s.tone(0.18, 150, 100, { wave: 'saw', decay: 8, gain: 0.12, vibrato: 0.1, vibRate: 30 }) }, { buf: mat.wood(0.14, 0.8, 5), at: 0.12 });
   out.deny = s.tone(0.12, 200, 160, { wave: 'square', decay: 15, gain: 0.12 });
   out.click = s.tone(0.04, 1200, 900, { wave: 'tri', decay: 60, gain: 0.25 });
   out.levelup = s.mix(...[523, 659, 784, 1046].map((f, i) => ({ buf: s.tone(0.35, f, f, { wave: 'tri', decay: 6, gain: 0.25 }), at: i * 0.09 })));

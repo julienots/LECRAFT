@@ -133,8 +133,14 @@ export class World {
     this.pendingEdits.push(x, y, z, id, meta);
     // mise à jour de l'éclairage local approximatif (sera recalculé au remesh)
     this.markDirty(x, z, lx, lz, prev !== id);
-    if (prev === B.CHEST && id !== B.CHEST) this.chests.delete(`${x},${y},${z}`);
-    if ((prev === B.FURNACE || prev === B.LIT_FURNACE) && id !== B.FURNACE && id !== B.LIT_FURNACE) this.furnaces.delete(`${x},${y},${z}`);
+    if (prev > 0 && prev !== id) {
+      // contenu d'un conteneur remplacé (coffre, tonneau, fourneau…) : les objets ont déjà été
+      // lâchés par le code qui casse le bloc (joueur, explosion) ; l'état est retiré ici
+      const kind = BlockRegistry.get(prev).interact;
+      const furnaceLike = (b: number) => b === B.FURNACE || b === B.LIT_FURNACE;
+      if (kind === 'chest') this.chests.delete(`${x},${y},${z}`);
+      if (kind === 'furnace' && !(furnaceLike(prev) && furnaceLike(id))) this.furnaces.delete(`${x},${y},${z}`);
+    }
     if ((prev === B.SPAWNER || prev === B.BOSS_ALTAR) && id !== prev) this.specials.delete(`${x},${y},${z}`);
     if (scheduleUpdates) {
       this.scheduleUpdate(x, y, z);
@@ -187,6 +193,17 @@ export class World {
       this.furnaces.set(k, f);
     }
     return f ?? null;
+  }
+
+  /** Objets contenus dans le conteneur en (x, y, z) : coffre, tonneau, shulker, fourneaux. */
+  containerItems(x: number, y: number, z: number): { id: string; count: number; durability?: number }[] {
+    const kind = BlockRegistry.get(this.getBlock(x, y, z)).interact;
+    if (kind === 'chest') return (this.getChest(x, y, z, false)?.slots ?? []).filter((s) => !!s) as { id: string; count: number; durability?: number }[];
+    if (kind === 'furnace') {
+      const f = this.getFurnace(x, y, z, false);
+      return f ? [f.input, f.fuel, f.output].filter((s) => !!s) as { id: string; count: number; durability?: number }[] : [];
+    }
+    return [];
   }
 
   getChest(x: number, y: number, z: number, create = true): Inventory | null {

@@ -37,6 +37,10 @@ class BlockRegistryImpl {
 
   register(def: BlockDef): Block {
     if (this.byKey.has(def.key)) throw new Error(`Bloc dupliqué: ${def.key}`);
+    // conteneurs qui avaient une texture mais aucune interface : tonneau et boîtes de shulker
+    // (27 cases comme un coffre), fumoir et haut fourneau (interface du fourneau)
+    if (!def.interact && (def.key === 'barrel' || def.key.endsWith('shulker_box'))) def = { ...def, interact: 'chest' };
+    else if (!def.interact && (def.key === 'smoker' || def.key === 'blast_furnace')) def = { ...def, interact: 'furnace' };
     const id = this.blocks.length;
     if (id >= MAX_BLOCKS) throw new Error(`Maximum ${MAX_BLOCKS} blocs`);
     // modèle 3D du jeu de référence (lanternes, chaudrons, enclumes…) : rendu par quads précalculés

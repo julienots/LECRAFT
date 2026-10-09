@@ -6,6 +6,8 @@
 const RULES: [RegExp, string][] = [
   [/door.*open|open.*door|open_door|fence_gate.*open|open.*trapdoor|trapdoor.*open/, 'door_open'],
   [/door.*close|close.*door|close_door|fence_gate.*close|close.*trapdoor|trapdoor.*close/, 'door_close'],
+  [/chest.*close|barrel.*close|shulker.*close|enderchest.*close/, 'chest_close'],
+  [/armor.*equip|equip.*armor/, 'equip'],
   [/chest.*open|barrel.*open|shulker.*open|enderchest.*open/, 'chest_open'],
   [/chest.*close|barrel.*close/, 'door_close'],
   [/levelup|level_up/, 'levelup'],

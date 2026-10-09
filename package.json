@@ -33,6 +33,7 @@
     "e2e:smp": "node scripts/e2e-smp.mjs",
     "e2e:multi": "node scripts/e2e-multi.mjs",
     "e2e:paper": "node scripts/e2e-paper.mjs",
+    "e2e:audit": "node scripts/e2e-audit.mjs",
     "server": "node server/lecraft-server.mjs"
   },
   "dependencies": {

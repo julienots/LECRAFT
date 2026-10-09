@@ -1,3 +1,4 @@
+import { Rng } from '../util/math';
 import * as THREE from 'three';
 import { BlockRegistry } from '../blocks/BlockRegistry';
 import { ItemRegistry } from '../inventory/ItemRegistry';
@@ -35,11 +36,20 @@ const PACK_RENAME: Record<string, string> = {
 };
 const WATER_TINT = hex('#3f76e4');
 
+/** Couleurs des armures (cuir non teint ; calques peints sans pack). */
+const ARMOR_COLORS: Record<string, string> = { leather: '#a06540', chainmail: '#9a9a9a', iron: '#d8d8d8', gold: '#f3d24a', diamond: '#4ee3d4', netherite: '#4a4446', copper: '#c87a50', turtle_scute: '#47a13a' };
+const shadeHex = (h: string, k: number) => {
+  const n = parseInt(h.slice(1), 16);
+  const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+};
+
 /** Skins de joueur fournies par les packs récents (entity/player/wide). */
 export const PLAYER_SKINS = ['steve', 'alex', 'ari', 'efe', 'kai', 'makena', 'noor', 'sunny', 'zuri'];
 
 /** Chemins des skins des créatures dans un pack (plusieurs versions du jeu). */
 export const SKIN_PATHS: Record<string, string[]> = {
+  armor_stand: ['entity/armorstand/wood.png', 'entity/armor_stand/wood.png'],
   pig: ['entity/pig/pig.png', 'entity/pig/temperate_pig.png'],
   cow: ['entity/cow/cow.png', 'entity/cow/temperate_cow.png'],
   sheep: ['entity/sheep/sheep.png'],
@@ -355,6 +365,8 @@ export class TextureManager implements SkinProvider {
 
   private skinCanvas(key: string): HTMLCanvasElement {
     if (key === 'zombie') return paintRealisticZombie();
+    if (key.startsWith('armor_')) return this.armorSkin(key);
+    if (key === 'armor_stand' && !this.view?.first('entity/armorstand/wood.png', 'entity/armor_stand/wood.png')) return this.woodStandSkin();
     if (key === 'snow_golem_pumpkin') return this.pumpkinSkin();
     // texture de bloc (entités d'add-ons qui utilisent une texture de bloc du jeu)
     for (const p of SKIN_PATHS[key] ?? []) {
@@ -392,6 +404,66 @@ export class TextureManager implements SkinProvider {
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#f0f';
     ctx.fillRect(0, 0, 64, 32);
+    return c;
+  }
+
+  /**
+   * Calque d'armure 64×32 (casque, plastron, bottes ; « _legs » : jambières) : texture du pack
+   * (format récent entity/equipment ou ancien models/armor), cuir teinté en brun comme l'armure
+   * non teinte du jeu ; sans pack, couleur du matériau sur les zones du calque.
+   */
+  /** Support d'armure sans pack : bois de chêne (tuile des planches) sur toute la texture. */
+  private woodStandSkin(): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d')!;
+    const t = this.tile(TileRegistry.has('oak_planks') ? TileRegistry.index('oak_planks') : 0);
+    for (let y = 0; y < 64; y += 16) for (let x = 0; x < 64; x += 16) ctx.drawImage(t, 0, 0, 16, 16, x, y, 16, 16);
+    return c;
+  }
+
+  private armorSkin(key: string): HTMLCanvasElement {
+    const legs = key.endsWith('_legs');
+    const mat = key.slice(6, legs ? -5 : undefined);
+    const old = mat === 'turtle_scute' ? 'turtle' : mat;
+    const img = this.view?.first(
+      `entity/equipment/${legs ? 'humanoid_leggings' : 'humanoid'}/${mat}.png`,
+      `models/armor/${old}_layer_${legs ? 2 : 1}.png`,
+    );
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 32;
+    const ctx = c.getContext('2d')!;
+    const color = ARMOR_COLORS[mat] ?? '#8a8a8a';
+    if (img) {
+      ctx.drawImage(img, 0, 0, 64, 32);
+      if (mat === 'leather') {
+        // cuir : texture en niveaux de gris multipliée par la couleur par défaut
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, 64, 32);
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.drawImage(img, 0, 0, 64, 32);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      return c;
+    }
+    const rng = new Rng(mat.length * 977);
+    const rect = (x: number, y: number, w: number, h: number) => {
+      for (let j = y; j < y + h; j++)
+        for (let i = x; i < x + w; i++) {
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = rng.next() < 0.25 ? shadeHex(color, 0.82) : rng.next() < 0.15 ? shadeHex(color, 1.15) : color;
+          ctx.fillRect(i, j, 1, 1);
+        }
+    };
+    // zones du calque (UV de boîte) : tête, corps, bras, jambes
+    if (!legs) {
+      rect(0, 0, 32, 16);
+      rect(16, 16, 24, 16);
+      rect(40, 16, 16, 16);
+    } else rect(16, 16, 24, 16);
+    rect(0, 16, 16, 16);
     return c;
   }
 

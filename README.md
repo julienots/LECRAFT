@@ -273,6 +273,22 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **Audit et corrections (v2.25)**. Détail complet et tests dans [AUDIT.md](AUDIT.md).
+  - **Plus de pertes de données** :
+    - les créatures éloignées sont conservées au chargement ;
+    - une sauvegarde ratée ne bloque plus les suivantes ;
+    - si la sauvegarde échoue, le jeu demande confirmation avant de quitter et annule le
+      voyage par portail ;
+    - le contenu d'un fourneau est rendu quand on le casse.
+  - **Supports d'armure** : pose, équipement, reprise, casse et sauvegarde.
+  - **Armure visible** sur le joueur et les supports, avec les textures du pack.
+  - **Conteneurs** : tonneaux et boîtes de shulker utilisables ; fumoir et haut fourneau
+    fonctionnels.
+  - **Cisailles sur citrouille** pour obtenir une citrouille sculptée.
+  - **Recettes** : 4 recettes qui ne pouvaient pas être fabriquées sont corrigées.
+  - **Sons** : fermeture du coffre et équipement d'armure.
+  - **Options et menus** : particules « Minimales », ombres, résolution, profil Bas,
+    triches, recréation de monde.
 - **Créatures complètes (v2.24)** — sens des rotations des modèles officiels corrigé (pose de
   repos, cubes tournés autour de leur centre) : vache, cochon, tortue, renard, lama, chat,
   ocelot, poule, dauphin… s'affichent entiers et à leur place.

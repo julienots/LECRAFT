@@ -90,6 +90,23 @@ const HUB_SPOTS: [number, number][] = [
 const GADGET_ITEM: Record<string, string> = { firework: 'firework_rocket', confetti: 'paper', leap: 'ender_pearl', storm: 'blaze_rod' };
 
 export class ServerNetwork {
+
+  /** Minuteries annulées en quittant le serveur (pas de messages ni d'effets après la sortie). */
+  private timers = new Set<ReturnType<typeof setTimeout>>();
+  later(fn: () => void, ms: number) {
+    const t = setTimeout(() => {
+      this.timers.delete(t);
+      fn();
+    }, ms);
+    this.timers.add(t);
+  }
+  /** Sortie du serveur : partie en cours restaurée, minuteries annulées. */
+  dispose() {
+    for (const t of this.timers) clearTimeout(t);
+    this.timers.clear();
+    this.game?.dispose();
+    this.game = null;
+  }
   readonly profile = loadProfile();
   private rng = new Rng((Math.random() * 1e9) | 0);
   private hubBots: Bot[] = [];
@@ -389,7 +406,7 @@ export class ServerNetwork {
       if (i++ < 14) {
         this.title('§5§lBOÎTE MYSTÈRE', this.rng.pick(names));
         this.s.audio.play('click', { volume: 0.4 });
-        setTimeout(roll, 70 + i * 14);
+        this.later(roll, 70 + i * 14);
         return;
       }
       this.title(`${RARITY_COLOR[c.rarity]}§l${c.name.toUpperCase()}`, `§7${KIND_LABEL[c.kind]} · ${c.rarity}`);
@@ -630,7 +647,7 @@ export class ServerNetwork {
     if (kind === 'firework') {
       const x = p.x + dx * 3, z = p.z + dz * 3;
       fx.burst('crit', x, p.y + 2, z, 12);
-      setTimeout(() => {
+      this.later(() => {
         fx.burst('explosion', x, p.y + 9, z, 26);
         fx.burst('magic', x, p.y + 9, z, 40);
         fx.burst('crystal', x, p.y + 9, z, 30);
@@ -646,10 +663,10 @@ export class ServerNetwork {
       p.body.vz = dz * 16;
       p.body.vy = 13;
       fx.burst('magic', p.x, p.y, p.z, 20);
-      a.play('whoosh', { volume: 0.5 });
+      a.play('paper_whoosh', { volume: 0.5 });
       this.gadgetCooldown = 4;
     } else if (kind === 'storm') {
-      for (let i = 0; i < 6; i++) setTimeout(() => fx.burst('rain', p.x + (Math.random() - 0.5) * 6, p.y + 4, p.z + (Math.random() - 0.5) * 6, 20), i * 120);
+      for (let i = 0; i < 6; i++) this.later(() => fx.burst('rain', p.x + (Math.random() - 0.5) * 6, p.y + 4, p.z + (Math.random() - 0.5) * 6, 20), i * 120);
       fx.burst('smoke', p.x, p.y + 3, p.z, 30);
       a.play('thunder', { volume: 0.4 });
       this.gadgetCooldown = 5;
@@ -699,7 +716,7 @@ export class ServerNetwork {
     else if (/\?$/.test(t)) reply = this.rng.pick(['je sais pas', 'oui', 'non', 'peut-être', 'demande au staff', 'bonne question']);
     else if (/(nul|noob|ez)/.test(t)) reply = this.rng.pick(['toi même', 'calme toi', ':(', 'on verra en duel']);
     else if (Math.random() < 0.35) reply = this.rng.pick(['mdr', 'ok', 'trop bien', 'ah oui ?', 'lol']);
-    if (reply) setTimeout(() => !who.removed && this.botSay(who, reply!), 900 + Math.random() * 2200);
+    if (reply) this.later(() => !who.removed && this.botSay(who, reply!), 900 + Math.random() * 2200);
   }
 
   /** Commandes du serveur (chat). */
@@ -983,7 +1000,7 @@ abstract class MiniGame {
     if (part.bot) {
       if (Math.random() < 0.3) this.net.botSay(part.bot, this.net.pick(DEATH_CHAT));
       const b = part.bot;
-      setTimeout(() => this.net.release(b), b.dead ? 1200 : 0);
+      this.net.later(() => this.net.release(b), b.dead ? 1200 : 0);
     } else {
       this.net.title('§c§lÉLIMINÉ', `§7${this.alive.length} joueur(s) encore en vie`);
       const c = this.center();

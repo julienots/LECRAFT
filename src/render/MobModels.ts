@@ -165,6 +165,7 @@ const VANILLA: Record<string, VanillaModel> = {
   zombie_chief: humanoid('zombie_chief', 64, 64, 4),
   skeleton: humanoid('skeleton', 64, 32, 2),
   player: playerModel(),
+  armor_stand: armorStandModel(),
   zombified_piglin: piglinModel('zombified_piglin'),
   wither_skeleton: humanoid('wither_skeleton', 64, 32, 2),
   ender_dragon: dragonModel(),
@@ -420,6 +421,25 @@ function playerModel(): VanillaModel {
       P([32, 48], [-1, -2, -2, 4, 12, 4], [5, 2, 0], { anim: 'armL', children: [o([48, 48], [-1, -2, -2, 4, 12, 4], 0.25)] }),
       P([0, 16], limb, [-1.9, 12, 0], { anim: 'legR', children: [o([0, 32], limb, 0.25)] }),
       P([16, 48], limb, [1.9, 12, 0], { anim: 'legL', children: [o([0, 48], limb, 0.25)] }),
+    ],
+  };
+}
+
+/** Support d'armure (texture entity/armorstand/wood, 64×64) : géométrie du modèle officiel. */
+function armorStandModel(): VanillaModel {
+  return {
+    skin: 'armor_stand', texW: 64, texH: 64,
+    parts: [
+      P([0, 0], [-1, -7, -1, 2, 7, 2], [0, 1, 0], { anim: 'head' }),
+      P([0, 26], [-6, 0, -1.5, 12, 3, 3], [0, 0, 0], {
+        anim: 'body',
+        children: [P([16, 0], [-3, 3, -1, 2, 7, 2], [0, 0, 0]), P([48, 16], [1, 3, -1, 2, 7, 2], [0, 0, 0]), P([0, 48], [-4, 10, -1, 8, 2, 2], [0, 0, 0])],
+      }),
+      P([24, 0], [-2, -2, -1, 2, 12, 2], [-5, 2, 0], { anim: 'armR', rot: [-0.17, 0, 0.17] }),
+      P([32, 16], [0, -2, -1, 2, 12, 2], [5, 2, 0], { anim: 'armL', mirror: true, rot: [-0.17, 0, -0.17] }),
+      P([8, 0], [-1, 0, -1, 2, 11, 2], [-1.9, 12, 0], { anim: 'legR' }),
+      P([40, 16], [-1, 0, -1, 2, 11, 2], [1.9, 12, 0], { anim: 'legL', mirror: true }),
+      P([0, 32], [-6, 11, -6, 12, 1, 12], [0, 12, 0]),
     ],
   };
 }
@@ -770,7 +790,65 @@ export class MobModel {
     }
   }
 
+  /** Armure portée (modèles humanoïdes : joueur, bots, supports d'armure). */
+  private armorMeshes = new Map<string, THREE.Mesh[]>();
+  private armorShown = new Map<string, string | null>();
+  private armorMats: THREE.MeshBasicMaterial[] = [];
+  /**
+   * Affiche les pièces d'armure (objets du jeu) sur les membres du modèle, comme le calque
+   * d'armure du jeu original : casque et bottes gonflés de 1 px, plastron (corps + bras) de 1 px,
+   * jambières de 0,5 px avec la seconde texture.
+   */
+  setArmor(armor: Partial<Record<'head' | 'chest' | 'legs' | 'feet', string | null>>, skins: SkinProvider) {
+    for (const slot of ['head', 'chest', 'legs', 'feet'] as const) {
+      const item = armor[slot] ?? null;
+      if ((this.armorShown.get(slot) ?? null) === item) continue;
+      this.armorShown.set(slot, item);
+      for (const m of this.armorMeshes.get(slot) ?? []) m.removeFromParent();
+      this.armorMeshes.set(slot, []);
+      const mat = item ? armorMaterialOf(item) : null;
+      if (!mat) continue;
+      const tex = skins.skin(slot === 'legs' ? `armor_${mat}_legs` : `armor_${mat}`);
+      const m = new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5 });
+      m.color.copy(this.material.color);
+      this.armorMats.push(m);
+      const limb: CubePart['box'] = [-2, 0, -2, 4, 12, 4];
+      const pieces: [string, CubePart][] =
+        slot === 'head' ? [['head', { uv: [0, 0], box: [-4, -8, -4, 8, 8, 8], pivot: [0, 0, 0], inflate: 1 }]]
+        : slot === 'chest' ? [
+            ['body', { uv: [16, 16], box: [-4, 0, -2, 8, 12, 4], pivot: [0, 0, 0], inflate: 1 }],
+            ['armR', { uv: [40, 16], box: [-3, -2, -2, 4, 12, 4], pivot: [0, 0, 0], inflate: 1 }],
+            ['armL', { uv: [40, 16], box: [-1, -2, -2, 4, 12, 4], pivot: [0, 0, 0], inflate: 1, mirror: true }],
+          ]
+        : slot === 'legs' ? [
+            ['body', { uv: [16, 16], box: [-4, 0, -2, 8, 12, 4], pivot: [0, 0, 0], inflate: 0.5 }],
+            ['legR', { uv: [0, 16], box: limb, pivot: [0, 0, 0], inflate: 0.5 }],
+            ['legL', { uv: [0, 16], box: limb, pivot: [0, 0, 0], inflate: 0.5, mirror: true }],
+          ]
+        : [
+            ['legR', { uv: [0, 16], box: limb, pivot: [0, 0, 0], inflate: 1 }],
+            ['legL', { uv: [0, 16], box: limb, pivot: [0, 0, 0], inflate: 1, mirror: true }],
+          ];
+      for (const [part, cube] of pieces) {
+        const pivot = this.parts.get(part)?.[0];
+        if (!pivot) continue;
+        const mesh = new THREE.Mesh(cachedCube(cube, 64, 32), m);
+        mesh.renderOrder = 2;
+        pivot.add(mesh);
+        this.armorMeshes.get(slot)!.push(mesh);
+      }
+    }
+  }
+
+  /** Retire toute l'armure (modèle remis au pool). */
+  clearArmor() {
+    for (const list of this.armorMeshes.values()) for (const m of list) m.removeFromParent();
+    this.armorMeshes.clear();
+    this.armorShown.clear();
+  }
+
   setTint(r: number, g: number, b: number) {
+    for (const m of this.armorMats) m.color.setRGB(r, g, b);
     this.material.color.setRGB(r, g, b);
     this.outerMaterial?.color.setRGB(r, g, b);
     this.pumpkinMaterial?.color.setRGB(r, g, b);
@@ -888,3 +966,11 @@ export function skinAspect(skin: string): number | undefined {
 }
 
 export const VANILLA_MODELS = VANILLA;
+
+/** Matériau d'armure (nom de texture du calque) d'après l'objet porté. */
+export function armorMaterialOf(item: string): string | null {
+  if (item === 'turtle_helmet') return 'turtle_scute';
+  const m = /^(.+?)_(helmet|chestplate|leggings|boots)$/.exec(item);
+  if (!m) return null;
+  return m[1] === 'golden' ? 'gold' : m[1];
+}

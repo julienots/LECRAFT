@@ -390,8 +390,8 @@ export class Game {
 
   /** Nouveau monde avec la même graine et les mêmes options (bouton « Recréer »). */
   async recreateWorld(meta: WorldMeta) {
-    const copy = await this.saves.createWorld(`${meta.name} (recréé)`, meta.seed, meta.gameMode, meta.difficulty);
-    await this.startWorld(copy, null);
+    // mêmes options que l'original (triches, bots de survie)
+    await this.createWorld(`${meta.name} (recréé)`, String(meta.seed), meta.gameMode, meta.difficulty, false, meta.cheats ?? true, !!meta.bots);
   }
 
   async continueLast() {
@@ -404,7 +404,7 @@ export class Game {
     this.stopPanorama();
     this.audio.unlock();
     this.state = 'loading';
-    this.settings.difficulty = state ? meta.difficulty : meta.difficulty;
+    this.settings.difficulty = meta.difficulty;
     const loading = loadingScreen(travel ?? meta.name);
     this.ui.set(loading.screen);
     this.session?.dispose();
@@ -434,7 +434,11 @@ export class Game {
     if (!s || this.state !== 'playing') return;
     this.closeInventory();
     this.chat.close();
-    await s.save(false).catch(() => {});
+    // dimension quittée : ses chunks modifiés doivent être écrits avant de la décharger
+    if (!(await this.trySave(s, false))) {
+      this.hud.toast('Sauvegarde impossible : voyage annulé');
+      return;
+    }
     const state = s.snapshot();
     const from = s.dimension;
     const dims = { ...(state.dims ?? {}) };
@@ -505,9 +509,24 @@ export class Game {
     }
   }
 
+  /** Sauvegarde avec une nouvelle tentative ; false si les deux échouent. */
+  private async trySave(s: Session, thumb: boolean) {
+    for (let i = 0; i < 2; i++) {
+      try {
+        await s.save(thumb);
+        return true;
+      } catch (e) {
+        console.warn('sauvegarde', e);
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+    return false;
+  }
+
   async quitToMenu() {
     if (this.session) {
-      await this.session.save(true).catch(() => {});
+      // une sauvegarde ratée (stockage plein…) ne doit pas faire perdre la partie sans prévenir
+      if (!(await this.trySave(this.session, true)) && !(await this.ui.confirm('Sauvegarde impossible', 'La sauvegarde a échoué (stockage plein ?). Quitter quand même ? Les dernières modifications seront perdues.', 'Quitter', true))) return;
       this.session.dispose();
       this.session = null;
     }
@@ -647,7 +666,10 @@ export class Game {
     ui.dispose();
     // partie en réseau : le coffre refermé repart chez l'hôte
     const cp = this.openChestPos;
-    if (cp) this.session?.netClient?.sendChest(cp.x, cp.y, cp.z);
+    if (cp) {
+      this.session?.netClient?.sendChest(cp.x, cp.y, cp.z);
+      this.audio.play('chest_close', { x: cp.x + 0.5, y: cp.y + 0.5, z: cp.z + 0.5 });
+    }
     this.openChestPos = null;
     this.ui.remove(ui.screen);
     if (this.state === 'playing') this.touch.setVisible(true);

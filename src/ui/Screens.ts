@@ -34,7 +34,8 @@ export function mainMenu(game: Game): Screen {
     mcButton('Multijoueur', () => game.showServers()),
     mcRow(mcButton('Aide', () => game.showHelp(), { w: 98 }), mcButton('Crédits', () => game.showCredits(), { w: 98 })),
     el('div', { style: 'height:calc(var(--gs) * 8px)' }),
-    mcRow(mcButton('Options...', () => game.showSettings(), { w: 98 }), mcButton('Quitter le jeu', () => game.back(), { w: 98 })),
+    // « Quitter le jeu » : seulement dans l'application (un navigateur ne peut pas fermer son onglet)
+    game.platform.native ? mcRow(mcButton('Options...', () => game.showSettings(), { w: 98 }), mcButton('Quitter le jeu', () => game.back(), { w: 98 })) : mcButton('Options...', () => game.showSettings()),
     el('div', { class: 'corner l' }, `LeCraft ${__APP_VERSION__}`),
     el('div', { class: 'corner r' }, 'Jeu original, hors ligne'),
   );
@@ -112,6 +113,7 @@ export function worldsScreen(game: Game): Screen {
 function editWorldScreen(game: Game, w: WorldMeta, done: () => void): Screen {
   const name = mcInput(w.name, { maxlength: 32 });
   const status = mcLabel('');
+  let cheats = w.cheats ?? true;
   return mcScreen({
     title: 'Modifier le monde',
     body: [
@@ -123,13 +125,15 @@ function editWorldScreen(game: Game, w: WorldMeta, done: () => void): Screen {
         status.textContent = 'Copie de sauvegarde créée';
         done();
       }),
-      mcToggle('Activer les triches', w.cheats ?? true, (v) => (w.cheats = v), 200),
+      mcToggle('Activer les triches', cheats, (v) => (cheats = v), 200),
       status,
     ],
     footer: [
       mcRow(
         mcButton('Enregistrer', async () => {
           w.name = name.value.trim() || w.name;
+          // les triches ne changent qu'en enregistrant (« Annuler » ne modifie rien)
+          w.cheats = cheats;
           await game.saves.updateMeta(w);
           done();
           game.ui.back();

@@ -251,7 +251,7 @@ shaped('glowstone', 'glowstone', 1, ['GG', 'GG'], { G: 'glowstone_dust' });
 shaped('bone_block', 'bone_block', 1, ['BBB', 'BBB', 'BBB'], { B: 'bone_meal' });
 shaped('honeycomb_block', 'honeycomb_block', 1, ['HH', 'HH'], { H: 'honeycomb' });
 shaped('slime_block', 'slime_block', 1, ['SSS', 'SSS', 'SSS'], { S: 'slime_ball' });
-shaped('deepslate_bricks', 'deepslate_bricks', 4, ['DD', 'DD'], { D: 'cobbled_deepslate' });
+shaped('deepslate_bricks', 'deepslate_bricks', 4, ['DD', 'DD'], { D: 'polished_deepslate' });
 shaped('end_stone_bricks', 'end_stone_bricks', 4, ['EE', 'EE'], { E: 'end_stone' });
 shaped('mud_bricks', 'mud_bricks', 4, ['MM', 'MM'], { M: 'packed_mud' });
 shapeless('packed_mud', 'packed_mud', 1, ['mud', 'wheat']);
@@ -390,7 +390,7 @@ shaped('lead', 'lead', 2, ['SS ', 'SB ', '  S'], { S: 'string', B: 'slime_ball' 
 shaped('clock', 'clock', 1, [' G ', 'GRG', ' G '], { G: 'gold_ingot', R: 'redstone' });
 shaped('shield', 'shield', 1, ['PIP', 'PPP', ' P '], { P: 'tag:planks', I: 'iron_ingot' });
 shapeless('netherite_ingot', 'netherite_ingot', 1, ['netherite_scrap', 'netherite_scrap', 'netherite_scrap', 'netherite_scrap', 'gold_ingot', 'gold_ingot', 'gold_ingot', 'gold_ingot']);
-shaped('carved_pumpkin_from', 'carved_pumpkin', 1, ['P'], { P: 'pumpkin' });
+// citrouille sculptée : cisailles sur une citrouille posée (PlayerInteraction), comme le jeu original
 
 // ---------- Nether : portail, feu, minerais, nylium, végétation ----------
 const NR = ['#5e2626', '#6e2c2c', '#7a3232', '#8a3a3a'];

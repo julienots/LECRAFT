@@ -59,7 +59,7 @@ function videoScreen(game: Game): Screen {
         mcCycle<QualityLevel>('Qualité', [['LOW', 'Basse'], ['MEDIUM', 'Moyenne'], ['HIGH', 'Haute']], s.quality, (v) => (applyQuality(s, v), apply(true))),
         mcSlider((v) => `Distance de rendu : ${v} tronçons`, 2, 12, 1, s.renderDistance, (v) => ((s.renderDistance = v), apply())),
         mcCycle<number>('FPS max', [[30, '30'], [45, '45'], [60, '60']], s.fpsCap, (v) => ((s.fpsCap = v as 30 | 45 | 60), apply())),
-        mcSlider((v) => `Résolution : ${pct(v)}`, 0.5, 1, 0.05, s.resolutionScale, (v) => ((s.resolutionScale = v), apply())),
+        mcSlider((v) => `Résolution : ${pct(v)}`, 0.75, 1, 0.05, s.resolutionScale, (v) => ((s.resolutionScale = v), apply())),
         mcCycle('Ombres', [['off', 'NON'], ['blob', 'Entités'], ['blob+ao', 'Entités + OA']], s.shadows, (v) => ((s.shadows = v as typeof s.shadows), apply())),
         mcCycle('Particules', [['high', 'Toutes'], ['low', 'Réduites'], ['off', 'Minimales']], s.particles, (v) => ((s.particles = v as typeof s.particles), apply())),
         mcCycle('Eau', [['animated', 'Animée'], ['simple', 'Simple']], s.waterQuality, (v) => ((s.waterQuality = v as typeof s.waterQuality), apply())),
@@ -337,7 +337,7 @@ function editLayout(game: Game) {
       hiddenScreens.forEach((e) => e.classList.remove('hidden'));
     }, 'primary small'),
   );
-  const screen = { el: el('div', { style: 'position:absolute;inset:0;pointer-events:none' }, banner), onBack: () => true };
+  const screen = { el: el('div', { style: 'position:absolute;inset:0;pointer-events:none' }, banner), onBack: () => ((banner.querySelector('button') as HTMLButtonElement | null)?.click(), true) };
   banner.style.pointerEvents = 'auto';
   game.ui.push(screen);
 }

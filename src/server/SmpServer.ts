@@ -85,6 +85,21 @@ const P1 = ['Alex', 'Nico', 'Lucas', 'Emma', 'Hugo', 'Lea', 'Mathis', 'Jade', 'T
 const P2 = ['Craft', 'Mine', 'Build', 'Block', 'Pixel', '_', 'Gaming', 'MC', 'TV', 'YT', 'Pro', 'Cube'];
 
 export class SmpServer {
+
+  /** Minuteries annulées en quittant le serveur (pas de messages ni d'effets après la sortie). */
+  private timers = new Set<ReturnType<typeof setTimeout>>();
+  later(fn: () => void, ms: number) {
+    const t = setTimeout(() => {
+      this.timers.delete(t);
+      fn();
+    }, ms);
+    this.timers.add(t);
+  }
+  /** Sortie du monde : plus de connexions ni de messages de bots en attente. */
+  dispose() {
+    for (const t of this.timers) clearTimeout(t);
+    this.timers.clear();
+  }
   private rng = new Rng((Math.random() * 1e9) | 0);
   private roster: BotProfile[] = [];
   online: Mind[] = [];
@@ -147,7 +162,7 @@ export class SmpServer {
     if (this.lite) {
       this.chat('§7Des §ebots joueurs§7 vont rejoindre la partie. Parlez-leur dans le chat (« suis-moi », « tu fais quoi ? », « donne-moi du bois »…).');
       const off = [...this.roster].sort(() => this.rng.next() - 0.5);
-      for (let i = 0; i < 3; i++) setTimeout(() => this.join(off[i], i === 0), 2000 + i * 3000);
+      for (let i = 0; i < 3; i++) this.later(() => this.join(off[i], i === 0), 2000 + i * 3000);
       return;
     }
     s.player.difficulty = 'normal';
@@ -156,7 +171,7 @@ export class SmpServer {
     this.chat('§7Mods : §fabattage d’arbre§7, §ffilons§7, §ftombes§7. Commandes : §e/spawn /sethome /home /tpa /shop /sell /money /pay /msg /list /rtp');
     const n = 3 + this.rng.int(0, 2);
     const off = this.roster.filter(() => true).sort(() => this.rng.next() - 0.5);
-    for (let i = 0; i < n; i++) setTimeout(() => this.join(off[i], i === 0), 1500 + i * 2500);
+    for (let i = 0; i < n; i++) this.later(() => this.join(off[i], i === 0), 1500 + i * 2500);
   }
 
   private chat(text: string) {
@@ -173,7 +188,7 @@ export class SmpServer {
     this.chat(`${rank.tag}${rank.color}${m.p.name}§f: ${text}`);
   }
   private sayLater(m: Mind, text: string, delay = 1000 + Math.random() * 2000) {
-    setTimeout(() => this.say(m, text), delay);
+    this.later(() => this.say(m, text), delay);
   }
 
   /** Un bot rejoint la partie (au point d'apparition ou chez lui). */
@@ -200,7 +215,7 @@ export class SmpServer {
 
   private leave(m: Mind) {
     if (Math.random() < 0.5) this.say(m, this.rng.pick(['bon je dois y aller', 'à plus', 'bye', 'je reviens plus tard', 'a+']));
-    setTimeout(() => {
+    this.later(() => {
       m.bot.removed = true;
       this.online = this.online.filter((x) => x !== m);
       this.chat(`§e${m.p.name} a quitté la partie`);
@@ -217,7 +232,7 @@ export class SmpServer {
         if (m.bot.dead) {
           const by = m.bot.lastAttacker === 'player' ? ' par Vous' : '';
           this.chat(`§7${m.p.name} est mort${by}.`);
-          setTimeout(() => {
+          this.later(() => {
             this.join(m.p);
             const back = this.online.find((x) => x.p === m.p);
             if (back && by) this.sayLater(back, this.rng.pick(['pourquoi tu m’as tué ??', 'hé ! c’était pas cool', 'ok la guerre est déclarée mdr']));
@@ -997,7 +1012,7 @@ export class SmpServer {
       const n = Math.min(have, w[1] === 'diamond' ? 1 : 16);
       if (w[1] === 'diamond' && Math.random() < 0.5) return reply('mes diamants ? non merci mdr');
       m.p.inv[w[1]] -= n;
-      setTimeout(() => {
+      this.later(() => {
         this.s.entities.spawnItem(w[2], n, pl.x, pl.y + 1, pl.z);
         this.say(m, `tiens, ${n} ${ItemRegistry.get(w[2])?.name ?? w[2]}`);
       }, 1500);
@@ -1155,7 +1170,7 @@ export class SmpServer {
     };
     if (this.isLog(block) && itemId && ItemRegistry.get(itemId)?.tool?.type === 'axe') {
       const n = this.fell(x, y, z, drop);
-      if (n) s.audio.play('break', { volume: 0.6 });
+      if (n) s.audio.blockSound('break', 'wood', x + 0.5, y + 0.5, z + 0.5);
     } else if (key.endsWith('_ore')) {
       this.data.coins += key.includes('diamond') ? 10 : key.includes('gold') || key.includes('emerald') ? 5 : 1;
       if (itemId && ItemRegistry.get(itemId)?.tool?.type === 'pickaxe') {

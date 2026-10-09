@@ -196,7 +196,9 @@ try {
   const tap = async (loc) => { await loc.evaluate((el) => { for (const t of ['pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerType: 'touch' })); }); await wait(60); };
   // double toucher réel : les quatre événements partent d'un coup (sans aller-retour par événement)
   const dbl = async (loc) => {
-    await loc.evaluate((el) => { for (const t of ['pointerdown', 'pointerup', 'pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerType: 'touch' })); });
+    // événements créés d'avance : comme un vrai écran, chaque toucher est horodaté quand il a lieu,
+    // pas quand le jeu a fini de traiter le précédent (rendu logiciel lent)
+    await loc.evaluate((el) => { const evs = ['pointerdown', 'pointerup', 'pointerdown', 'pointerup'].map((t) => new PointerEvent(t, { bubbles: true, pointerType: 'touch' })); for (const e of evs) el.dispatchEvent(e); });
     await wait(160);
   };
   const [ix, iy] = await center('.mc-invbtn');

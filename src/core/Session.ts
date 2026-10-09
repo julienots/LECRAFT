@@ -299,7 +299,13 @@ export class Session implements GameContext {
       this.shake(1);
       void this.save();
     };
-    this.weather.onThunder = (delay) => setTimeout(() => this.audio.play('thunder', { volume: 1 }), delay * 1000);
+    this.weather.onThunder = (delay) => {
+      const t = setTimeout(() => {
+        this.timers.delete(t);
+        if (!this.disposed) this.audio.play('thunder', { volume: 1 });
+      }, delay * 1000);
+      this.timers.add(t);
+    };
     // état initial
     if (state) this.restore(state);
     else if (meta.remote && meta.netSpawn) {
@@ -415,7 +421,8 @@ export class Session implements GameContext {
 
   particleLimit() {
     const s = this.game.settings.particles;
-    return s === 'off' ? 0 : s === 'low' ? Math.min(150, this.profile.maxParticles) : this.profile.maxParticles;
+    // « Minimales » (comme le jeu original) : quelques particules restent (casse, coups)
+    return s === 'off' ? 40 : s === 'low' ? Math.min(150, this.profile.maxParticles) : this.profile.maxParticles;
   }
 
   private biomeWeather() {
@@ -540,6 +547,9 @@ export class Session implements GameContext {
     return this.dimension === 'overworld' ? this.meta.id : `${this.meta.id}:${this.dimension}`;
   }
   private pendingMobs: SavedMob[] | null = null;
+  /** Minuteries à annuler en quittant le monde. */
+  private timers = new Set<ReturnType<typeof setTimeout>>();
+  private disposed = false;
 
   snapshot(): WorldState {
     const chests: WorldState['chests'] = {};
@@ -557,7 +567,8 @@ export class Session implements GameContext {
       progression: this.progression.serialize(),
       furnaces: Object.fromEntries(this.world.furnaces),
       gamerules: { ...this.gamerules },
-      mobs: this.entities.serialize(),
+      // créatures pas encore réapparues (chunks non chargés) : conservées telles quelles
+      mobs: [...this.entities.serialize(), ...(this.pendingMobs ?? [])],
       scripting: { dynProps: Object.fromEntries(this.worldProps), scoreboard: this.scoreboard.serialize(), extraRules: Object.fromEntries(this.extraRules) },
       dimension: this.dimension,
       dims: this.dims,
@@ -570,7 +581,8 @@ export class Session implements GameContext {
   async save(withThumbnail = true): Promise<void> {
     if (!this.loaded || this.server || this.meta.remote) return;
     this.smp?.save();
-    if (this.saving) await this.saving;
+    // une sauvegarde précédente ratée ne doit pas bloquer celle-ci
+    if (this.saving) await this.saving.catch(() => {});
     const list = this.chunks.collectUnsaved();
     const versions = list.map((c) => c.version);
     const chunks = list.map((c) => ({ cx: c.cx, cz: c.cz, blocks: c.blocks.slice(), meta: c.meta.slice() }));
@@ -901,8 +913,11 @@ export class Session implements GameContext {
     this.scripts?.update();
     this.checkPressurePlate(dt);
     if (this.pendingMobs && !this.meta.remote && this.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) {
-      this.entities.load(this.pendingMobs.filter((m) => this.world.isLoaded(Math.floor(m.x), Math.floor(m.z))));
-      this.pendingMobs = null;
+      // les créatures des chunks pas encore chargés attendent leur chunk (sinon elles seraient perdues)
+      const ready = this.pendingMobs.filter((m) => this.world.isLoaded(Math.floor(m.x), Math.floor(m.z)));
+      if (ready.length) this.entities.load(ready);
+      const rest = this.pendingMobs.filter((m) => !ready.includes(m));
+      this.pendingMobs = rest.length ? rest : null;
     }
     // dégâts de contact (cactus, pièges)
     this.contactTimer -= dt;
@@ -1045,7 +1060,8 @@ export class Session implements GameContext {
     u.uSkyColor.value.copy(r.sky.skyLightColor);
     u.uSway.value = this.profile.foliageAnimation ? 1 : 0;
     u.uWaterAnim.value = s.waterQuality === 'animated' ? 1 : 0;
-    u.uAO.value = s.shadows === 'off' ? 0.65 : 1;
+    // occlusion ambiante : pleine avec « Entités + OA », adoucie sinon
+    u.uAO.value = s.shadows === 'blob+ao' ? 1 : s.shadows === 'blob' ? 0.85 : 0.65;
     // shaders : lumière dominante, couleurs du ciel, ombres projetées (ultra)
     const shaders = s.shaders === 'ultra' ? 2 : s.shaders === 'on' ? 1 : 0;
     u.uShaders.value = shaders;
@@ -1101,6 +1117,10 @@ export class Session implements GameContext {
     if (this.perspective && !this.avatar) {
       this.avatar = new PlayerAvatar(this.shadowTexture, this.skins, (id) => this.iconTexture(id), `player_${this.game.settings.playerSkin ?? 'steve'}`);
       this.scene.add(this.avatar.group);
+    }
+    if (this.avatar) {
+      const a = p.inventory.armor;
+      this.avatar.model.setArmor({ head: a.head?.id, chest: a.chest?.id, legs: a.legs?.id, feet: a.feet?.id }, this.skins);
     }
     this.avatar?.update({
       x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, phase: this.controller.bobPhase, speed: Math.hypot(p.body.vx, p.body.vz),
@@ -1302,6 +1322,11 @@ export class Session implements GameContext {
   }
 
   dispose() {
+    this.disposed = true;
+    for (const t of this.timers) clearTimeout(t);
+    this.timers.clear();
+    this.server?.dispose();
+    this.smp?.dispose();
     this.stopMultiplayer();
     this.scripts?.dispose();
     this.game.hud.setSidebar(null);
