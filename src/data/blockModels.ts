@@ -29,6 +29,10 @@ export interface JModel {
   facing?: boolean;
   /** Boîtes de collision (pixels) ; défaut : englobante des éléments. [] = traversable. */
   collision?: number[][];
+  /** Quarts de tour horaires imposés (vue de dessus). */
+  steps?: number;
+  /** Un modèle par méta (torches : 0 au sol, 1..4 au mur). */
+  variants?: JModel[];
 }
 
 type Tex = string | Partial<Record<FaceName | 'side' | 'all', string>>;
@@ -394,12 +398,36 @@ for (let s = 0; s < 2; s++) def(`torchflower_crop_stage${s}`, { els: crop(`torch
 for (const k of ['rail', 'rail_corner', 'powered_rail', 'powered_rail_on', 'detector_rail', 'detector_rail_on', 'activator_rail', 'activator_rail_on', 'redstone_dust_dot', 'redstone_dust_line0', 'redstone_dust_line1', 'leaf_litter', 'pink_petals_stem', 'wildflowers', 'wildflowers_stem', 'frogspawn', 'tripwire', 'sculk_vein', 'resin_clump', 'pale_moss_carpet_side_small', 'pale_moss_carpet_side_tall'])
   def(k, { facing: true, els: flat(k, k === 'frogspawn' ? 1.5 : 0.25), collision: [] });
 
+// ---------- torches (au sol et au mur, inclinées comme dans le jeu) ----------
+const torchEls = (t: string, wall: boolean): JElement[] => {
+  const uv = { side: [7, 6, 9, 16], up: [7, 6, 9, 8], down: [7, 13, 9, 15] };
+  return wall
+    ? [box([-1, 3.5, 7], [1, 13.5, 9], t, { uv, rot: { o: [0, 3.5, 8], axis: 'z', a: -22.5 } })]
+    : [box([7, 0, 7], [9, 10, 9], t, { uv })];
+};
+/** Torche : variante 0 au sol, 1..4 contre le mur (côté du support : sud, ouest, nord, est). */
+export function torchModel(t: string): JModel {
+  return { els: [], collision: [], variants: [{ els: torchEls(t, false), collision: [] }, ...[3, 0, 1, 2].map((steps) => ({ els: torchEls(t, true), steps, collision: [] }))] };
+}
+const endRodEls = (): JElement[] => [
+  box([7, 1, 7], [9, 16, 9], 'end_rod', { uv: { side: [0, 0, 2, 15], up: [2, 0, 4, 2], down: [2, 0, 4, 2] } }),
+  box([6, 0, 6], [10, 1, 10], 'end_rod', { uv: { side: [2, 6, 6, 7], up: [2, 2, 6, 6], down: [2, 2, 6, 6] } }),
+];
+M.end_rod = {
+  els: [],
+  collision: [],
+  variants: [
+    { els: endRodEls(), collision: [] },
+    ...[3, 0, 1, 2].map((steps) => ({ els: endRodEls().map((e) => ({ ...e, rot: { o: [8, 8, 8], axis: 'z' as const, a: -90 } })), steps, collision: [] })),
+  ],
+};
+
 /** Modèles par clé de bloc. */
 export const BLOCK_MODELS: Record<string, JModel> = M;
 
 /** Toutes les tuiles citées par les modèles (enregistrées dans l'atlas). */
 export function modelTiles(): string[] {
   const out = new Set<string>();
-  for (const m of Object.values(M)) for (const e of m.els) for (const f of Object.values(e.faces)) if (f) out.add(f.t);
+  for (const m of Object.values(M)) for (const v of [m, ...(m.variants ?? [])]) for (const e of v.els) for (const f of Object.values(e.faces)) if (f) out.add(f.t);
   return [...out];
 }

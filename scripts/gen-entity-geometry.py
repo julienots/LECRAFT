@@ -18,7 +18,7 @@ WANT = {
   'axolotl.geo.json': 'geometry.axolotl', 'tadpole.geo.json': 'geometry.tadpole', 'iron_golem.geo.json': 'geometry.irongolem',
   'zombie_villager.geo.json': 'geometry.zombie.villager.v1.8', 'pillager.geo.json': 'geometry.pillager', 'vindicator.geo.json': 'geometry.vindicator.v1.8',
   'evoker.geo.json': 'geometry.evoker.v1.8', 'bat_v2.geo.json': 'geometry.bat_v2', 'shulker.geo.json': 'geometry.shulker.v1.8',
-  'bogged.geo.json': 'geometry.skeleton.bogged', 'parched.geo.json': 'geometry.parched', 'villager.geo.json': None,
+  'bogged.geo.json': 'geometry.skeleton.bogged', 'parched.geo.json': 'geometry.parched', 'villager.geo.json': None, 'snow_golem.geo.json': 'geometry.snowgolem.v1.8',
 }
 KEEP_BONE = ('name', 'parent', 'pivot', 'rotation', 'bind_pose_rotation', 'mirror', 'inflate', 'neverRender')
 KEEP_CUBE = ('origin', 'size', 'uv', 'inflate', 'mirror', 'pivot', 'rotation')

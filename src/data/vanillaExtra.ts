@@ -219,13 +219,13 @@ sided('carved_pumpkin', 'Citrouille taillée', (t) => void t.grain(paint.ramp('#
   t.rect(3, 4, 3, 3, hex('#2a1a00'));
   t.rect(10, 4, 3, 3, hex('#2a1a00'));
   t.rect(4, 10, 8, 2, hex('#2a1a00'));
-});
+}, { textures: { top: 'carved_pumpkin_top', bottom: 'carved_pumpkin_top', side: 'pumpkin_side', front: 'carved_pumpkin_side' }, orientable: true });
 sided('jack_o_lantern', "Citrouille-lanterne", (t) => void t.grain(paint.ramp('#e38a1d', 4, 0.2), 0.5, 4), (t) => {
   t.grain(paint.ramp('#e38a1d', 4, 0.2), 0.5, 4);
   t.rect(3, 4, 3, 3, hex('#ffe060'));
   t.rect(10, 4, 3, 3, hex('#ffe060'));
   t.rect(4, 10, 8, 2, hex('#ffe060'));
-}, { light: 15 });
+}, { light: 15, textures: { top: 'jack_o_lantern_top', bottom: 'jack_o_lantern_top', side: 'pumpkin_side', front: 'jack_o_lantern_side' }, orientable: true });
 sided('campfire', 'Feu de camp', (t) => {
   paint.logSide(t, '#5a3e22');
   t.speckle(hex('#ffb030'), 18);

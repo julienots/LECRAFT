@@ -4,6 +4,7 @@ import { ItemRegistry } from '../inventory/ItemRegistry';
 import { ICON_TEMPLATES } from '../ui/IconTemplates';
 import type { SkinProvider } from './MobModels';
 import { paintSkin } from './MobSkins';
+import { paintRealisticZombie } from './RealisticZombie';
 import { skinAspect } from './MobModels';
 import { LoadedPack } from './ResourcePack';
 import { buildAtlas, hex } from './TextureGenerator';
@@ -291,6 +292,8 @@ export class TextureManager implements SkinProvider {
           d[i + 2] = (d[i + 2] * WATER_TINT[2]) / 255;
           d[i + 3] = Math.max(d[i + 3], 170);
         }
+      } else if (this.translucentTiles().has(name)) {
+        // verre teinté, glace, miel, slime : transparence partielle conservée (comme le jeu)
       } else if (name.startsWith('addon/')) {
         // textures d'add-ons : transparence conservée (blocs « blend »)
       } else {
@@ -300,6 +303,16 @@ export class TextureManager implements SkinProvider {
       out.set(full, data);
     }
     return out;
+  }
+
+  private translucent: Set<string> | null = null;
+  /** Tuiles des blocs translucides (rendus dans la passe transparente). */
+  private translucentTiles(): Set<string> {
+    if (!this.translucent) {
+      this.translucent = new Set();
+      for (const b of BlockRegistry.blocks) if (b.render === 'translucent') for (const t of b.faceTiles) this.translucent.add(TileRegistry.names[t]);
+    }
+    return this.translucent;
   }
 
   private flatCache = new Map<number, boolean>();
@@ -327,10 +340,13 @@ export class TextureManager implements SkinProvider {
   skin(key: string): THREE.Texture {
     let t = this.skinCache.get(key);
     if (!t) {
-      t = new THREE.CanvasTexture(this.skinCanvas(key));
-      t.magFilter = THREE.NearestFilter;
-      t.minFilter = THREE.NearestFilter;
-      t.generateMipmaps = false;
+      const canvas = this.skinCanvas(key);
+      t = new THREE.CanvasTexture(canvas);
+      // skins haute définition (zombie réaliste) : filtrage lissé et mipmaps
+      const hd = canvas.width >= 256 && key === 'zombie';
+      t.magFilter = hd ? THREE.LinearFilter : THREE.NearestFilter;
+      t.minFilter = hd ? THREE.LinearMipmapLinearFilter : THREE.NearestFilter;
+      t.generateMipmaps = hd;
       t.colorSpace = THREE.NoColorSpace;
       this.skinCache.set(key, t);
     }
@@ -338,6 +354,8 @@ export class TextureManager implements SkinProvider {
   }
 
   private skinCanvas(key: string): HTMLCanvasElement {
+    if (key === 'zombie') return paintRealisticZombie();
+    if (key === 'snow_golem_pumpkin') return this.pumpkinSkin();
     // texture de bloc (entités d'add-ons qui utilisent une texture de bloc du jeu)
     for (const p of SKIN_PATHS[key] ?? []) {
       if (!p.startsWith('tile:')) continue;
@@ -374,6 +392,24 @@ export class TextureManager implements SkinProvider {
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#f0f';
     ctx.fillRect(0, 0, 64, 32);
+    return c;
+  }
+
+  /** Citrouille sculptée du golem de neige : faces du bloc disposées en UV de boîte 10×10×10 (×8). */
+  private pumpkinSkin(): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = 320;
+    c.height = 160;
+    const ctx = c.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    const t = (n: string) => this.tile(TileRegistry.has(n) ? TileRegistry.index(n) : 0);
+    const put = (n: string, x: number, y: number) => ctx.drawImage(t(n), 0, 0, 16, 16, x * 8, y * 8, 80, 80);
+    put('pumpkin_top', 10, 0);
+    put('pumpkin_top', 20, 0);
+    put('pumpkin_side', 0, 10);
+    put(TileRegistry.has('carved_pumpkin_side') ? 'carved_pumpkin_side' : 'pumpkin_side', 10, 10);
+    put('pumpkin_side', 20, 10);
+    put('pumpkin_side', 30, 10);
     return c;
   }
 

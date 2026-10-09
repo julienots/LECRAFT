@@ -1,7 +1,7 @@
 import type { Block, BlockDef, ShapeKind } from './Block';
 import { BLOCK_DEFS } from '../data/blocks';
 import { TileRegistry } from '../render/TileRegistry';
-import { BLOCK_MODELS } from '../data/blockModels';
+import { BLOCK_MODELS, torchModel } from '../data/blockModels';
 import { buildJavaVisuals } from './JavaModels';
 
 /** Nombre maximal de blocs (identifiants sur 16 bits, tables de lookup bornées). */
@@ -40,7 +40,9 @@ class BlockRegistryImpl {
     const id = this.blocks.length;
     if (id >= MAX_BLOCKS) throw new Error(`Maximum ${MAX_BLOCKS} blocs`);
     // modèle 3D du jeu de référence (lanternes, chaudrons, enclumes…) : rendu par quads précalculés
-    const model = def.bedrock ? undefined : BLOCK_MODELS[def.key];
+    // torches : modèle incliné du jeu, mais la forme « torch » reste (pose, support, contour)
+    const torch = !def.bedrock && def.shape === 'torch' && def.textures?.all ? (BLOCK_MODELS[def.key] ?? torchModel(def.textures.all)) : undefined;
+    const model = def.bedrock || torch ? undefined : BLOCK_MODELS[def.key];
     const shapeKind: ShapeKind | undefined = model ? 'custom' : def.shape;
     const render = model ? 'model' : def.render ?? (def.shape ? 'model' : 'cube');
     const solid = model ? model.collision?.length !== 0 && def.solid !== false : def.solid ?? !(render === 'none' || render === 'cross' || render === 'liquid');
@@ -59,7 +61,7 @@ class BlockRegistryImpl {
       def,
       render,
       shape: shapeKind ?? null,
-      visuals: model ? buildJavaVisuals(model) : undefined,
+      visuals: model ? buildJavaVisuals(model) : torch ? buildJavaVisuals(torch) : undefined,
       solid,
       opaque,
       transparent: !opaque,

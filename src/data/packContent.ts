@@ -74,7 +74,12 @@ function packBlock([key, name, kind, color, textures]: (typeof PACK_BLOCKS)[numb
   }
 }
 
-export const PACK_BLOCK_DEFS: BlockDef[] = PACK_BLOCKS.map(packBlock);
+export const PACK_BLOCK_DEFS: BlockDef[] = [
+  ...PACK_BLOCKS.map(packBlock),
+  // textures aussi utilisées par les modèles (répéteur, comparateur) mais qui sont de vrais blocs
+  { key: 'redstone_torch', name: 'Torche de redstone', textures: { all: 'redstone_torch' }, hardness: 0, render: 'model', shape: 'torch', solid: false, light: 7, sound: 'wood', needsSupport: true, color: '#d02010' },
+  { key: 'redstone_torch_off', name: 'Torche de redstone éteinte', textures: { all: 'redstone_torch_off' }, hardness: 0, render: 'model', shape: 'torch', solid: false, sound: 'wood', needsSupport: true, color: '#602010' },
+];
 export const PACK_ITEM_DEFS: ItemDef[] = PACK_ITEMS as ItemDef[];
 /** Recettes des objets les plus utiles (le reste se trouve dans l'inventaire créatif). */
 export const PACK_RECIPES = [

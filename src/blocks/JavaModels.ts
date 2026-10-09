@@ -66,7 +66,7 @@ function tileOf(name: string): number {
 
 /** Quads, collisions et contour d'un modèle pour une orientation (méta). */
 export function buildJavaVisual(model: JModel, meta: number): BedrockVisual {
-  const steps = model.facing ? STEPS[meta & 3] : 0;
+  const steps = model.steps ?? (model.facing ? STEPS[meta & 3] : 0);
   const quads: BlockQuad[] = [];
   const eps = 0.01;
   for (const el of model.els) {
@@ -138,5 +138,6 @@ function turnFace(d: number, steps: number): number {
 
 /** Les quatre orientations (ou une seule) d'un modèle. */
 export function buildJavaVisuals(model: JModel): BedrockVisual[] {
+  if (model.variants) return model.variants.map((v) => buildJavaVisual(v, 0));
   return model.facing ? [0, 1, 2, 3].map((m) => buildJavaVisual(model, m)) : [buildJavaVisual(model, 0)];
 }

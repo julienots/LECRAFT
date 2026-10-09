@@ -245,6 +245,13 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   plus réactive (baisse de résolution en 3 s) et mémorisée d'un lancement à l'autre, shaders
   désactivés par défaut en profil Bas. Créatures : saut à 1,3 bloc (comme le joueur), nage pour
   sortir de l'eau, peuvent sauter dans l'eau depuis plus haut.
+- **Corrections du rendu (v2.23)** — torches (et torches de redstone, bâtons de l'End) avec le
+  modèle incliné du jeu quand elles sont posées au mur ; verre teinté et vitres teintées
+  réellement translucides ; cube de magma (nouvelle texture 64×64) et golem de neige (avec sa
+  citrouille sculptée) corrigés ; slime avec sa couche extérieure translucide ; citrouilles
+  taillées avec une seule face sculptée. Zombie « ultra réaliste » : skin peinte en haute
+  définition (512×512 : peau marbrée en relief, orbites creuses, yeux laiteux, dents cassées,
+  plaies, chemise et jean en lambeaux), couches extérieures (cheveux, lambeaux) et tête penchée.
 - **Rendu fidèle au jeu original (v2.22)** — modèles 3D des blocs non cubiques au format des
   modèles de blocs du jeu (lanternes, chaînes, bougies, gâteau, chaudron, entonnoir, enclumes,
   cloche, alambic, table d'enchantement, tailleur de pierre, pupitre, meule, feux de camp,

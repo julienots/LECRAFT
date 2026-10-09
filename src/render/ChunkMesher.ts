@@ -368,7 +368,7 @@ export class ChunkMesher {
     const { blocks, sky, blk } = inp;
     const m = inp.meta[x + z * 16 + y * 256];
     const kind = SHAPES[R.shape[b] - 1];
-    if (kind === 'custom') return this.custom(inp, x, y, z, pi, b, m);
+    if (kind === 'custom' || block.visuals) return this.custom(inp, x, y, z, pi, b, m);
     const nb = (dx: number, dy: number, dz: number) => {
       const yy = y + dy;
       if (yy < 0 || yy >= WORLD_HEIGHT) return 0;
@@ -377,7 +377,8 @@ export class ChunkMesher {
     const boxes = modelBoxes(b, m, nb);
     const tint = this.tintOf(inp, b, x, z);
     const tr = (tint >> 16) & 255, tg = (tint >> 8) & 255, tb = tint & 255;
-    const builder = this.opaque;
+    // vitres teintées : translucides comme le verre teinté
+    const builder = block.key.includes('stained_glass') ? this.trans : this.opaque;
     const flags = 0;
     // cadre du portail de l'End : socle avec le dessus du cadre vide, œil (texture à transparence
     // dans les packs) sur la boîte du dessus uniquement — sinon le dessus du socle serait percé

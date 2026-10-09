@@ -22,8 +22,10 @@ interface CubePart {
   anim?: string;
   /** UV par face (format « per-face » des modèles de l'édition Bedrock) : [u, v, largeur, hauteur]. */
   faceUV?: Partial<Record<'top' | 'bottom' | 'right' | 'front' | 'left' | 'back', [number, number, number, number]>>;
-  /** Couche séparée (laine du mouton). */
-  layer?: 'fur';
+  /** Couche séparée : laine du mouton, couche translucide (slime), citrouille du golem de neige. */
+  layer?: 'fur' | 'outer' | 'pumpkin';
+  /** Taille de texture propre à cette pièce (sinon celle du modèle). */
+  texSize?: [number, number];
   /** Nom d'os (modèles d'add-ons : animations Bedrock). */
   bone?: string;
   children?: CubePart[];
@@ -153,7 +155,13 @@ const VANILLA: Record<string, VanillaModel> = {
       P([24, 13], [-1, 0, -3, 1, 4, 6], [4, 13, 0], { anim: 'wingL' }),
     ],
   },
-  zombie: humanoid('zombie', 64, 64, 4),
+  // zombie « ultra réaliste » : modèle joueur complet (couches extérieures) + skin HD peinte
+  zombie: (() => {
+    const m = { ...playerModel(), skin: 'zombie' };
+    // tête penchée en avant et sur le côté (démarche de mort-vivant)
+    m.parts = m.parts.map((p, i) => (i === 0 ? { ...p, rot: [0.22, 0, 0.12] as [number, number, number] } : p));
+    return m;
+  })(),
   zombie_chief: humanoid('zombie_chief', 64, 64, 4),
   skeleton: humanoid('skeleton', 64, 32, 2),
   player: playerModel(),
@@ -250,10 +258,11 @@ const VANILLA: Record<string, VanillaModel> = {
     ],
   },
   magma_cube: {
-    skin: 'magma_cube', texW: 64, texH: 32,
+    skin: 'magma_cube', texW: 64, texH: 64,
     parts: [
-      ...Array.from({ length: 8 }, (_, i) => P(i === 2 ? [24, 10] : i === 3 ? [24, 19] : [0, i], [-4, 16 + i, -4, 8, 1, 8], [0, 0, 0], { anim: 'squash' })),
-      P([0, 16], [-2, 18, -2, 4, 4, 4], [0, 0, 0], { anim: 'squash' }),
+      // texture 64×64 des versions récentes : tranches en deux colonnes de 4 (9 px chacune), cœur en (24, 40)
+      ...Array.from({ length: 8 }, (_, i) => P([i >= 4 ? 32 : 0, (i % 4) * 9], [-4, 16 + i, -4, 8, 1, 8], [0, 0, 0], { anim: 'squash' })),
+      P([24, 40], [-2, 18, -2, 4, 4, 4], [0, 0, 0], { anim: 'squash' }),
     ],
   },
   blaze: {
@@ -288,7 +297,7 @@ const VANILLA: Record<string, VanillaModel> = {
       P([32, 0], [-3.25, 18, -3.5, 2, 2, 2], [0, 0, 0]),
       P([32, 4], [1.25, 18, -3.5, 2, 2, 2], [0, 0, 0]),
       P([32, 8], [0, 21, -3.5, 1, 1, 1], [0, 0, 0]),
-      P([0, 0], [-4, 16, -4, 8, 8, 8], [0, 0, 0], { anim: 'squash' }),
+      P([0, 0], [-4, 16, -4, 8, 8, 8], [0, 0, 0], { anim: 'squash', layer: 'outer' }),
     ],
   },
 };
@@ -331,7 +340,13 @@ Object.assign(VANILLA, {
   paper_crane: reuse('bat', 'paper_crane'),
   origami_frog: reuse('pig', 'origami_frog'),
   scribble: humanoid('scribble', 64, 64, 4),
-  crumpled_ball: reuse('magma_cube', 'crumpled_ball'),
+  crumpled_ball: {
+    skin: 'crumpled_ball', texW: 64, texH: 32,
+    parts: [
+      ...Array.from({ length: 8 }, (_, i) => P(i === 2 ? [24, 10] : i === 3 ? [24, 19] : [0, i], [-4, 16 + i, -4, 8, 1, 8], [0, 0, 0], { anim: 'squash' })),
+      P([0, 16], [-2, 18, -2, 4, 4, 4], [0, 0, 0], { anim: 'squash' }),
+    ],
+  },
   paper_plane: fishModel('paper_plane', 12, 2, 10),
   cardboard_golem: humanoid('cardboard_golem', 64, 64, 4),
   // v2.21 : créatures des textures du pack
@@ -565,6 +580,9 @@ export class MobModel {
   readonly furMaterial: THREE.MeshBasicMaterial | null = null;
   /** Yeux lumineux (non teintés par la lumière). */
   readonly glowMaterial: THREE.MeshBasicMaterial | null = null;
+  /** Couche extérieure translucide (slime) et citrouille du golem de neige. */
+  private outerMaterial: THREE.MeshBasicMaterial | null = null;
+  private pumpkinMaterial: THREE.MeshBasicMaterial | null = null;
   readonly parts = new Map<string, THREE.Object3D[]>();
   readonly furParts: THREE.Object3D[] = [];
   private shadow: THREE.Mesh | null = null;
@@ -580,7 +598,10 @@ export class MobModel {
     const def = VANILLA[type];
     this.vanilla = !!def;
     if (def) {
-      this.material = new THREE.MeshBasicMaterial({ map: skins.skin(skinKey ?? def.skin), transparent: type === 'slime', alphaTest: type === 'slime' ? 0.05 : 0.5, side: type === 'slime' ? THREE.DoubleSide : THREE.FrontSide, depthWrite: type !== 'slime' });
+      this.material = new THREE.MeshBasicMaterial({ map: skins.skin(skinKey ?? def.skin), alphaTest: 0.5 });
+      if (def.parts.some(function has(p: CubePart): boolean { return p.layer === 'outer' || !!p.children?.some(has); }))
+        this.outerMaterial = new THREE.MeshBasicMaterial({ map: this.material.map, transparent: true, alphaTest: 0.02, depthWrite: false });
+      if (type === 'snow_golem') this.pumpkinMaterial = new THREE.MeshBasicMaterial({ map: skins.skin('snow_golem_pumpkin'), alphaTest: 0.5 });
       if (def.furSkin) this.furMaterial = new THREE.MeshBasicMaterial({ map: skins.skin(def.furSkin), alphaTest: 0.5 });
       if (def.glow)
         this.glowMaterial = new THREE.MeshBasicMaterial({
@@ -612,10 +633,11 @@ export class MobModel {
     pivot.position.set(p.pivot[0] / 16, (child ? -p.pivot[1] : 24 - p.pivot[1]) / 16, -p.pivot[2] / 16);
     if (p.rot) pivot.rotation.set(p.rot[0], -p.rot[1], -p.rot[2]);
     const fur = p.layer === 'fur';
-    const mat = fur ? this.furMaterial! : this.material;
+    const mat = fur ? this.furMaterial! : p.layer === 'outer' && this.outerMaterial ? this.outerMaterial : p.layer === 'pumpkin' && this.pumpkinMaterial ? this.pumpkinMaterial : this.material;
     // nœud sans géométrie (os d'un modèle Bedrock) : seulement un pivot
     if (p.box[3] || p.box[4] || p.box[5]) {
-      const mesh = new THREE.Mesh(cachedCube(p, def.texW, def.texH), mat);
+      const mesh = new THREE.Mesh(cachedCube(p, p.texSize?.[0] ?? def.texW, p.texSize?.[1] ?? def.texH), mat);
+      if (p.layer === 'outer') mesh.renderOrder = 3;
       pivot.add(mesh);
       if (fur) this.furParts.push(mesh);
       else if (this.glowMaterial) {
@@ -750,6 +772,8 @@ export class MobModel {
 
   setTint(r: number, g: number, b: number) {
     this.material.color.setRGB(r, g, b);
+    this.outerMaterial?.color.setRGB(r, g, b);
+    this.pumpkinMaterial?.color.setRGB(r, g, b);
     if (this.furMaterial) {
       const base = (this.furMaterial.userData.base as number | undefined) ?? 0xffffff;
       this.furMaterial.color.setRGB((((base >> 16) & 255) / 255) * r, (((base >> 8) & 255) / 255) * g, ((base & 255) / 255) * b);
@@ -760,6 +784,8 @@ export class MobModel {
     this.material.dispose();
     this.furMaterial?.dispose();
     this.glowMaterial?.dispose();
+    this.outerMaterial?.dispose();
+    this.pumpkinMaterial?.dispose();
     if (this.shadow) (this.shadow.material as THREE.Material).dispose();
   }
 }
@@ -798,7 +824,7 @@ const GEO_MOBS: Record<string, string> = {
   strider: 'geometry.strider', cod: 'geometry.cod', salmon: 'geometry.salmon', pufferfish: 'geometry.pufferfish.large.v1.8', tropical_fish: 'geometry.tropicalfish_a',
   dolphin: 'geometry.dolphin', guardian: 'geometry.guardian.v1.8', elder_guardian: 'geometry.guardian.v1.8', axolotl: 'geometry.axolotl', tadpole: 'geometry.tadpole',
   iron_golem: 'geometry.irongolem', zombie_villager: 'geometry.zombie.villager.v1.8', pillager: 'geometry.pillager', vindicator: 'geometry.vindicator.v1.8',
-  evoker: 'geometry.evoker.v1.8', bat: 'geometry.bat_v2', shulker: 'geometry.shulker.v1.8', bogged: 'geometry.skeleton.bogged', parched: 'geometry.parched',
+  evoker: 'geometry.evoker.v1.8', bat: 'geometry.bat_v2', shulker: 'geometry.shulker.v1.8', bogged: 'geometry.skeleton.bogged', parched: 'geometry.parched', snow_golem: 'geometry.snowgolem.v1.8',
 };
 const GEO_GLOW: Record<string, string> = { phantom: 'phantom_eyes' };
 /** Os d'équipement ou d'états particuliers masqués (selle, sacoches, coffres, pose enroulée…). */
@@ -826,6 +852,20 @@ for (const [k, id] of Object.entries(GEO_MOBS)) {
     return false;
   };
   VANILLA[k] = { ...geometryToModel({ id, texW: g.texW, texH: g.texH, bones: g.bones.filter((b) => !hidden(b)) }, k), glow: GEO_GLOW[k] ?? VANILLA[k]?.glow };
+}
+
+// golem de neige : citrouille sculptée (bloc du jeu, 10 px) sur la tête
+{
+  const find = (parts: CubePart[]): CubePart | undefined => {
+    for (const p of parts) {
+      if (p.bone === 'head' || p.anim === 'head') return p;
+      const c = find(p.children ?? []);
+      if (c) return c;
+    }
+    return undefined;
+  };
+  const head = find(VANILLA.snow_golem.parts);
+  if (head) (head.children ??= []).push(P([0, 0], [-5, -9, -5, 10, 10, 10], [0, 0, 0], { layer: 'pumpkin', texSize: [40, 20] }));
 }
 
 // ours polaire : modèle Java (texture 128×64)
