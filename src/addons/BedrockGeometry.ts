@@ -60,6 +60,12 @@ const DEG = Math.PI / 180;
 function animName(bone: string): string | undefined {
   const n = bone.toLowerCase();
   if (n === 'head' || n === 'skull') return 'head';
+  // pattes nommées (cheval, chèvre, chat, hoglin, dromadaire, lapin…) : avant/arrière × gauche/droite
+  if (/leg/.test(n) && /(front|hind|back|^leg[bf][lr]$)/.test(n)) {
+    const back = /hind|back|^legb/.test(n);
+    const left = /left|legl\b|[a-z]l$|^leg[bf]l$/.test(n) && !/right/.test(n);
+    return back ? (left ? 'legBL' : 'legBR') : left ? 'legFL' : 'legFR';
+  }
   if (n === 'leg0') return 'legFL';
   if (n === 'leg3') return 'legBR';
   if (n === 'leg1') return 'legFR';

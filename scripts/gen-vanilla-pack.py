@@ -12,7 +12,8 @@ def listdir(sub):
     return sorted(n[len(pre):-4] for n in z.namelist() if n.startswith(pre) and n.endswith('.png') and '/' not in n[len(pre):])
 PB = set(listdir('block'))
 PI = set(listdir('item'))
-L = json.load(open('/tmp/lists.json'))
+L = json.load(open(sys.argv[3] if len(sys.argv) > 3 else '/tmp/lists.json'))
+MODELS = json.load(open(sys.argv[4])) if len(sys.argv) > 4 else {'keys': [], 'tiles': []}
 src = open('src/render/TextureManager.ts').read()
 ren_src = src[src.index('const PACK_RENAME'):src.index('};', src.index('const PACK_RENAME'))]
 RENAME = dict(re.findall(r"(\w+): '(\w+)'", ren_src))
@@ -111,9 +112,16 @@ for k in ('dispenser', 'dropper'):
         if k not in ORIENT: ORIENT.append(k)
 
 # ---------------------------------------------------------------- 2. textures restantes -> nouveaux blocs
+# textures utilisées par les modèles 3D (src/data/blockModels.ts) ; blocs à modèle manquants
+used |= set(MODELS['tiles'])
 U = sorted(n for n in PB if n not in used and not SKIP.match(n))
 NEW = []  # dicts
 taken = set(blocks)
+for k in MODELS['keys']:
+    if k in blocks: continue
+    first = k if k in PB else next((t for t in MODELS['tiles'] if t.startswith(k.split('_')[0]) and t in PB), MODELS['tiles'][0])
+    taken.add(k)
+    NEW.append({'key': k, 'src': k, 'kind': 'model', 'textures': {'all': first}})
 def newkey(k):
     base = k
     i = 2
@@ -207,7 +215,7 @@ for n in sorted(remaining):
     elif tr > 0.02: kind = 'cutout'
     NEW.append({'key': newkey(n), 'src': n, 'kind': kind, 'textures': {'all': n}})
 
-newtiles = set()
+newtiles = set(t for t in MODELS['tiles'] if t not in tiles)
 for b in NEW:
     for v in b['textures'].values():
         for n in (v if isinstance(v, list) else [v]):

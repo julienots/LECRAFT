@@ -50,6 +50,9 @@ function packBlock([key, name, kind, color, textures]: (typeof PACK_BLOCKS)[numb
       return { ...base, render: 'cutout', orientable: !!textures.front };
     case 'faces':
       return { ...base, orientable: !!textures.front };
+    case 'model':
+      // modèle 3D (src/data/blockModels.ts) : forme, collisions et orientation viennent du modèle
+      return { ...base, render: 'model', hardness: /crop|stage|wart|rail|dust|litter|petals|wildflowers|frogspawn|tripwire|vein|clump|moss_carpet|candle|pot|cocoa|dripleaf|azalea|pickle|egg|frame/.test(key) ? (/rail/.test(key) ? 0.7 : 0.1) : m.hardness };
     case 'cross':
       return { ...base, hardness: m.sound === 'metal' ? 1 : 0, tool: m.sound === 'metal' ? 'pickaxe' : undefined, render: 'cross', sound: m.sound === 'stone' ? 'grass' : m.sound, replaceable: false };
     case 'double':

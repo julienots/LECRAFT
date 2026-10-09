@@ -222,7 +222,7 @@ export class Session implements GameContext {
     };
     this.particles.limit = this.particleLimit();
     this.highlight = new BlockHighlight(game.textures);
-    this.held = new HeldItem(game.textures);
+    this.held = new HeldItem(game.textures, `player_${game.settings.playerSkin ?? 'steve'}`);
     this.explosions = new Explosions(game.textures);
     this.falling = new FallingBlocks(game.textures);
     this.ticker.onFall = (x, y, z, id) => this.falling.spawn(this, x, y, z, id);
@@ -1095,7 +1095,7 @@ export class Session implements GameContext {
     this.held.update(cam.aspect, this.entities.combat.swing, this.controller.bobPhase * 2, Math.min(1, Math.hypot(p.body.vx, p.body.vz) / 4), br, p.sneaking);
     // modèle du joueur (vues à la 3e personne)
     if (this.perspective && !this.avatar) {
-      this.avatar = new PlayerAvatar(this.shadowTexture, this.skins, (id) => this.iconTexture(id));
+      this.avatar = new PlayerAvatar(this.shadowTexture, this.skins, (id) => this.iconTexture(id), `player_${this.game.settings.playerSkin ?? 'steve'}`);
       this.scene.add(this.avatar.group);
     }
     this.avatar?.update({

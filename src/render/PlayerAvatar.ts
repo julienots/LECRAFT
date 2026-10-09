@@ -15,8 +15,8 @@ export class PlayerAvatar {
   private item: THREE.Mesh;
   private itemId = '';
 
-  constructor(shadow: THREE.Texture, skins: SkinProvider, private icon: (id: string) => THREE.Texture) {
-    this.model = new MobModel('player', SCALE, shadow, skins);
+  constructor(shadow: THREE.Texture, skins: SkinProvider, private icon: (id: string) => THREE.Texture, skinKey = 'player') {
+    this.model = new MobModel('player', SCALE, shadow, skins, skinKey);
     this.model.setShadowSize(0.6, true);
     this.item = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.3, side: THREE.DoubleSide }));
     // dans la main droite (repère du bras : y vers le bas, 10 px sous l'épaule)

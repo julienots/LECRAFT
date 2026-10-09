@@ -44,7 +44,7 @@ export class HeldItem {
   private tmpM = new THREE.Matrix4();
   private tq = new THREE.Quaternion();
 
-  constructor(private tm: TextureManager) {
+  constructor(private tm: TextureManager, private skinKey = 'player') {
     // le jeu original dessine la main avec un champ de vision fixe de 70°
     this.camera = new THREE.PerspectiveCamera(70, 1, 0.01, 10);
     this.holder.add(this.pose);
@@ -74,7 +74,7 @@ export class HeldItem {
    */
   private makeArm(): THREE.Object3D {
     // ombrage par face comme le jeu original (dessus clair, côtés plus sombres)
-    const m = new THREE.MeshLambertMaterial({ map: this.tm.skin('player'), alphaTest: 0.3, side: THREE.DoubleSide });
+    const m = new THREE.MeshLambertMaterial({ map: this.tm.skin(this.skinKey), alphaTest: 0.3, side: THREE.DoubleSide });
     m.userData.sharedMap = true; // skin partagée : ne pas la libérer ici
     this.mats.push(m as unknown as THREE.MeshBasicMaterial);
     const geo = cachedCube({ uv: [40, 16], box: [-3, -2, -2, 4, 12, 4], pivot: [0, 0, 0] }, 64, 64).clone();

@@ -3,7 +3,8 @@ import { BlockRegistry } from '../blocks/BlockRegistry';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { ICON_TEMPLATES } from '../ui/IconTemplates';
 import type { SkinProvider } from './MobModels';
-import { SKINS, paintSkin } from './MobSkins';
+import { paintSkin } from './MobSkins';
+import { skinAspect } from './MobModels';
 import { LoadedPack } from './ResourcePack';
 import { buildAtlas, hex } from './TextureGenerator';
 import { ANIMATED_TILES, ATLAS_COLS, TILE_PX, TileRegistry } from './TileRegistry';
@@ -84,6 +85,49 @@ export const SKIN_PATHS: Record<string, string[]> = {
   spider: ['entity/spider/spider.png'],
   cave_spider: ['entity/spider/cave_spider.png'],
   slime: ['entity/slime/slime.png'],
+  horse: ['entity/horse/horse_brown.png'],
+  donkey: ['entity/horse/donkey.png'],
+  mule: ['entity/horse/mule.png'],
+  skeleton_horse: ['entity/horse/horse_skeleton.png'],
+  zombie_horse: ['entity/horse/horse_zombie.png'],
+  llama: ['entity/llama/brown.png'],
+  trader_llama: ['entity/llama/creamy.png'],
+  camel: ['entity/camel/camel.png'],
+  camel_husk: ['entity/camel/camel_husk.png'],
+  goat: ['entity/goat/goat.png'],
+  polar_bear: ['entity/bear/polarbear.png'],
+  panda: ['entity/panda/panda.png'],
+  hoglin: ['entity/hoglin/hoglin.png'],
+  zoglin: ['entity/hoglin/zoglin.png'],
+  armadillo: ['entity/armadillo.png'],
+  rabbit: ['entity/rabbit/brown.png'],
+  frog: ['entity/frog/temperate_frog.png'],
+  turtle: ['entity/turtle/big_sea_turtle.png'],
+  fox: ['entity/fox/fox.png'],
+  ocelot: ['entity/cat/ocelot.png'],
+  cat: ['entity/cat/tabby.png'],
+  parrot: ['entity/parrot/parrot_red_blue.png'],
+  bee: ['entity/bee/bee.png'],
+  phantom: ['entity/phantom.png'],
+  phantom_eyes: ['entity/phantom_eyes.png'],
+  silverfish: ['entity/silverfish.png'],
+  endermite: ['entity/endermite.png'],
+  strider: ['entity/strider/strider.png'],
+  cod: ['entity/fish/cod.png'],
+  salmon: ['entity/fish/salmon.png'],
+  pufferfish: ['entity/fish/pufferfish.png'],
+  tropical_fish: ['entity/fish/tropical_a.png'],
+  dolphin: ['entity/dolphin.png'],
+  guardian: ['entity/guardian.png'],
+  elder_guardian: ['entity/guardian_elder.png'],
+  axolotl: ['entity/axolotl/axolotl_lucy.png'],
+  tadpole: ['entity/tadpole/tadpole.png'],
+  iron_golem: ['entity/iron_golem/iron_golem.png'],
+  zombie_villager: ['entity/zombie_villager/zombie_villager.png'],
+  pillager: ['entity/illager/pillager.png'],
+  vindicator: ['entity/illager/vindicator.png'],
+  bat: ['entity/bat.png'],
+  shulker: ['entity/shulker/shulker.png'],
 };
 /** Skin générée de remplacement pour une clé sans peintre (entités d'add-ons sur un modèle vanilla). */
 /**
@@ -312,10 +356,10 @@ export class TextureManager implements SkinProvider {
       const c = document.createElement('canvas');
       c.width = img.width;
       c.height = img.height;
-      // packs récents (1.21.5+) : vache, cochon, meuh-champi… en 64×64 avec la même disposition
-      // que l'ancienne texture 64×32 dans la moitié haute → on garde la moitié haute
-      const spec = SKINS[SKIN_FALLBACK[key] ?? key];
-      if (spec && spec.w === spec.h * 2 && img.width === img.height) c.height = img.width / 2;
+      // proportions attendues par le modèle : texture plus haute → on garde le haut (ancienne
+      // disposition 64×32 dans une texture 64×64), plus basse → on complète (vide)
+      const asp = skinAspect(key);
+      if (asp) c.height = Math.round(img.width * asp);
       c.getContext('2d')!.drawImage(img, 0, 0);
       return c;
     }

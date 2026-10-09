@@ -135,4 +135,6 @@ export interface Block extends Required<Pick<BlockDef, 'key' | 'name' | 'hardnes
   climbable: boolean;
   drops: DropDef[];
   color: string;
+  /** Quads précalculés d'un modèle 3D (par orientation). */
+  visuals?: import('../addons/BedrockBlocks').BedrockVisual[];
 }

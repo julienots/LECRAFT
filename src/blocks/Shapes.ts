@@ -99,8 +99,8 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
       return out;
     }
     case 'custom': {
-      const info = BlockRegistry.get(id).def.bedrock;
-      return info?.visuals[meta]?.selection ?? info?.visuals[0]?.selection ?? [FULL];
+      const vis = BlockRegistry.get(id).visuals ?? BlockRegistry.get(id).def.bedrock?.visuals;
+      return vis?.[meta & (vis.length > 4 ? 255 : 3)]?.selection ?? vis?.[0]?.selection ?? [FULL];
     }
     case 'trapdoor': {
       // méta : bits 0-1 orientation, bit 2 ouverte, bit 3 moitié haute
@@ -202,8 +202,8 @@ export function collisionBoxes(id: number, meta: number, nb: NeighborFn): Box[] 
     case 'lily_pad':
       return [[1, 0, 1, 15, 1.5, 15]];
     case 'custom': {
-      const info = BlockRegistry.get(id).def.bedrock;
-      return info?.visuals[meta]?.collision ?? info?.visuals[0]?.collision ?? [FULL];
+      const vis = BlockRegistry.get(id).visuals ?? BlockRegistry.get(id).def.bedrock?.visuals;
+      return vis?.[meta & (vis.length > 4 ? 255 : 3)]?.collision ?? vis?.[0]?.collision ?? [FULL];
     }
     default:
       return modelBoxes(id, meta, nb);

@@ -432,8 +432,8 @@ export class ChunkMesher {
   /** Bloc d'add-on : quads précalculés de la permutation (méta). */
   private custom(inp: MeshInput, x: number, y: number, z: number, pi: number, b: number, m: number) {
     const R = BlockRegistry;
-    const info = R.blocks[b].def.bedrock;
-    const vis = info?.visuals[m] ?? info?.visuals[0];
+    const all = R.blocks[b].visuals ?? R.blocks[b].def.bedrock?.visuals;
+    const vis = all?.[m & (all.length > 4 ? 255 : 3)] ?? all?.[0];
     if (!vis) return;
     const { blocks, sky, blk } = inp;
     for (const q of vis.quads) {

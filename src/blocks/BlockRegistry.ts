@@ -1,6 +1,8 @@
 import type { Block, BlockDef, ShapeKind } from './Block';
 import { BLOCK_DEFS } from '../data/blocks';
 import { TileRegistry } from '../render/TileRegistry';
+import { BLOCK_MODELS } from '../data/blockModels';
+import { buildJavaVisuals } from './JavaModels';
 
 /** Nombre maximal de blocs (identifiants sur 16 bits, tables de lookup bornées). */
 export const MAX_BLOCKS = 4096;
@@ -37,8 +39,11 @@ class BlockRegistryImpl {
     if (this.byKey.has(def.key)) throw new Error(`Bloc dupliqué: ${def.key}`);
     const id = this.blocks.length;
     if (id >= MAX_BLOCKS) throw new Error(`Maximum ${MAX_BLOCKS} blocs`);
-    const render = def.render ?? (def.shape ? 'model' : 'cube');
-    const solid = def.solid ?? !(render === 'none' || render === 'cross' || render === 'liquid');
+    // modèle 3D du jeu de référence (lanternes, chaudrons, enclumes…) : rendu par quads précalculés
+    const model = def.bedrock ? undefined : BLOCK_MODELS[def.key];
+    const shapeKind: ShapeKind | undefined = model ? 'custom' : def.shape;
+    const render = model ? 'model' : def.render ?? (def.shape ? 'model' : 'cube');
+    const solid = model ? model.collision?.length !== 0 && def.solid !== false : def.solid ?? !(render === 'none' || render === 'cross' || render === 'liquid');
     const opaque = render === 'cube';
     const t = def.textures ?? {};
     const tile = (n?: string) => (n ? TileRegistry.index(n) : 0);
@@ -53,7 +58,8 @@ class BlockRegistryImpl {
       hardness: def.hardness,
       def,
       render,
-      shape: def.shape ?? null,
+      shape: shapeKind ?? null,
+      visuals: model ? buildJavaVisuals(model) : undefined,
       solid,
       opaque,
       transparent: !opaque,
@@ -74,7 +80,7 @@ class BlockRegistryImpl {
       interact: def.interact ?? null,
       needsSupport: def.needsSupport ?? false,
       supportBlocks: def.supportBlocks ?? null,
-      orientable: def.orientable ?? false,
+      orientable: def.orientable ?? model?.facing ?? false,
       climbable: def.climbable ?? false,
       drops: def.drops ?? [{ item: def.key }],
       color: def.color ?? '#888888',
@@ -88,7 +94,7 @@ class BlockRegistryImpl {
     this.renderType[id] = RENDER_TYPES.indexOf(render);
     this.liquid[id] = block.liquid === 'water' ? 1 : block.liquid === 'lava' ? 2 : 0;
     this.replaceable[id] = block.replaceable ? 1 : 0;
-    this.shape[id] = def.shape ? SHAPES.indexOf(def.shape) + 1 : 0;
+    this.shape[id] = shapeKind ? SHAPES.indexOf(shapeKind) + 1 : 0;
     this.climbable[id] = block.climbable ? 1 : 0;
     if (def.tint === 'grass') this.tintType[id] = 1;
     else if (def.tint === 'foliage') this.tintType[id] = 2;

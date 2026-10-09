@@ -245,6 +245,17 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   plus réactive (baisse de résolution en 3 s) et mémorisée d'un lancement à l'autre, shaders
   désactivés par défaut en profil Bas. Créatures : saut à 1,3 bloc (comme le joueur), nage pour
   sortir de l'eau, peuvent sauter dans l'eau depuis plus haut.
+- **Rendu fidèle au jeu original (v2.22)** — modèles 3D des blocs non cubiques au format des
+  modèles de blocs du jeu (lanternes, chaînes, bougies, gâteau, chaudron, entonnoir, enclumes,
+  cloche, alambic, table d'enchantement, tailleur de pierre, pupitre, meule, feux de camp,
+  composteur, répéteur, comparateur, échafaudage, balise, paratonnerres, cacao, cultures, rails,
+  capteurs et hurleurs de sculk, œufs de renifleur, ghast desséché…) : plus de « trous » dans les
+  blocs ; les cages (générateurs, coffres-forts, grilles) se voient des deux côtés. Créatures :
+  géométrie exacte des modèles officiels (scripts/gen-entity-geometry.py, d'après les
+  échantillons publics de l'édition Bedrock) avec les vraies textures du pack. Image nette :
+  résolution native de l'écran, anticrénelage dès le profil moyen, mipmaps jusqu'au niveau 4
+  (plus de scintillement au loin), herbe et feuillage bien teintés au loin, bords sans liseré
+  sombre. L'inventaire, le bras et le corps du joueur utilisent sa vraie skin.
 - **Toutes les textures du pack (v2.21)** — chaque texture de bloc et d'objet du pack de
   ressources a maintenant un usage : faces multiples (dessus / dessous / avant / dos) pour ~70 blocs
   existants (quartz, basalte, grès, fourneaux, ruches, observateur, fabricateur, vitres…), ~370

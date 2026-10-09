@@ -92,7 +92,7 @@ export class InventoryUI {
     const h = guiHeight(this.kind);
 
     this.gui = el('div', { class: 'gui', style: `width:${GUI_W}px;height:${h}px` });
-    const bg = containerBackground(this.kind, title, game.textures);
+    const bg = containerBackground(this.kind, title, game.textures, 3, `player_${game.settings.playerSkin ?? 'steve'}`);
     bg.className = 'gui-bg';
     this.gui.append(bg);
     this.buildSlots(pinv);

@@ -806,9 +806,40 @@ export function buildAtlas(overrides?: Map<string, ImageData>): HTMLCanvasElemen
   tiles.forEach((tile, i) => {
     const name = TileRegistry.names[i];
     const img = overrides?.get(name) ?? new ImageData(tile.data, TILE_PX, TILE_PX);
+    bleed(img.data);
     ctx.putImageData(img, (i % ATLAS_COLS) * TILE_PX, Math.floor(i / ATLAS_COLS) * TILE_PX);
   });
   return canvas;
+}
+
+/**
+ * Couleur des texels transparents = moyenne des voisins opaques (alpha inchangé) : les niveaux de
+ * mipmap ne mélangent plus du noir aux bords des plantes et des feuilles (pas de liseré sombre).
+ */
+export function bleed(d: Uint8ClampedArray) {
+  const N = TILE_PX;
+  let todo = true;
+  for (let pass = 0; pass < 8 && todo; pass++) {
+    todo = false;
+    const filled = new Uint8Array(N * N);
+    for (let i = 0; i < N * N; i++) if (d[i * 4 + 3] > 0 || d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2] > 0) filled[i] = 1;
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const i = y * N + x;
+        if (filled[i]) continue;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue;
+          const j = yy * N + xx;
+          if (!filled[j]) continue;
+          r += d[j * 4]; g += d[j * 4 + 1]; b += d[j * 4 + 2]; n++;
+        }
+        if (n) {
+          d[i * 4] = Math.max(1, r / n); d[i * 4 + 1] = g / n; d[i * 4 + 2] = b / n;
+        } else todo = true;
+      }
+  }
 }
 
 /** Dessine toutes les tuiles (pur calcul, testable sans DOM). */

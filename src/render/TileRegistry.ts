@@ -1,4 +1,5 @@
 import { BLOCK_DEFS } from '../data/blocks';
+import { modelTiles } from '../data/blockModels';
 
 /** Tuiles animées : nombre d'images consécutives dans l'atlas. */
 export const ANIMATED_TILES: Record<string, number> = { water: 16, lava: 16 };
@@ -22,6 +23,7 @@ class TileRegistryImpl {
       if (!t) continue;
       for (const n of [t.all, t.top, t.bottom, t.side, t.front, t.back, t.east, t.west, ...(t.byMeta ?? [])]) if (n) this.add(n);
     }
+    for (const n of modelTiles()) this.add(n);
     for (const n of EXTRA_TILES) this.add(n);
     if (this.names.length > ATLAS_COLS * ATLAS_COLS) throw new Error('Atlas plein');
   }

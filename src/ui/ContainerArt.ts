@@ -85,26 +85,40 @@ export function drawFlame(ctx: CanvasRenderingContext2D, x: number, y: number, f
 }
 
 /** Personnage (vue de face) dans le cadre noir de l'inventaire. */
-function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number) {
+/** Personnage de l'inventaire dessiné à partir de la vraie skin du joueur (vue de face, couches comprises). */
+function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number, skin: CanvasImageSource & { width: number; height: number }) {
   const k = 2;
-  const box = (bx: number, by: number, w: number, h: number, c: string) => rect(ctx, x + bx * k, y + by * k, w * k, h * k, c);
-  box(4, 0, 8, 8, '#b98a6a'); // tête
-  box(4, 0, 8, 2, '#3b2a1c'); // cheveux
-  box(4, 2, 1, 2, '#3b2a1c');
-  box(11, 2, 1, 2, '#3b2a1c');
-  box(6, 4, 1, 1, '#ffffff');
-  box(7, 4, 1, 1, '#3a5a8a');
-  box(9, 4, 1, 1, '#3a5a8a');
-  box(10, 4, 1, 1, '#ffffff');
-  box(7, 6, 3, 1, '#8a5a44');
-  box(4, 8, 8, 12, '#3d7d48'); // torse
-  box(0, 8, 4, 12, '#3d7d48'); // bras
-  box(12, 8, 4, 12, '#3d7d48');
-  box(0, 16, 4, 4, '#b98a6a');
-  box(12, 16, 4, 4, '#b98a6a');
-  box(4, 20, 4, 12, '#5a4632'); // jambes
-  box(8, 20, 4, 12, '#4e3c2a');
-  box(4, 30, 8, 2, '#2a2a2a');
+  const sx = skin.width / 64; // skins HD des packs
+  const tall = skin.height >= skin.width; // format 64×64 (sinon 64×32 : membres gauches en miroir)
+  ctx.imageSmoothingEnabled = false;
+  const part = (u: number, v: number, w: number, h: number, dx: number, dy: number, mirror = false) => {
+    ctx.save();
+    if (mirror) {
+      ctx.translate(x + (dx + w) * k, y + dy * k);
+      ctx.scale(-1, 1);
+      ctx.drawImage(skin, u * sx, v * sx, w * sx, h * sx, 0, 0, w * k, h * k);
+    } else ctx.drawImage(skin, u * sx, v * sx, w * sx, h * sx, x + dx * k, y + dy * k, w * k, h * k);
+    ctx.restore();
+  };
+  part(8, 8, 8, 8, 4, 0); // tête
+  part(20, 20, 8, 12, 4, 8); // torse
+  part(44, 20, 4, 12, 0, 8); // bras droit (à gauche à l'écran)
+  part(4, 20, 4, 12, 4, 20); // jambe droite
+  if (tall) {
+    part(36, 52, 4, 12, 12, 8);
+    part(20, 52, 4, 12, 8, 20);
+    // couches extérieures (chapeau, veste, manches, pantalon)
+    part(40, 8, 8, 8, 4, 0);
+    part(20, 36, 8, 12, 4, 8);
+    part(44, 36, 4, 12, 0, 8);
+    part(52, 52, 4, 12, 12, 8);
+    part(4, 36, 4, 12, 4, 20);
+    part(4, 52, 4, 12, 8, 20);
+  } else {
+    part(44, 20, 4, 12, 12, 8, true);
+    part(4, 20, 4, 12, 8, 20, true);
+    part(40, 8, 8, 8, 4, 0);
+  }
 }
 
 const PACK_FILES: Record<ContainerKind, string> = {
@@ -138,7 +152,7 @@ export function playerInvY(kind: ContainerKind, rows = 3) {
 }
 
 /** Construit l'image de fond d'une interface (canvas 1:1 en pixels d'interface). */
-export function containerBackground(kind: ContainerKind, title: string, tex: TextureManager, rows = 3): HTMLCanvasElement {
+export function containerBackground(kind: ContainerKind, title: string, tex: TextureManager, rows = 3, skinKey = 'player'): HTMLCanvasElement {
   const h = guiHeight(kind, rows);
   const c = document.createElement('canvas');
   c.width = GUI_W;
@@ -181,7 +195,7 @@ export function containerBackground(kind: ContainerKind, title: string, tex: Tex
   }
   if (kind === 'inventory') {
     rect(ctx, 27, 9, 49, 70, '#000000');
-    drawFigure(ctx, 27 + 8, 9 + 3);
+    drawFigure(ctx, 27 + 8, 9 + 3, tex.skin(skinKey).image as HTMLCanvasElement);
   }
   // libellés
   const label = (t: string, x: number, y: number) => drawText(ctx, t, x, y - 2, C.label);

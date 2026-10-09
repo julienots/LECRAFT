@@ -39,7 +39,7 @@ export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
   LOW: {
     renderDistance: 4,
     simulationDistance: 2,
-    pixelRatio: 0.75,
+    pixelRatio: 1,
     maxParticles: 150,
     maxEntities: 20,
     entityDistance: 32,

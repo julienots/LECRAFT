@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { build, VOXEL_MODELS } from './VoxelModels';
+import { VANILLA_GEO } from '../data/vanillaGeometry';
+import { geometryToModel } from '../addons/BedrockGeometry';
 
 /**
  * Modèles des créatures.
@@ -780,6 +782,69 @@ export function createShadowTexture(): THREE.Texture {
 export function disposeModelCache() {
   geoCache.forEach((g) => g.dispose());
   geoCache.clear();
+}
+
+/**
+ * Géométries exactes du jeu de référence (src/data/vanillaGeometry.ts) : mêmes cubes et mêmes UV
+ * que les textures du pack, pour que chaque créature ait exactement son apparence d'origine.
+ */
+const GEO_MOBS: Record<string, string> = {
+  cow: 'geometry.cow.v2', mooshroom: 'geometry.mooshroom.v2', pig: 'geometry.pig.v3', chicken: 'geometry.chicken.v1.12',
+  horse: 'geometry.horse.v3', donkey: 'geometry.horse.v3', mule: 'geometry.horse.v3', skeleton_horse: 'geometry.horse.v3', zombie_horse: 'geometry.horse.v3',
+  llama: 'geometry.llama.v1.8', trader_llama: 'geometry.llama.v1.8', camel: 'geometry.camel', camel_husk: 'geometry.camel_husk', goat: 'geometry.goat',
+  panda: 'geometry.panda', hoglin: 'geometry.hoglin', zoglin: 'geometry.hoglin', armadillo: 'geometry.armadillo',
+  rabbit: 'geometry.rabbit.v2', frog: 'geometry.frog', turtle: 'geometry.turtle', fox: 'geometry.fox', ocelot: 'geometry.ocelot.v1.8', cat: 'geometry.cat',
+  parrot: 'geometry.parrot', bee: 'geometry.bee', phantom: 'geometry.phantom', silverfish: 'geometry.silverfish', endermite: 'geometry.endermite',
+  strider: 'geometry.strider', cod: 'geometry.cod', salmon: 'geometry.salmon', pufferfish: 'geometry.pufferfish.large.v1.8', tropical_fish: 'geometry.tropicalfish_a',
+  dolphin: 'geometry.dolphin', guardian: 'geometry.guardian.v1.8', elder_guardian: 'geometry.guardian.v1.8', axolotl: 'geometry.axolotl', tadpole: 'geometry.tadpole',
+  iron_golem: 'geometry.irongolem', zombie_villager: 'geometry.zombie.villager.v1.8', pillager: 'geometry.pillager', vindicator: 'geometry.vindicator.v1.8',
+  evoker: 'geometry.evoker.v1.8', bat: 'geometry.bat_v2', shulker: 'geometry.shulker.v1.8', bogged: 'geometry.skeleton.bogged', parched: 'geometry.parched',
+};
+const GEO_GLOW: Record<string, string> = { phantom: 'phantom_eyes' };
+/** Os d'équipement ou d'états particuliers masqués (selle, sacoches, coffres, pose enroulée…). */
+const HORSE_GEAR = ['reinsl', 'reinsr', 'bridle', 'bitl', 'bitr', 'bagl', 'bagr', 'saddle'];
+const GEO_HIDE: Record<string, string[]> = {
+  horse: [...HORSE_GEAR, 'muleearl', 'muleearr'], skeleton_horse: [...HORSE_GEAR, 'muleearl', 'muleearr'], zombie_horse: [...HORSE_GEAR, 'muleearl', 'muleearr'],
+  donkey: [...HORSE_GEAR, 'earl', 'earr'], mule: [...HORSE_GEAR, 'earl', 'earr'],
+  llama: ['chest1', 'chest2'], trader_llama: ['chest1', 'chest2'], camel: ['saddle', 'bridle', 'reins'], camel_husk: ['saddle', 'bridle', 'reins'],
+  armadillo: ['body_rolled_up'], frog: ['croaking_body', 'tongue'], fox: ['head_sleeping', 'held_item'],
+  evoker: ['rightarm', 'leftarm'], vindicator: ['arms'],
+};
+/** Corps couchés par l'animation d'installation des quadrupèdes de l'édition Bedrock (rotation X de 90°). */
+const GEO_BODY_90 = new Set(['cow', 'mooshroom', 'pig', 'chicken', 'llama', 'trader_llama', 'ocelot', 'cat', 'fox']);
+for (const [k, id] of Object.entries(GEO_MOBS)) {
+  const g0 = VANILLA_GEO[id];
+  // seuls les cubes du corps tournent (os intermédiaire) : les pattes et la tête restent en place
+  const g = g0 && GEO_BODY_90.has(k)
+    ? { ...g0, bones: g0.bones.flatMap((b) => (b.name === 'body' ? [{ ...b, cubes: [] }, { name: 'body_turned', parent: 'body', pivot: b.pivot, rotation: [90, 0, 0], cubes: b.cubes }] : [b])) }
+    : g0;
+  if (!g) continue;
+  const hide = new Set(GEO_HIDE[k] ?? []);
+  const byName = new Map(g.bones.map((b) => [b.name, b]));
+  const hidden = (b: { name: string; parent?: string }): boolean => {
+    for (let x: { name: string; parent?: string } | undefined = b; x; x = x.parent ? byName.get(x.parent) : undefined) if (hide.has(x.name.toLowerCase())) return true;
+    return false;
+  };
+  VANILLA[k] = { ...geometryToModel({ id, texW: g.texW, texH: g.texH, bones: g.bones.filter((b) => !hidden(b)) }, k), glow: GEO_GLOW[k] ?? VANILLA[k]?.glow };
+}
+
+// ours polaire : modèle Java (texture 128×64)
+VANILLA.polar_bear = {
+  skin: 'polar_bear', texW: 128, texH: 64,
+  parts: [
+    P([0, 0], [-3.5, -3, -3, 7, 7, 7], [0, 10, -16], { anim: 'head', children: [P([0, 44], [-2.5, 1, -6, 5, 3, 3], [0, 0, 0]), P([26, 0], [-4.5, -4, -1, 2, 2, 1], [0, 0, 0]), P([26, 0], [2.5, -4, -1, 2, 2, 1], [0, 0, 0], { mirror: true })] }),
+    P([0, 19], [-5, -13, -7, 14, 14, 11], [-2, 9, 12], { rot: [HALF_PI, 0, 0], children: [P([39, 0], [-4, -25, -7, 12, 12, 10], [0, 0, 0])] }),
+    P([50, 22], [-2, 0, -2, 4, 10, 8], [-4.5, 14, 6], { anim: 'legBR' }),
+    P([50, 22], [-2, 0, -2, 4, 10, 8], [4.5, 14, 6], { anim: 'legBL', mirror: true }),
+    P([50, 40], [-2, 0, -2, 4, 10, 6], [-3.5, 14, -8], { anim: 'legFR' }),
+    P([50, 40], [-2, 0, -2, 4, 10, 6], [3.5, 14, -8], { anim: 'legFL', mirror: true }),
+  ],
+};
+
+/** Proportions (hauteur / largeur) de la texture attendue par le modèle d'une skin. */
+export function skinAspect(skin: string): number | undefined {
+  for (const m of Object.values(VANILLA)) if (m.skin === skin) return m.texH / m.texW;
+  return undefined;
 }
 
 export const VANILLA_MODELS = VANILLA;
