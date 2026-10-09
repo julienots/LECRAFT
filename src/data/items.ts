@@ -76,7 +76,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { key: 'wheat_seeds', name: 'Graines de blé', icon: sprite('seeds', '#5a9a2a', '#c8d870'), use: 'plant', plants: 'wheat', tab: 'nature' },
   { key: 'sugar_cane', name: 'Canne à sucre', icon: { tile: 'sugar_cane' }, place: 'sugar_cane', tab: 'nature' },
   { key: 'spider_eye', name: "Œil d'araignée", icon: sprite('eye', '#8a1a2a', '#e04a5a'), food: { hunger: 2, saturation: 3.2 }, tab: 'food' },
-  { key: 'snowball', name: 'Boule de neige', icon: sprite('ball', '#f0f8ff', '#ffffff'), maxStack: 16, tab: 'combat' },
+  { key: 'snowball', name: 'Boule de neige', icon: sprite('ball', '#f0f8ff', '#ffffff'), maxStack: 16, use: 'throw', projectile: 'minecraft:snowball', tab: 'combat' },
   { key: 'arrow', name: 'Flèche', icon: sprite('arrow', '#8a6a3c', '#5a5a64', '#f0f0f0'), tab: 'combat' },
   // --- nourriture ---
   food('apple', 'Pomme', sprite('apple', '#d8241c', '#4f8a2c'), 4, 2.4),

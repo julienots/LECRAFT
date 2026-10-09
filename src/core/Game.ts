@@ -429,7 +429,7 @@ export class Game {
    * Passage d'un portail : sauvegarde la dimension quittée, convertit les coordonnées (÷ 8 vers le
    * Nether, × 8 vers la surface) et relance la partie dans l'autre dimension (écran de chargement).
    */
-  async changeDimension(target: 'overworld' | 'nether' | 'end', at?: { x: number; y: number; z: number }) {
+  async changeDimension(target: 'overworld' | 'nether' | 'end' | 'paper', at?: { x: number; y: number; z: number }, via: 'nether' | 'paper' = 'nether') {
     const s = this.session;
     if (!s || this.state !== 'playing') return;
     this.closeInventory();
@@ -457,14 +457,14 @@ export class Game {
       spawners: next?.spawners ?? {},
       furnaces: next?.furnaces ?? {},
       mobs: next?.mobs ?? [],
-      arrival: at ? undefined : { x: ax, y: p.y, z: az },
+      arrival: at ? undefined : { x: ax, y: p.y, z: az, kind: via },
       player: (at ? { ...state.player, ...at } : { ...state.player, x: ax, y: target === 'end' ? END_SPAWN.y : Math.min(120, Math.max(40, p.y)), z: az }) as WorldState['player'],
     };
     // la nouvelle dimension est enregistrée tout de suite (un arrêt pendant le chargement reste cohérent)
     await this.saves.save(s.meta, newState, []).catch((e) => console.error(e));
     // partie en réseau : la salle reste ouverte, les invités suivent l'hôte dans la dimension
     const hosting = s.netHost?.detach(target) ?? null;
-    await this.startWorld(s.meta, newState, false, target === 'nether' ? 'Entrée dans le Nether' : target === 'end' ? "Entrée dans l'End" : 'Retour à la surface');
+    await this.startWorld(s.meta, newState, false, target === 'nether' ? 'Entrée dans le Nether' : target === 'end' ? "Entrée dans l'End" : target === 'paper' ? 'Entrée dans la Pâte à papier' : 'Retour à la surface');
     if (hosting && this.session) this.session.startHosting(hosting.link, hosting.room, hosting.opts);
     if (s.meta.bots && target === 'overworld') this.session?.smp?.start();
   }

@@ -7,6 +7,7 @@
 import { CHUNK_SIZE, LIGHT_PADDING, WORLD_HEIGHT } from '../core/Config';
 import { chunkKey } from '../util/math';
 import { WorldGenerator, scanSpecials } from '../world/WorldGenerator';
+import { PaperGenerator } from '../world/PaperGenerator';
 import { NetherGenerator } from '../world/NetherGenerator';
 import { EndGenerator } from '../world/EndGenerator';
 import { ServerGenerator } from '../server/ServerMaps';
@@ -19,7 +20,7 @@ import type { FromWorker, ToWorker } from './protocol';
 import { registerAddonBlocks } from '../addons/AddonRegistry';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
-let gen: WorldGenerator | NetherGenerator | EndGenerator | ServerGenerator | null = null;
+let gen: WorldGenerator | NetherGenerator | EndGenerator | ServerGenerator | PaperGenerator | null = null;
 const chunks = new Map<string, ChunkData>();
 const mesher = new ChunkMesher();
 const light = new LightVolume(PADDED_W);
@@ -128,7 +129,7 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
     switch (m.type) {
       case 'init':
         if (m.addonBlocks?.length) registerAddonBlocks(m.addonBlocks, m.addonTiles ?? []);
-        gen = m.dimension === 'nether' ? new NetherGenerator(m.seed) : m.dimension === 'end' ? new EndGenerator(m.seed) : m.dimension === 'server' ? new ServerGenerator(m.seed) : new WorldGenerator(m.seed);
+        gen = m.dimension === 'nether' ? new NetherGenerator(m.seed) : m.dimension === 'paper' ? new PaperGenerator(m.seed) : m.dimension === 'end' ? new EndGenerator(m.seed) : m.dimension === 'server' ? new ServerGenerator(m.seed) : new WorldGenerator(m.seed);
         chunks.clear();
         break;
       case 'load':

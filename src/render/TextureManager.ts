@@ -3,7 +3,7 @@ import { BlockRegistry } from '../blocks/BlockRegistry';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { ICON_TEMPLATES } from '../ui/IconTemplates';
 import type { SkinProvider } from './MobModels';
-import { paintSkin } from './MobSkins';
+import { SKINS, paintSkin } from './MobSkins';
 import { LoadedPack } from './ResourcePack';
 import { buildAtlas, hex } from './TextureGenerator';
 import { ANIMATED_TILES, ATLAS_COLS, TILE_PX, TileRegistry } from './TileRegistry';
@@ -307,6 +307,10 @@ export class TextureManager implements SkinProvider {
       const c = document.createElement('canvas');
       c.width = img.width;
       c.height = img.height;
+      // packs récents (1.21.5+) : vache, cochon, meuh-champi… en 64×64 avec la même disposition
+      // que l'ancienne texture 64×32 dans la moitié haute → on garde la moitié haute
+      const spec = SKINS[SKIN_FALLBACK[key] ?? key];
+      if (spec && spec.w === spec.h * 2 && img.width === img.height) c.height = img.width / 2;
       c.getContext('2d')!.drawImage(img, 0, 0);
       return c;
     }

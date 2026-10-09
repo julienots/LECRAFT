@@ -1,7 +1,7 @@
 {
   "name": "lecraft",
   "private": true,
-  "version": "2.19.0",
+  "version": "2.20.0",
   "description": "LeCraft - jeu sandbox voxel 3D hors ligne pour Android",
   "type": "module",
   "scripts": {
@@ -32,6 +32,7 @@
     "e2e:server": "node scripts/e2e-server.mjs",
     "e2e:smp": "node scripts/e2e-smp.mjs",
     "e2e:multi": "node scripts/e2e-multi.mjs",
+    "e2e:paper": "node scripts/e2e-paper.mjs",
     "server": "node server/lecraft-server.mjs"
   },
   "dependencies": {

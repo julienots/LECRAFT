@@ -16,7 +16,8 @@ export type ItemUse =
   | 'ignite'
   | 'shear'
   | 'spawn_compass'
-  | 'spawn_egg';
+  | 'spawn_egg'
+  | 'throw';
 
 export interface ItemDef {
   key: string;
@@ -48,6 +49,8 @@ export interface ItemDef {
   /** Nom de texture dans un pack de ressources (sinon = clé). */
   packTexture?: string;
   description?: string;
+  /** Pour use='throw' : projectile lancé (PROJECTILE_DEFS). */
+  projectile?: string;
   /** Outil de zone : marteau (minage 3×3) ou excavateur (pelletage 3×3). */
   area?: 'hammer' | 'excavator';
   /** Add-ons : composants personnalisés (scripts) → paramètres. */

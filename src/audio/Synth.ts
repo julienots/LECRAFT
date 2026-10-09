@@ -147,6 +147,11 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.chirp = s.mix({ buf: s.tone(0.07, 2600, 3400, { wave: 'sine', decay: 25, gain: 0.12 }) }, { buf: s.tone(0.07, 2800, 3600, { wave: 'sine', decay: 25, gain: 0.1 }), at: 0.1 });
   out.buzz = s.tone(0.6, 210, 200, { wave: 'saw', decay: 2, attack: 0.1, gain: 0.08, vibrato: 0.04, vibRate: 30 });
   out.snow = s.noise(0.2, { lp: 1500, hp: 400, decay: 14, gain: 0.5 });
+  // Pâte à papier : froissement, déchirure, gribouillis au crayon, avion qui fend l'air
+  out.paper_rustle = s.noise(0.35, { lp: 6000, hp: 1800, decay: 8, gain: 0.35, crackle: 0.7 });
+  out.paper_tear = s.mix({ buf: s.noise(0.3, { lp: 5000, hp: 900, decay: 9, gain: 0.5, crackle: 0.9 }) }, { buf: s.noise(0.15, { lp: 2500, hp: 600, decay: 14, gain: 0.3, crackle: 0.5 }), at: 0.12 });
+  out.scribble = s.mix({ buf: s.noise(0.12, { lp: 4000, hp: 1200, decay: 12, gain: 0.3, crackle: 0.4 }) }, { buf: s.noise(0.12, { lp: 4200, hp: 1400, decay: 12, gain: 0.3, crackle: 0.4 }), at: 0.16 }, { buf: s.noise(0.12, { lp: 3800, hp: 1100, decay: 12, gain: 0.3, crackle: 0.4 }), at: 0.32 });
+  out.paper_whoosh = s.noise(0.6, { lp: 1800, hp: 300, decay: 4, attack: 0.15, gain: 0.3 });
   out.cackle = s.mix(...[0, 0.09, 0.18, 0.27].map((at) => ({ buf: s.tone(0.08, 700, 500, { wave: 'saw', decay: 15, gain: 0.2 }), at })));
   out.hmm = s.tone(0.45, 160, 140, { wave: 'saw', decay: 3, attack: 0.05, gain: 0.25, vibrato: 0.05, vibRate: 6 });
   out.hmm_hurt = s.tone(0.3, 220, 150, { wave: 'saw', decay: 8, gain: 0.3 });

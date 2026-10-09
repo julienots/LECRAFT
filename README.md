@@ -245,6 +245,21 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   plus réactive (baisse de résolution en 3 s) et mémorisée d'un lancement à l'autre, shaders
   désactivés par défaut en profil Bas. Créatures : saut à 1,3 bloc (comme le joueur), nage pour
   sortir de l'eau, peuvent sauter dans l'eau depuis plus haut.
+- **Nouvelle dimension : la « Pâte à papier » (v2.20)** — un monde entièrement en papier. Construisez
+  un cadre de **papier mâché** (comme un portail du Nether : 4×5, intérieur 2×3 ; recette : 8 papiers
+  + 1 boule d'argile → 4) et ouvrez-le avec une **plume encrée** (plume + poche d'encre + papier).
+  Quatre biomes : **plaines de papier** (fleurs en papier, confettis, lanternes sur poteaux),
+  **forêts d'origami** (troncs en tubes de carton, feuillages pliés verts et roses), **canyons de
+  carton** en terrasses, **marais d'encre** (papier journal, flaques d'encre) ; sous-sol en carton et
+  papier froissé avec **filons de graphite** ; **temples d'origami** arc-en-ciel (trésor, cage à
+  gribouilles). Ciel pastel en plein jour permanent, musique propre. **Créatures** : grue en papier
+  (vole), grenouille en origami, **gribouille** (silhouette d'encre), **boulette de papier** (rebondit et
+  se divise), **avion de papier** (pique sur le joueur), **golem de carton** (mini-boss). **Objets** :
+  outils en **graphite**, armure en **carton**, couronne de papier, **ciseaux géants**, avions en papier
+  à lancer, fruits en origami ; ~30 blocs (papier ligné/quadrillé, journal, carton, papiers de
+  couleur, lanterne en papier…). `/execute in paper run tp …` et `/locate paper_temple` fonctionnent.
+- **Textures des packs récents** : les vaches, cochons et meuh-champis des packs 1.21.5+ (textures
+  64×64) s'affichent correctement ; les boules de neige se lancent.
 - **Vrai multijoueur en réseau (v2.19)** — jouez avec de **vrais joueurs** (Wi-Fi local ou Internet) :
   un joueur ouvre son monde (*Menu du jeu › Ouvrir au multijoueur* : JcJ, bots joueurs, 4 à 16 joueurs),
   les autres le rejoignent (*Multijoueur › Parties en réseau*). Un petit **serveur relais sans
@@ -809,6 +824,8 @@ npm run e2e:server               # 20 vérifications : file d'attente, arc des b
                                  # de scores, hub protégé), menu des jeux, Duel (le bot frappe, victoire,
                                  # pièces), SkyWars (cages, coffres, bots armés et ponts), Spleef, carte
                                  # restaurée, TNT Run, Parkour (record), réponses des bots au chat
+npm run e2e:paper                # 8 vérifications : plume encrée sur le cadre de papier mâché, voyage,
+                                 # terrain et créatures de papier, portail de retour, temple, retour
 npm run e2e:multi                # 22 vérifications : deux navigateurs (hôte + invité), liste des parties,
                                  # chunks modifiés, blocs dans les deux sens, chat, créatures, butin, bots,
                                  # coffre partagé, JcJ, déconnexion, serveur autonome

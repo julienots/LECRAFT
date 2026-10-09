@@ -4,6 +4,7 @@ import { breakTime, getDrops, blockXp, hasSupport, plantSoil, rollLoot } from '.
 import type { GameContext } from '../core/GameContext';
 import type { InputState } from '../input/InputState';
 import { STRIPPED } from '../data/vanillaMore';
+import { PROJECTILE_DEFS } from '../entities/Projectile';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { EntityManager } from '../entities/EntityManager';
 import { Animal } from '../entities/Animal';
@@ -774,11 +775,34 @@ export class PlayerInteraction {
         if (m && !p.creative) inv.takeFromSlot(inv.selected, 1);
         return !!m;
       }
+      case 'throw': {
+        // objet lancé (avion en papier, boule de neige…) dans la direction du regard
+        const def = ItemRegistry.get(itemId);
+        const pd = def?.projectile ? PROJECTILE_DEFS.get(def.projectile) : undefined;
+        if (!pd) return false;
+        const [ox, oy, oz, dx, dy, dz] = this.eye();
+        const pr = this.entities.spawnProjectile('custom', ox + dx * 0.6, oy + dy * 0.6, oz + dz * 0.6, dx * 18, dy * 18 + 1.5, dz * 18, pd.damage, true, pd);
+        pr.owner = p;
+        ctx.audio.play('paper_whoosh', { x: ox, y: oy, z: oz });
+        this.entities.combat.swing = 1;
+        if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+        return true;
+      }
       case 'ignite': {
         // briquet : allume un portail dans un cadre d'obsidienne, sinon pose du feu
         if (!t) return false;
         const x = t.x + t.nx, y = t.y + t.ny, z = t.z + t.nz;
         if (w.getBlock(x, y, z) !== B.AIR) return false;
+        // plume encrée : ouvre un cadre de papier mâché (la Pâte à papier), jamais de feu
+        if (itemId === 'quill') {
+          const open = tryLight(w, x, y, z, 'paper');
+          if (!open) return false;
+          this.host.portalLit?.(open);
+          ctx.audio.play('portal', { x, y, z, volume: 0.7, pitch: 1.6 });
+          ctx.particles.burst('magic', x + 0.5, y + 1, z + 0.5, 20);
+          if (!p.creative) inv.damageSelected(1);
+          return true;
+        }
         const lit = tryLight(w, x, y, z);
         if (lit) {
           this.host.portalLit?.(lit);

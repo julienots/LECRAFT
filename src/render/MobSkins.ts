@@ -410,6 +410,35 @@ export const SKINS: Record<string, SkinSpec> = {
       box(ctx, 0, 52, 6, 6, 6, (f, x, y) => (f === 'front' && y === 2 && (x === 1 || x === 4) ? '#1a1a1a' : pick(rng, ['#e8e0a0', '#d8d090'])));
     },
   },
+  // ---------- Pâte à papier ----------
+  paper_crane: batLike(['#f6f3ea', '#ece6da', '#ffffff'], ['#f6f3ea', '#e8e2d4', '#dcd6c8'], '#1a1a2a'),
+  origami_frog: pigLike(['#7cc850', '#6ab840', '#8ad860'], ['#5aa830', '#9ae070'], (x, y) => (y <= 1 && (x === 1 || x === 6) ? '#1a1a1a' : (x + y) % 5 === 0 ? '#5aa830' : null), true),
+  scribble: {
+    w: 64,
+    h: 64,
+    paint(ctx, rng) {
+      // silhouette de traits d'encre (gribouillis bleu-noir sur papier)
+      const ink = ['#1a1a3a', '#22224a', '#141428', '#2a2a5a'];
+      const scrawl = (u: number, v: number, w: number, h: number, d: number) =>
+        box(ctx, u, v, w, h, d, (_f, x, y) => ((x * 3 + y * 5 + Math.floor(rng.next() * 3)) % 4 === 0 ? '#f6f3ea' : pick(rng, ink)));
+      scrawl(0, 0, 8, 8, 8);
+      box(ctx, 0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && y === 3 && (x === 2 || x === 5) ? '#ffffff' : null));
+      scrawl(16, 16, 8, 12, 4);
+      scrawl(40, 16, 4, 12, 4);
+      scrawl(0, 16, 4, 12, 4);
+    },
+  },
+  crumpled_ball: {
+    w: 64,
+    h: 32,
+    paint(ctx, rng) {
+      const pal = ['#f0ece2', '#e2ddd0', '#f8f5ee', '#d4cfc2', '#c8c2b4'];
+      for (let i = 0; i < 9; i++) box(ctx, i === 2 ? 24 : i === 3 ? 24 : 0, i === 2 ? 10 : i === 3 ? 19 : i, 8, 1, 8, () => pick(rng, pal));
+      box(ctx, 0, 16, 4, 4, 4, (f, x, y) => (f === 'front' && y === 1 && (x === 0 || x === 3) ? '#1a1a2a' : pick(rng, pal)));
+    },
+  },
+  paper_plane: fishSkin(10, 2, 12, ['#f6f3ea', '#ffffff', '#ece6da'], '#8fb3e0'),
+  cardboard_golem: humanSkin({ skin: ['#c49a64', '#b88c58', '#d0a670'], shirt: ['#a87e4c', '#b8905c', '#9a7040'], pants: ['#b88c58', '#a87e4c', '#c49a64'], shoes: '#7a5a34', eyes: '#1a1a2a', mouth: '#7a5a34' }),
 };
 
 function humanSkin(c: { skin: string[]; shirt: string[]; pants: string[]; shoes: string; eyes: string; mouth: string }): SkinSpec {

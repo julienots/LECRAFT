@@ -8,8 +8,8 @@
  * Aucune musique d'un autre jeu n'est incluse : les mélodies sont générées (art original).
  */
 
-export type MusicMood = 'menu' | 'day' | 'night' | 'cave' | 'underwater' | 'creative' | 'nether' | 'end';
-export const MUSIC_MOODS: MusicMood[] = ['menu', 'day', 'night', 'cave', 'underwater', 'creative', 'nether', 'end'];
+export type MusicMood = 'menu' | 'day' | 'night' | 'cave' | 'underwater' | 'creative' | 'nether' | 'end' | 'paper';
+export const MUSIC_MOODS: MusicMood[] = ['menu', 'day', 'night', 'cave', 'underwater', 'creative', 'nether', 'end', 'paper'];
 
 export type Voice = 'piano' | 'pad' | 'bass' | 'bell';
 export interface MusicNote {
@@ -95,6 +95,11 @@ const STYLES: Record<MusicMood, Style> = {
     tempo: [46, 54], keys: [4, 1], scale: PHRYGIAN,
     progressions: [[[0, MIN], [1, MAJ], [0, MIN], [8, MAJ]], [[0, MIN6], [1, MAJ7], [10, MIN], [1, MAJ]]],
     voices: { melody: 'bell', chords: 'pad', bass: true }, density: 0.3, center: 62, names: ['Braises', 'Âmes perdues', 'Forteresse'],
+  },
+  paper: {
+    tempo: [88, 100], keys: [0, 5, 7], scale: MAJOR_SCALE,
+    progressions: [[[0, MAJ], [5, MAJ], [7, MAJ], [0, MAJ]], [[0, ADD9], [9, MIN], [5, MAJ7], [7, SUS2]]],
+    voices: { melody: 'bell', chords: 'piano', bass: true, sparkle: true }, density: 0.75, center: 79, names: ['Pliages', 'Grues de papier', 'Feuilles blanches', 'Confettis'],
   },
   end: {
     tempo: [44, 52], keys: [11, 6], scale: MINOR_SCALE,
@@ -219,6 +224,7 @@ function openDb(): Promise<IDBDatabase> {
 export function moodFromPath(path: string): MusicMood | 'any' {
   const p = path.toLowerCase();
   if (/nether/.test(p)) return 'nether';
+  if (/paper|papier/.test(p)) return 'paper';
   if (/(^|\/|_|\b)end(\b|\/|_)|the_end|boss/.test(p)) return 'end';
   if (/menu/.test(p)) return 'menu';
   if (/creative/.test(p)) return 'creative';

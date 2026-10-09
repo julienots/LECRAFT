@@ -11,6 +11,7 @@ import type { CraftingRecipe, SmeltingRecipe } from '../crafting/Recipe';
 import { WOOL_COLORS } from './blocks';
 import { hex, registerPainter, paint, type Tile } from '../render/TextureGenerator';
 import { MORE_BLOCKS, MORE_ITEMS, MORE_RECIPES, MORE_SMELTING } from './vanillaMore';
+import { PAPER_BLOCKS, PAPER_ITEMS, PAPER_RECIPES, PAPER_SMELTING } from './paperContent';
 
 const B: BlockDef[] = [];
 const I: ItemDef[] = [];
@@ -683,7 +684,7 @@ shaped('lever', 'lever', 1, ['S', 'C'], { S: 'stick', C: 'cobblestone' });
 B.push({ key: 'stone_button', name: 'Bouton de pierre', textures: { all: 'stone' }, hardness: 0.5, render: 'model', shape: 'button', sound: 'stone', interact: 'button', needsSupport: true, color: '#8a8a8a' });
 shapeless('stone_button', 'stone_button', 1, ['stone']);
 
-export const EXTRA_BLOCKS: BlockDef[] = [...B, ...MORE_BLOCKS];
-export const EXTRA_ITEMS: ItemDef[] = [...I, ...MORE_ITEMS];
-export const EXTRA_RECIPES = [...R, ...MORE_RECIPES];
-export const EXTRA_SMELTING = [...S, ...MORE_SMELTING];
+export const EXTRA_BLOCKS: BlockDef[] = [...B, ...MORE_BLOCKS, ...PAPER_BLOCKS];
+export const EXTRA_ITEMS: ItemDef[] = [...I, ...MORE_ITEMS, ...PAPER_ITEMS];
+export const EXTRA_RECIPES = [...R, ...MORE_RECIPES, ...PAPER_RECIPES];
+export const EXTRA_SMELTING = [...S, ...MORE_SMELTING, ...PAPER_SMELTING];

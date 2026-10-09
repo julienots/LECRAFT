@@ -235,7 +235,7 @@ export class AudioManager implements SoundFx {
   /** Change l'ambiance musicale ; un changement de dimension coupe la pièce en cours (fondu). */
   setMusicMood(m: MusicMood) {
     if (m === this.musicMood) return;
-    const big = (x: MusicMood) => (x === 'nether' || x === 'end' || x === 'menu' ? x : 'overworld');
+    const big = (x: MusicMood) => (x === 'nether' || x === 'end' || x === 'menu' || x === 'paper' ? x : 'overworld');
     const prev = this.musicMood;
     this.musicMood = m;
     if (big(prev) !== big(m) && this.current) {

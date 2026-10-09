@@ -6,17 +6,23 @@ import type { World } from './World';
  * Portails du Nether : cadre d'obsidienne rectangulaire (intérieur de 2×3 à 21×21, coins
  * facultatifs) allumé au briquet, dans le plan X ou Z. Méta du bloc de portail : 0 = plan X, 1 = plan Z.
  */
-export type Dimension = 'overworld' | 'nether' | 'end';
+export type Dimension = 'overworld' | 'nether' | 'end' | 'paper' | 'paper';
+/** Portails à cadre rectangulaire : Nether (obsidienne + briquet) et Pâte à papier (papier mâché + plume encrée). */
+export type PortalKind = 'nether' | 'paper';
 
-export const portalId = () => (BlockRegistry.has('nether_portal') ? BlockRegistry.byName('nether_portal').id : -1);
+export const portalId = (kind: PortalKind = 'nether') => {
+  const k = kind === 'paper' ? 'paper_portal' : 'nether_portal';
+  return BlockRegistry.has(k) ? BlockRegistry.byName(k).id : -1;
+};
+export const frameId = (kind: PortalKind = 'nether') => (kind === 'paper' ? (BlockRegistry.has('papier_mache') ? BlockRegistry.byName('papier_mache').id : -2) : B.OBSIDIAN);
 
 const MAX = 21;
 /** Remplissage en cours : la vérification du cadre est suspendue (blocs posés un à un). */
 let filling = false;
 
 /** Intérieur d'un cadre valide contenant (x, y, z), ou null. */
-export function findFrame(w: World, x: number, y: number, z: number): { cells: [number, number, number][]; axis: 0 | 1 } | null {
-  const P = portalId();
+export function findFrame(w: World, x: number, y: number, z: number, kind: PortalKind = 'nether'): { cells: [number, number, number][]; axis: 0 | 1 } | null {
+  const P = portalId(kind), F = frameId(kind);
   const open = (b: number) => b === B.AIR || b === P || (BlockRegistry.has('fire') && b === BlockRegistry.byName('fire').id);
   for (const axis of [0, 1] as const) {
     const ax = axis === 0 ? 1 : 0, az = axis === 0 ? 0 : 1;
@@ -24,7 +30,7 @@ export function findFrame(w: World, x: number, y: number, z: number): { cells: [
     // descend jusqu'au bas de l'intérieur
     let by = y;
     while (by > 0 && y - by < MAX && open(w.getBlock(x, by - 1, z))) by--;
-    if (w.getBlock(x, by - 1, z) !== B.OBSIDIAN) continue;
+    if (w.getBlock(x, by - 1, z) !== F) continue;
     // bords gauche / droit
     let l = 0;
     while (l < MAX && open(w.getBlock(x - ax * (l + 1), by, z - az * (l + 1)))) l++;
@@ -33,7 +39,7 @@ export function findFrame(w: World, x: number, y: number, z: number): { cells: [
     const width = l + r + 1;
     if (width < 2 || width > MAX) continue;
     const x0 = x - ax * l, z0 = z - az * l;
-    if (w.getBlock(x0 - ax, by, z0 - az) !== B.OBSIDIAN || w.getBlock(x0 + ax * width, by, z0 + az * width) !== B.OBSIDIAN) continue;
+    if (w.getBlock(x0 - ax, by, z0 - az) !== F || w.getBlock(x0 + ax * width, by, z0 + az * width) !== F) continue;
     // hauteur : la première ligne dont un bloc n'est plus ouvert doit être un toit d'obsidienne complet
     let height = 0;
     let ok = true;
@@ -41,14 +47,14 @@ export function findFrame(w: World, x: number, y: number, z: number): { cells: [
       let rowOpen = true;
       for (let i = 0; i < width; i++) if (!open(w.getBlock(x0 + ax * i, by + height, z0 + az * i))) rowOpen = false;
       if (!rowOpen) break;
-      if (w.getBlock(x0 - ax, by + height, z0 - az) !== B.OBSIDIAN || w.getBlock(x0 + ax * width, by + height, z0 + az * width) !== B.OBSIDIAN) {
+      if (w.getBlock(x0 - ax, by + height, z0 - az) !== F || w.getBlock(x0 + ax * width, by + height, z0 + az * width) !== F) {
         ok = false;
         break;
       }
     }
     if (!ok || height < 3 || height > MAX) continue;
-    for (let i = 0; i < width; i++) if (w.getBlock(x0 + ax * i, by + height, z0 + az * i) !== B.OBSIDIAN) ok = false;
-    for (let i = 0; i < width; i++) if (w.getBlock(x0 + ax * i, by - 1, z0 + az * i) !== B.OBSIDIAN) ok = false;
+    for (let i = 0; i < width; i++) if (w.getBlock(x0 + ax * i, by + height, z0 + az * i) !== F) ok = false;
+    for (let i = 0; i < width; i++) if (w.getBlock(x0 + ax * i, by - 1, z0 + az * i) !== F) ok = false;
     if (!ok) continue;
     const cells: [number, number, number][] = [];
     for (let h = 0; h < height; h++) for (let i = 0; i < width; i++) cells.push([x0 + ax * i, by + h, z0 + az * i]);
@@ -58,10 +64,10 @@ export function findFrame(w: World, x: number, y: number, z: number): { cells: [
 }
 
 /** Allume le portail si (x, y, z) est à l'intérieur d'un cadre valide. */
-export function tryLight(w: World, x: number, y: number, z: number): { x: number; y: number; z: number } | null {
-  const P = portalId();
+export function tryLight(w: World, x: number, y: number, z: number, kind: PortalKind = 'nether'): { x: number; y: number; z: number } | null {
+  const P = portalId(kind);
   if (P < 0) return null;
-  const f = findFrame(w, x, y, z);
+  const f = findFrame(w, x, y, z, kind);
   if (!f) return null;
   filling = true;
   try {
@@ -78,8 +84,13 @@ export function tryLight(w: World, x: number, y: number, z: number): { x: number
  * ou portail dans leur plan) disparaissent, ce qui éteint tout le portail de proche en proche.
  */
 export function onBlockChanged(w: World, x: number, y: number, z: number) {
-  const P = portalId();
-  if (P < 0 || filling) return;
+  if (filling) return;
+  for (const kind of ['nether', 'paper'] as const) breakUnheld(w, x, y, z, kind);
+}
+
+function breakUnheld(w: World, x: number, y: number, z: number, kind: PortalKind) {
+  const P = portalId(kind), F = frameId(kind);
+  if (P < 0) return;
   const queue: [number, number, number][] = [[x + 1, y, z], [x - 1, y, z], [x, y + 1, z], [x, y - 1, z], [x, y, z + 1], [x, y, z - 1]];
   let guard = 0;
   while (queue.length && guard++ < 2000) {
@@ -87,7 +98,7 @@ export function onBlockChanged(w: World, x: number, y: number, z: number) {
     if (w.getBlock(px, py, pz) !== P) continue;
     const axis = w.getMeta(px, py, pz) & 1;
     const ax = axis === 0 ? 1 : 0, az = axis === 0 ? 0 : 1;
-    const held = (b: number) => b === P || b === B.OBSIDIAN;
+    const held = (b: number) => b === P || b === F;
     if (held(w.getBlock(px, py + 1, pz)) && held(w.getBlock(px, py - 1, pz)) && held(w.getBlock(px + ax, py, pz + az)) && held(w.getBlock(px - ax, py, pz - az))) continue;
     w.setBlock(px, py, pz, B.AIR);
     queue.push([px + ax, py, pz + az], [px - ax, py, pz - az], [px, py + 1, pz], [px, py - 1, pz]);
@@ -95,18 +106,21 @@ export function onBlockChanged(w: World, x: number, y: number, z: number) {
 }
 
 /** Le joueur (boîte) touche-t-il un bloc de portail ? */
-export function touchesPortal(w: World, x: number, y: number, z: number, halfW: number, h: number): boolean {
-  const P = portalId();
-  if (P < 0) return false;
+export function touchesPortal(w: World, x: number, y: number, z: number, halfW: number, h: number): PortalKind | null {
+  const P = portalId('nether'), Q = portalId('paper');
   for (let by = Math.floor(y); by <= Math.floor(y + h - 0.01); by++)
     for (let bx = Math.floor(x - halfW); bx <= Math.floor(x + halfW); bx++)
-      for (let bz = Math.floor(z - halfW); bz <= Math.floor(z + halfW); bz++) if (w.getBlock(bx, by, bz) === P) return true;
-  return false;
+      for (let bz = Math.floor(z - halfW); bz <= Math.floor(z + halfW); bz++) {
+        const b = w.getBlock(bx, by, bz);
+        if (b === P && P >= 0) return 'nether';
+        if (b === Q && Q >= 0) return 'paper';
+      }
+  return null;
 }
 
 /** Cherche un bloc de portail chargé près de (x, z) dans un rayon horizontal. */
-export function findNearbyPortal(w: World, x: number, z: number, radius: number, hint: { x: number; y: number; z: number }[]): { x: number; y: number; z: number } | null {
-  const P = portalId();
+export function findNearbyPortal(w: World, x: number, z: number, radius: number, hint: { x: number; y: number; z: number }[], kind: PortalKind = 'nether'): { x: number; y: number; z: number } | null {
+  const P = portalId(kind);
   let best: { x: number; y: number; z: number } | null = null, bd = Infinity;
   for (const p of hint) {
     const d = Math.hypot(p.x - x, p.z - z);
@@ -126,8 +140,8 @@ export function findNearbyPortal(w: World, x: number, z: number, radius: number,
  * dégagé posé sur un sol solide ; à défaut, construit une plateforme d'obsidienne et dégage l'air.
  * Retourne la position du premier bloc de portail (bas, à gauche).
  */
-export function buildArrivalPortal(w: World, tx: number, tz: number, dim: Dimension, preferY: number): { x: number; y: number; z: number } {
-  const P = portalId();
+export function buildArrivalPortal(w: World, tx: number, tz: number, dim: Dimension, preferY: number, kind: PortalKind = 'nether'): { x: number; y: number; z: number } {
+  const P = portalId(kind), F = frameId(kind);
   const minY = dim === 'nether' ? 32 : 2, maxY = dim === 'nether' ? 118 : WORLD_HEIGHT - 8;
   const fits = (x: number, y: number, z: number) => {
     for (let i = -1; i <= 2; i++) {
@@ -145,7 +159,8 @@ export function buildArrivalPortal(w: World, tx: number, tz: number, dim: Dimens
         if (!w.isLoaded(x - 2, z) || !w.isLoaded(x + 3, z)) continue;
         // du plus proche de l'altitude souhaitée vers l'extérieur
         for (let k = 0; k < maxY - minY; k++) {
-          const y = preferY + (k % 2 ? -(k + 1) / 2 : k / 2);
+          // Nether : au plus près de l'altitude visée ; ailleurs : on monte d'abord (pas dans une grotte)
+          const y = dim === 'nether' ? preferY + (k % 2 ? -(k + 1) / 2 : k / 2) : k <= 12 ? preferY + k : preferY - (k - 12);
           if (y < minY || y > maxY) continue;
           if (fits(x, y, z)) {
             spot = [x, y, z];
@@ -158,19 +173,19 @@ export function buildArrivalPortal(w: World, tx: number, tz: number, dim: Dimens
     // plateforme d'obsidienne + espace dégagé
     for (let i = -1; i <= 2; i++)
       for (const dz of [-1, 0, 1]) {
-        w.setBlock(x + i, y - 1, z + dz, B.OBSIDIAN);
+        w.setBlock(x + i, y - 1, z + dz, F);
         for (let h = 0; h < 5; h++) w.setBlock(x + i, y + h, z + dz, B.AIR);
       }
   }
   // cadre
   filling = true;
   for (let i = -1; i <= 2; i++) {
-    w.setBlock(x + i, y - 1, z, B.OBSIDIAN);
-    w.setBlock(x + i, y + 3, z, B.OBSIDIAN);
+    w.setBlock(x + i, y - 1, z, F);
+    w.setBlock(x + i, y + 3, z, F);
   }
   for (let h = 0; h < 3; h++) {
-    w.setBlock(x - 1, y + h, z, B.OBSIDIAN);
-    w.setBlock(x + 2, y + h, z, B.OBSIDIAN);
+    w.setBlock(x - 1, y + h, z, F);
+    w.setBlock(x + 2, y + h, z, F);
     for (let i = 0; i < 2; i++) w.setBlock(x + i, y + h, z, P, 0);
   }
   filling = false;

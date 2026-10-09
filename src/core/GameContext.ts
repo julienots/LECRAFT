@@ -66,7 +66,7 @@ export interface GameContext {
   /** Règles du jeu (/gamerule). */
   gamerules: GameRules;
   /** Dimension de la partie en cours. */
-  dimension: 'overworld' | 'nether' | 'end';
+  dimension: 'overworld' | 'nether' | 'end' | 'paper';
   iconTexture(itemId: string): THREE.Texture;
   /** Modèle 3D d'un objet tombé au sol. */
   droppedItem(itemId: string): THREE.Mesh;

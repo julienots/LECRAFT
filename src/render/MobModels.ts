@@ -325,6 +325,13 @@ Object.assign(VANILLA, {
   pillager: humanoid('pillager', 64, 64, 4),
   vindicator: humanoid('vindicator', 64, 64, 4),
   piglin: piglinModel('piglin'),
+  // Pâte à papier
+  paper_crane: reuse('bat', 'paper_crane'),
+  origami_frog: reuse('pig', 'origami_frog'),
+  scribble: humanoid('scribble', 64, 64, 4),
+  crumpled_ball: reuse('magma_cube', 'crumpled_ball'),
+  paper_plane: fishModel('paper_plane', 12, 2, 10),
+  cardboard_golem: humanoid('cardboard_golem', 64, 64, 4),
   shulker: {
     skin: 'shulker', texW: 64, texH: 64,
     parts: [P([0, 28], [-8, -8, -8, 16, 8, 16], [0, 24, 0]), P([0, 0], [-8, -16, -8, 16, 12, 16], [0, 24, 0], { inflate: 0.05 }), P([0, 52], [-3, -14, -3, 6, 6, 6], [0, 24, 0], { anim: 'head' })],

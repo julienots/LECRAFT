@@ -346,6 +346,7 @@ export class EntityManager implements EntitySpawner {
     const w = ctx.world;
     const peaceful = ctx.player.difficulty === 'peaceful';
     if (!ctx.gamerules.doMobSpawning) return;
+    if (ctx.dimension === 'paper') return this.paperSpawns(ctx, cap, peaceful);
     if (ctx.dimension !== 'overworld') {
       if (!peaceful) this.netherSpawns(ctx, cap);
       return;
@@ -417,7 +418,7 @@ export class EntityManager implements EntitySpawner {
       const candidates = MOB_DEFS.filter((d) => {
         if (!d.spawn || d.category !== 'hostile') return false;
         if (d.spawn.where === 'cave' && !underground) return false;
-        if (d.traits?.includes('waterSpawn') || d.spawn.where === 'nether') return false;
+        if (d.traits?.includes('waterSpawn') || d.spawn.where === 'nether' || d.spawn.where === 'paper') return false;
         if (d.spawn.where === 'surface' && underground && !biome.hostiles.includes(d.key)) return d.key === 'rodeur';
         if (d.spawn.where === 'surface' && !biome.hostiles.includes(d.key)) return false;
         if (d.spawn.maxY !== undefined && y > d.spawn.maxY) return false;
@@ -461,6 +462,29 @@ export class EntityManager implements EntitySpawner {
     if (l.sky > 3 || l.block > 3) return;
     if (b === B.AIR && w.getBlock(x, y + 1, z) === B.AIR && count('bat') < 4) this.spawnMob('bat', x + 0.5, y, z + 0.5);
     else if (b === B.WATER && w.getBlock(x, y + 1, z) === B.WATER && y < 45 && count('glow_squid') < 3) this.spawnMob(Math.random() < 0.5 && count('axolotl') < 3 ? 'axolotl' : 'glow_squid', x + 0.5, y, z + 0.5);
+  }
+
+  /** Pâte à papier : créatures de papier sur le sol, selon le biome (pas de nuit). */
+  private paperSpawns(ctx: GameContext, cap: number, peaceful: boolean) {
+    const p = ctx.player, w = ctx.world;
+    for (const cat of ['passive', 'hostile'] as const) {
+      if (cat === 'hostile' && peaceful) continue;
+      const n = this.count(cat) + (cat === 'passive' ? this.count('neutral') : 0);
+      if (n >= Math.round(cap * (cat === 'passive' ? 0.4 : 0.5)) || Math.random() > (cat === 'passive' ? 0.5 : 0.35)) continue;
+      const a = Math.random() * Math.PI * 2, r = 18 + Math.random() * 30;
+      const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);
+      if (!w.isLoaded(x, z)) continue;
+      const y = groundY(w, x, z);
+      if (y < 0) continue;
+      const biome = w.biomeAt(x, z);
+      const keys = cat === 'passive' ? biome.animals : biome.hostiles;
+      const list = keys.map((k) => MOB_BY_KEY.get(k)?.def).filter((d): d is MobDef => !!d?.spawn && (cat === 'passive' ? d.category !== 'hostile' : d.category === 'hostile'));
+      // le golem de carton reste rare
+      const def = weighted(list.filter((d) => d.key !== 'cardboard_golem' || this.mobs.every((m) => m.def.key !== 'cardboard_golem' || m.dead)));
+      if (!def?.spawn) continue;
+      const k = def.spawn.group[0] + Math.floor(Math.random() * (def.spawn.group[1] - def.spawn.group[0] + 1));
+      for (let i = 0; i < k; i++) this.spawnMob(def.key, x + 0.5 + (Math.random() - 0.5) * 3, y + 1 + (def.traits?.includes('flies') ? 3 : 0), z + 0.5 + (Math.random() - 0.5) * 3);
+    }
   }
 
   /** Nether : apparitions selon le biome à toute hauteur (pas de cycle jour/nuit). */

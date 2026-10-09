@@ -84,7 +84,7 @@ export interface WorldState {
   /** Combat du dragon : dragon vaincu, cristaux déjà posés. */
   endState?: { dragonKilled?: boolean; crystals?: boolean; exitBuilt?: boolean };
   /** Arrivée par un portail : position visée (coordonnées converties). */
-  arrival?: { x: number; y: number; z: number };
+  arrival?: { x: number; y: number; z: number; kind?: 'nether' | 'paper' };
   /** Données des scripts d'add-ons : propriétés dynamiques du monde, tableau des scores, règles. */
   scripting?: { dynProps?: Record<string, unknown>; scoreboard?: ScoreboardSnapshot; extraRules?: Record<string, string> };
 }
@@ -121,8 +121,8 @@ export class Session implements GameContext {
   /** Dimension de cette partie (un changement de dimension recrée la session). */
   readonly dimension: Dimension;
   private dims: Partial<Record<Dimension, DimState>> = {};
-  readonly portals: Record<Dimension, { x: number; y: number; z: number }[]> = { overworld: [], nether: [], end: [] };
-  private arrival: { x: number; y: number; z: number } | null = null;
+  readonly portals: Record<Dimension, { x: number; y: number; z: number }[]> = { overworld: [], nether: [], end: [], paper: [] };
+  private arrival: { x: number; y: number; z: number; kind?: Portals.PortalKind } | null = null;
   /** Temps passé dans un portail (s) ; le joueur doit en sortir avant de pouvoir repartir. */
   portalTime = 0;
   /** Dernier lieu de mort du joueur (affiché à l'écran de mort et suivi à la boussole). */
@@ -526,7 +526,7 @@ export class Session implements GameContext {
     this.scoreboard.load(s.scripting?.scoreboard);
     for (const [k, v] of Object.entries(s.scripting?.extraRules ?? {})) this.extraRules.set(k, v);
     this.dims = s.dims ?? {};
-    for (const d of ['overworld', 'nether', 'end'] as const) this.portals[d] = s.portals?.[d] ?? [];
+    for (const d of ['overworld', 'nether', 'end', 'paper'] as const) this.portals[d] = s.portals?.[d] ?? [];
     this.arrival = s.arrival ?? null;
     this.endState = s.endState ?? {};
   }
@@ -698,7 +698,7 @@ export class Session implements GameContext {
       } else void this.game.changeDimension('end');
       return;
     }
-    const inside = !p.dead && Portals.touchesPortal(this.world, p.x, p.y, p.z, p.body.halfWidth, p.body.height);
+    const inside = p.dead ? null : Portals.touchesPortal(this.world, p.x, p.y, p.z, p.body.halfWidth, p.body.height);
     if (!inside) {
       this.portalBlocked = false;
       this.portalTime = Math.max(0, this.portalTime - dt * 2);
@@ -708,7 +708,8 @@ export class Session implements GameContext {
       if (this.portalTime >= (p.creative ? 1 : 4)) {
         this.portalBlocked = true;
         this.portalTime = 0;
-        void this.game.changeDimension(this.dimension === 'nether' ? 'overworld' : 'nether');
+        if (inside === 'paper') void this.game.changeDimension(this.dimension === 'paper' ? 'overworld' : 'paper', undefined, 'paper');
+        else void this.game.changeDimension(this.dimension === 'nether' ? 'overworld' : 'nether');
       }
     }
     this.hud.setPortal(this.portalTime / (p.creative ? 1 : 4));
@@ -729,18 +730,19 @@ export class Session implements GameContext {
   }
 
   /** Arrivée par un portail : portail existant proche (registre), sinon nouveau portail. */
-  private arrive(a: { x: number; y: number; z: number }) {
+  private arrive(a: { x: number; y: number; z: number; kind?: Portals.PortalKind }) {
     const w = this.world, p = this.player;
     if (this.dimension === 'end') {
       this.arriveEnd();
       return;
     }
     const nether = this.dimension === 'nether';
-    let spot = Portals.findNearbyPortal(w, a.x, a.z, nether ? 16 : 128, this.portals[this.dimension]);
+    const kind = a.kind ?? 'nether';
+    let spot = Portals.findNearbyPortal(w, a.x, a.z, nether ? 16 : 128, this.portals[this.dimension], kind);
     if (!spot) {
       const tx = Math.floor(a.x), tz = Math.floor(a.z);
       const prefer = nether ? clamp(Math.round(a.y), NETHER_LAVA_LEVEL + 8, 100) : w.surfaceBelow(tx, WORLD_HEIGHT - 2, tz) + 1;
-      spot = Portals.buildArrivalPortal(w, tx, tz, this.dimension, prefer);
+      spot = Portals.buildArrivalPortal(w, tx, tz, this.dimension, prefer, kind);
       this.portals[this.dimension].push(spot);
     }
     p.body.setPos(spot.x + 0.5, spot.y, spot.z + 0.5);
@@ -1022,18 +1024,20 @@ export class Session implements GameContext {
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2);
     r.shake = this.shakeAmt;
     // ciel, brouillard, lumière
-    const nether = this.dimension !== 'overworld';
-    const rain = nether || this.biomeWeather() === 'none' ? 0 : this.weather.intensity;
+    const paper = this.dimension === 'paper';
+    const nether = this.dimension === 'nether' || this.dimension === 'end';
+    const rain = nether || paper || this.biomeWeather() === 'none' ? 0 : this.weather.intensity;
     const netherFog = this.dimension === 'end' ? new THREE.Color(0x120a18) : nether ? new THREE.Color(NETHER_FOG[this.world.biomeAt(Math.floor(p.x), Math.floor(p.z)).key] ?? 0x330808) : null;
     r.sky.moonPhase = this.dayCycle.day % 8;
     if (netherFog) r.sky.updateNether(cam.position, netherFog, this.dimension === 'end');
-    else r.sky.update(this.dayCycle.time, cam.position, rain, this.weather.flash, this.elapsed, s.clouds);
+    // la Pâte à papier : éternel milieu de journée, ciel pastel, nuages de papier
+    else r.sky.update(paper ? 0.22 : this.dayCycle.time, cam.position, rain, this.weather.flash, this.elapsed, s.clouds);
     const u = r.materials.uniforms;
     u.uTime.value = this.elapsed;
     u.uPortalTile.value = TileRegistry.has('end_portal') ? TileRegistry.index('end_portal') : -1;
     u.uResolution.value.set(r.gl.domElement.width, r.gl.domElement.height);
-    u.uDaylight.value = nether ? 0 : Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
-    u.uAmbient.value = this.dimension === 'end' ? 0.7 : nether ? 0.3 : 0.035;
+    u.uDaylight.value = nether ? 0 : paper ? 1 : Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
+    u.uAmbient.value = this.dimension === 'end' ? 0.7 : nether ? 0.3 : paper ? 0.28 : 0.035;
     u.uSkyColor.value.copy(r.sky.skyLightColor);
     u.uSway.value = this.profile.foliageAnimation ? 1 : 0;
     u.uWaterAnim.value = s.waterQuality === 'animated' ? 1 : 0;
@@ -1062,6 +1066,7 @@ export class Session implements GameContext {
     else if (inLava) r.setFog(0.2, 3, new THREE.Color(0.9, 0.35, 0.05));
     else if (netherFog && this.dimension === 'end') r.setFog(far * 0.75, far * 1.1, netherFog);
     else if (netherFog) r.setFog(Math.min(far, 64) * 0.1, Math.min(far, 64), netherFog);
+    else if (paper) r.setFog(far * 0.8, far, new THREE.Color(0xe8eef8));
     // brouillard du jeu original : seulement sur la fin de la distance de vue (fin − clamp(fin/10, 4, 64))
     else r.setFog(rain > 0.3 ? far * 0.35 : far - Math.min(64, Math.max(4, far / 10)), far, r.sky.horizon);
     game.hud.setOverlays(underwater, inLava);
@@ -1113,7 +1118,7 @@ export class Session implements GameContext {
       dt,
     );
     this.audio.setMusicMood(
-      this.dimension === 'nether' ? 'nether' : this.dimension === 'end' ? 'end' : underwater ? 'underwater' : underground ? 'cave' : p.creative ? 'creative' : night ? 'night' : 'day',
+      this.dimension === 'nether' ? 'nether' : this.dimension === 'end' ? 'end' : this.dimension === 'paper' ? 'paper' : underwater ? 'underwater' : underground ? 'cave' : p.creative ? 'creative' : night ? 'night' : 'day',
     );
     this.audio.updateMusic(dt);
     game.hud.update(this, dt);
@@ -1230,7 +1235,7 @@ export class Session implements GameContext {
     // notre touche : on retrouve l'endroit de sa mort (message + boussole vers les objets perdus)
     const d = this.lastDeath;
     if (d) {
-      const where = d.dim === 'overworld' ? '' : d.dim === 'nether' ? ' (Nether)' : " (l'End)";
+      const where = d.dim === 'overworld' ? '' : d.dim === 'nether' ? ' (Nether)' : d.dim === 'paper' ? ' (Pâte à papier)' : " (l'End)";
       this.game.chat.add(`Vous êtes mort en ${d.x}, ${d.y}, ${d.z}${where}`, 'info');
       if (d.dim === 'overworld') this.hud.showCompass(d.x + 0.5, d.z + 0.5, 'death', 300);
     }

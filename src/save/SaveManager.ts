@@ -24,7 +24,7 @@ export interface WorldMeta {
   remote?: boolean;
   /** Partie en réseau : point d'apparition et dimension de l'hôte. */
   netSpawn?: [number, number, number];
-  netDim?: 'overworld' | 'nether' | 'end';
+  netDim?: 'overworld' | 'nether' | 'end' | 'paper';
 }
 
 interface StateRecord {

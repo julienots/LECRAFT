@@ -18,6 +18,7 @@ export class Monster extends Mob {
     if (def.key === 'ghast') this.hoverHeight = 7;
     else if (def.key === 'blaze') this.hoverHeight = 1.5;
     else if (def.key === 'phantom') this.hoverHeight = 14;
+    else if (def.key === 'paper_plane') this.hoverHeight = 8;
   }
 
   /** Le creeper n'attaque pas : il allume sa mèche (voir customUpdate). */
@@ -30,13 +31,13 @@ export class Monster extends Mob {
     else this.farTime = 0;
     if (this.def.key === 'creeper' && !this.dead) this.creeperUpdate(ctx, dt);
     // phantom : tourne haut dans le ciel puis pique sur le joueur
-    if (this.def.key === 'phantom' && !this.dead) {
+    if ((this.def.key === 'phantom' || this.def.key === 'paper_plane') && !this.dead) {
       const p = ctx.player;
       const near = Math.hypot(p.x - this.x, p.z - this.z);
       this.swoop -= dt;
       if (this.swoop <= 0 && near < 24 && !p.dead && !p.creative) this.swoop = 4;
-      this.hoverHeight = this.swoop > 2 ? Math.max(0.5, p.y - ctx.world.surfaceBelow(Math.floor(this.x), Math.floor(this.y + 1), Math.floor(this.z))) : 14;
-      if (ctx.dayCycle.daylight > 0.7) this.removed = this.distToPlayer > 32 || this.removed;
+      this.hoverHeight = this.swoop > 2 ? Math.max(0.5, p.y - ctx.world.surfaceBelow(Math.floor(this.x), Math.floor(this.y + 1), Math.floor(this.z))) : this.def.key === 'phantom' ? 14 : 8;
+      if (this.def.key === 'phantom' && ctx.dayCycle.daylight > 0.7) this.removed = this.distToPlayer > 32 || this.removed;
     }
     // le chef charge quand il est à moyenne distance
     if (this.def.key === 'zombie_chief' && this.ai.canSee && this.distToPlayer > 4 && this.distToPlayer < 12 && this.attackTimer < -2) {
