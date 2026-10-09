@@ -1,0 +1,46 @@
+# Construit l'APK de débogage (installable directement sur un téléphone) et le publie en
+# pré-version « apk-<branche> » sur GitHub (lien de téléchargement direct), plus en artefact.
+name: APK Android
+on:
+  workflow_dispatch:
+  push:
+    branches: ['ccr-*', 'main', 'master']
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Dépendances
+        run: npm ci
+      - name: Build web + synchronisation Capacitor
+        run: npm run build && npx cap sync android
+      - name: APK de débogage
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Renommer
+        run: |
+          V=$(node -p "require('./package.json').version")
+          cp android/app/build/outputs/apk/debug/app-debug.apk "LeCraft-$V.apk"
+          echo "APK=LeCraft-$V.apk" >> $GITHUB_ENV
+          echo "VER=$V" >> $GITHUB_ENV
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LeCraft-apk
+          path: ${{ env.APK }}
+      - name: Pré-version avec l'APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="apk-${GITHUB_REF_NAME//\//-}"
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" "$APK" --prerelease --target "$GITHUB_SHA" --title "LeCraft $VER ($GITHUB_REF_NAME)" --notes "APK de débogage construit automatiquement. Textures : importez votre pack dans Options › Packs de ressources."
