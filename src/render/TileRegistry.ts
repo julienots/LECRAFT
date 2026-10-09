@@ -3,7 +3,7 @@ import { BLOCK_DEFS } from '../data/blocks';
 /** Tuiles animées : nombre d'images consécutives dans l'atlas. */
 export const ANIMATED_TILES: Record<string, number> = { water: 16, lava: 16 };
 export const EXTRA_TILES = Array.from({ length: 10 }, (_, i) => `destroy_stage_${i}`);
-export const ATLAS_COLS = 32;
+export const ATLAS_COLS = 64;
 export const TILE_PX = 16;
 
 /**
@@ -20,7 +20,7 @@ class TileRegistryImpl {
     for (const d of BLOCK_DEFS) {
       const t = d.textures;
       if (!t) continue;
-      for (const n of [t.all, t.top, t.bottom, t.side, t.front, ...(t.byMeta ?? [])]) if (n) this.add(n);
+      for (const n of [t.all, t.top, t.bottom, t.side, t.front, t.back, t.east, t.west, ...(t.byMeta ?? [])]) if (n) this.add(n);
     }
     for (const n of EXTRA_TILES) this.add(n);
     if (this.names.length > ATLAS_COLS * ATLAS_COLS) throw new Error('Atlas plein');

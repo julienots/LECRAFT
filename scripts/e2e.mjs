@@ -191,7 +191,9 @@ try {
 
   // ---------- inventaire à curseur & fabrication ----------
   const slot = (n) => page.locator('.gui .gslot').nth(n);
-  const tap = async (loc) => { await loc.dispatchEvent('pointerdown'); await loc.dispatchEvent('pointerup'); await wait(60); };
+  // toucher bref : appui et relâchement partent ensemble (le rendu logiciel peut prendre > 380 ms par
+  // image ; deux allers-retours séparés seraient pris pour un appui long)
+  const tap = async (loc) => { await loc.evaluate((el) => { for (const t of ['pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerType: 'touch' })); }); await wait(60); };
   // double toucher réel : les quatre événements partent d'un coup (sans aller-retour par événement)
   const dbl = async (loc) => {
     await loc.evaluate((el) => { for (const t of ['pointerdown', 'pointerup', 'pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerType: 'touch' })); });

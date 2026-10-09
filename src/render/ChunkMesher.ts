@@ -107,6 +107,11 @@ const FACE_SHADE = [0.78, 0.78, 1.0, 0.55, 0.9, 0.9];
 const AO_CURVE = [1.0, 0.78, 0.62, 0.48];
 // face avant selon la méta d'orientation : 0 sud(+Z), 1 ouest(-X), 2 nord(-Z), 3 est(+X)
 const FRONT_FACE = [4, 1, 5, 0];
+/** Tuile d'une face latérale d'un bloc orientable : avant, dos, puis côtés droit / gauche. */
+function orientTile(ft: number[], d: number, meta: number): number {
+  const rel = (FRONT_FACE.indexOf(d) - (meta & 3)) & 3;
+  return rel === 0 ? ft[4] : rel === 2 ? ft[5] : rel === 1 ? ft[1] : ft[0];
+}
 
 export interface MeshInput {
   /** Volume padded (W x H x W) des ID de blocs. */
@@ -193,7 +198,7 @@ export class ChunkMesher {
           const li = (x + z * CHUNK_SIZE + y * 256);
           const bm = meta[li];
           let tile = block.faceTiles[d];
-          if (block.orientable && d !== 2 && d !== 3) tile = d === FRONT_FACE[bm & 3] ? block.faceTiles[4] : block.faceTiles[0];
+          if (block.orientable && d !== 2 && d !== 3) tile = orientTile(block.faceTiles, d, bm);
           else if (block.metaTiles && d === 2) tile = block.metaTiles[Math.min(bm, block.metaTiles.length - 1)];
           const flags = (block.sway && R.renderType[b] === 2 ? FLAG_SWAY : 0) | (TileRegistry.animFrames[tile] > 1 ? FLAG_ANIM : 0);
           const layer = rt === 5 ? 1 : 0;
@@ -221,7 +226,7 @@ export class ChunkMesher {
             else if (packed !== first) uniform = false;
           }
           const tint = this.tintOf(inp, b, x, z);
-          mk[m] = tile | (flags << 12) | (layer << 20) | ((uniform ? 1 : 0) << 21); // tuile sur 12 bits (atlas 32×32)
+          mk[m] = tile | (flags << 12) | (layer << 20) | ((uniform ? 1 : 0) << 21); // tuile sur 12 bits (atlas 64×64)
           ml[m] = uniform ? first : -2 - m; // valeurs uniques pour empêcher la fusion
           mt[m] = tint;
         }
@@ -398,7 +403,7 @@ export class ChunkMesher {
         if (kind === 'door' && block.metaTiles) tile = block.metaTiles[(m >> 3) & 1];
         else if (kind === 'bed' && block.metaTiles && d === 2) tile = block.metaTiles[(m >> 2) & 1];
         else if (kind === 'farmland' && block.metaTiles && d === 2) tile = block.metaTiles[m & 1];
-        else if (block.orientable && d !== 2 && d !== 3) tile = d === FRONT_FACE[m & 3] ? block.faceTiles[4] : block.faceTiles[0];
+        else if (block.orientable && d !== 2 && d !== 3) tile = orientTile(block.faceTiles, d, m);
         if (frame) {
           if (bi === 0 && d === 2) tile = frame.faceTiles[2];
           else if (bi === 1) tile = block.faceTiles[2];

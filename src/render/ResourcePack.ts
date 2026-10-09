@@ -142,6 +142,7 @@ export async function removePack(): Promise<void> {
 
 /** Images du pack installé (chemin relatif à textures/ → bitmap). */
 export class LoadedPack {
+  private static scratch = new Map<number, CanvasRenderingContext2D>();
   constructor(readonly info: PackInfo, readonly images: Map<string, ImageBitmap>) {}
 
   get(path: string): ImageBitmap | undefined {
@@ -159,9 +160,15 @@ export class LoadedPack {
   }
   /** Image redimensionnée en ImageData (une image d'une bande animée : `frame`). */
   imageData(img: ImageBitmap, size = 16, frame = 0): ImageData {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d')!;
+    // canvas partagé en mémoire CPU : des milliers de lectures sans aller-retour par le GPU
+    let ctx = LoadedPack.scratch.get(size);
+    if (!ctx) {
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      ctx = c.getContext('2d', { willReadFrequently: true })!;
+      LoadedPack.scratch.set(size, ctx);
+    }
+    ctx.clearRect(0, 0, size, size);
     ctx.imageSmoothingEnabled = false;
     const fw = img.width, fh = img.width; // images carrées, bandes verticales pour les animations
     const frames = Math.max(1, Math.floor(img.height / fh));

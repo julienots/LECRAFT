@@ -104,7 +104,7 @@ export class HeldItem {
         return mesh;
       }
     }
-    const canvas = this.tm.iconCanvas(id);
+    const canvas = this.tm.heldCanvas(id);
     const tex = new THREE.CanvasTexture(canvas);
     tex.magFilter = tex.minFilter = THREE.NearestFilter;
     tex.generateMipmaps = false;

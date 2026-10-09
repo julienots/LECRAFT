@@ -9,6 +9,7 @@
 import { Rng } from '../util/math';
 import { ATLAS_COLS, TILE_PX, TileRegistry } from './TileRegistry';
 import { WOOL_COLORS } from '../data/blocks';
+import { PACK_TILE_FALLBACK } from '../data/vanillaPack';
 
 export type RGB = [number, number, number];
 const TINT_A = 200;
@@ -816,15 +817,30 @@ export function drawTiles(): Tile[] {
     const [name, frameStr] = full.split('#');
     const frame = frameStr ? Number(frameStr) : 0;
     const t = new Tile(1000 + i * 7919);
-    const p = painters[name];
+    const p = painters[name] ?? packFallback(name);
     if (!p) painters.missing(t, 0);
     else p(t, frame);
     return t;
   });
 }
 
+/** Tuiles des textures du pack sans dessin propre : tuile voisine ou couleur moyenne du pack. */
+function packFallback(name: string): Painter | undefined {
+  const f = PACK_TILE_FALLBACK[name];
+  if (!f) return undefined;
+  if (f.startsWith('#')) return (t) => void t.grain(ramp(f, 4, 0.12), 0.4, 4);
+  if (f.startsWith('~')) {
+    const c = ramp('#' + f.slice(1), 3, 0.2);
+    return (t) => {
+      t.clear();
+      for (let x = 3; x < 13; x += 3) for (let y = 15 - ((x * 7) % 5) - 6; y < 16; y++) t.set(x + ((y >> 2) & 1), y, c[(x + y) % 3]);
+    };
+  }
+  return painters[f];
+}
+
 export function hasPainter(name: string) {
-  return !!painters[name];
+  return !!(painters[name] ?? packFallback(name));
 }
 
 /** Ajoute (ou remplace) le dessin d'une tuile (blocs supplémentaires). */

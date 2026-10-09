@@ -600,3 +600,24 @@ function fishSkin(w: number, h: number, len: number, pal: string[], fin: string)
     },
   };
 }
+
+// v2.21 : créatures ajoutées avec les textures du pack (skins générées de repli)
+const HORSE_GEO = { head: [0, 0, 8, 8, 6, 0] as [number, number, number, number, number, number], body: [18, 4, 12, 18, 10] as [number, number, number, number, number], leg: [0, 16, 4, 12, 4] as [number, number, number, number, number] };
+const horseFace = (x: number, y: number) => (y === 2 && (x === 1 || x === 6) ? '#1a1a1a' : null);
+Object.assign(SKINS, {
+  bogged: { ...SKINS.stray },
+  parched: humanSkin({ skin: ['#d8c8a0', '#c8b890', '#e4d4b0'], shirt: ['#a08a60', '#907a50', '#b09a70'], pants: ['#8a7450', '#7a6440', '#9a8460'], shoes: '#5a4a30', eyes: '#2a1a0a', mouth: '#6a5a3a' }),
+  piglin_brute: { ...SKINS.piglin },
+  evoker: villagerSkin(['#2a2a32', '#1e1e26', '#36363e'], false),
+  wandering_trader: villagerSkin(['#2a4a8a', '#1e3e7a', '#36569a'], false),
+  mule: quadSkin({ base: ['#5a3a20', '#4e3018', '#664428', '#442a14'], ...HORSE_GEO, face: horseFace }),
+  skeleton_horse: quadSkin({ base: ['#d8d8c8', '#c8c8b8', '#e4e4d4', '#b8b8a8'], ...HORSE_GEO, face: horseFace }),
+  zombie_horse: quadSkin({ base: ['#4a7a3a', '#3e6e30', '#568646', '#36602a'], ...HORSE_GEO, face: horseFace }),
+  trader_llama: quadSkin({ base: ['#e8dcc0', '#dccfb0', '#f0e6d0', '#2a4a8a'], ...HORSE_GEO, face: horseFace }),
+  camel_husk: quadSkin({ base: ['#a89060', '#988050', '#b8a070', '#8a7448'], ...HORSE_GEO, face: horseFace }),
+  zoglin: pigLike(['#d8a0a0', '#c89090', '#e8b0aa'], ['#8a5a5a', '#9a6a6a'], (x, y) => (y === 3 && (x === 1 || x === 6) ? '#1a1a1a' : y === 6 && (x === 1 || x === 6) ? '#f0ecd8' : null)),
+  cat: wolfSkin('#b08050', '#5a3a1a'),
+  elder_guardian: fishSkin(12, 12, 12, ['#c8c4b0', '#b8b4a0', '#d8d4c0', '#8a6a9a'], '#8a6a9a'),
+  pufferfish: fishSkin(6, 6, 6, ['#e0c030', '#d0b020', '#f0d040'], '#f8e870'),
+  tadpole: fishSkin(2, 2, 5, ['#4a3a2a', '#3a2a1a', '#5a4a3a'], '#6a5a4a'),
+});

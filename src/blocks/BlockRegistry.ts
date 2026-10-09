@@ -45,7 +45,7 @@ class BlockRegistryImpl {
     const side = t.side ?? t.all ?? t.byMeta?.[0];
     const top = t.top ?? t.all ?? t.byMeta?.[0];
     const bottom = t.bottom ?? t.all ?? t.byMeta?.[0];
-    const faceTiles = [tile(side), tile(side), tile(top), tile(bottom), tile(t.front ?? side), tile(side)];
+    const faceTiles = [tile(t.east ?? side), tile(t.west ?? side), tile(top), tile(bottom), tile(t.front ?? side), tile(t.back ?? side)];
     const block: Block = {
       id,
       key: def.key,

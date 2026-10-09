@@ -22,7 +22,7 @@ export function addonTile(name: string): number {
 /** Tuiles référencées par une définition de bloc. */
 export function tilesOf(def: BlockDef): string[] {
   const t = def.textures ?? {};
-  return [t.all, t.top, t.bottom, t.side, t.front, ...(t.byMeta ?? [])].filter((n): n is string => !!n);
+  return [t.all, t.top, t.bottom, t.side, t.front, t.back, t.east, t.west, ...(t.byMeta ?? [])].filter((n): n is string => !!n);
 }
 
 /** Enregistre tuiles puis blocs (thread principal et worker, même ordre). */

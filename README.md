@@ -245,6 +245,18 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   plus réactive (baisse de résolution en 3 s) et mémorisée d'un lancement à l'autre, shaders
   désactivés par défaut en profil Bas. Créatures : saut à 1,3 bloc (comme le joueur), nage pour
   sortir de l'eau, peuvent sauter dans l'eau depuis plus haut.
+- **Toutes les textures du pack (v2.21)** — chaque texture de bloc et d'objet du pack de
+  ressources a maintenant un usage : faces multiples (dessus / dessous / avant / dos) pour ~70 blocs
+  existants (quartz, basalte, grès, fourneaux, ruches, observateur, fabricateur, vitres…), ~370
+  nouveaux blocs (bougies, rails, ampoules, chaînes, portes et trappes en cuivre, étagères, coffres-
+  forts, générateurs d'épreuve, blocs de commande, œufs de renifleur, ghast desséché, coraux morts,
+  stades de culture…), ~250 nouveaux objets (bateaux, pancartes, sacs, harnais, lances, armure en
+  cuivre, disques, tessons, modèles de forge, motifs de bannière, potions, seaux de poissons…) et
+  15 nouvelles créatures (embourbé, desséché, piglin barbare, évocateur, marchand ambulant, mule,
+  chevaux squelette et zombie, zoglin, chat, poisson-globe, têtard…). Atlas agrandi à 64×64 tuiles.
+  Les données sont générées par `scripts/gen-vanilla-pack.py` (noms + couleurs moyennes, aucune
+  image incluse) ; sans pack, des tuiles de repli sont dessinées. Restent seulement les images
+  techniques (cadres d'animation de l'horloge et de la boussole, surcouches, textures de débogage).
 - **Nouvelle dimension : la « Pâte à papier » (v2.20)** — un monde entièrement en papier. Construisez
   un cadre de **papier mâché** (comme un portail du Nether : 4×5, intérieur 2×3 ; recette : 8 papiers
   + 1 boule d'argile → 4) et ouvrez-le avec une **plume encrée** (plume + poche d'encre + papier).

@@ -1,7 +1,7 @@
 ext {
     // Version de l'application (incrémenter appVersionCode à chaque publication)
-    appVersionCode = 22
-    appVersionName = '2.20.0'
+    appVersionCode = 23
+    appVersionName = '2.21.0'
     minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36

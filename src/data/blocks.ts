@@ -1,4 +1,5 @@
 import type { BlockDef, DropDef } from '../blocks/Block';
+import { applyPackFaces } from './packContent';
 
 /**
  * Définitions des blocs (inspirées du jeu vanilla, noms français officiels).
@@ -146,3 +147,6 @@ export const BLOCK_DEFS: BlockDef[] = [
   { key: 'boss_altar', name: 'Autel ancien', textures: { top: 'altar_top', bottom: 'stone_bricks', side: 'altar_side' }, hardness: -1, light: 12, sound: 'stone', drops: [], color: '#7a40c0' },
   { key: 'snowy_grass_block', name: "Bloc d'herbe", textures: { top: 'snow', bottom: 'dirt', side: 'grass_block_snow' }, hardness: 0.6, tool: 'shovel', sound: 'snow', drops: [{ item: 'dirt' }], color: '#f0f4f4' },
 ];
+
+// faces multiples des textures du pack (dessus / dessous / avant…)
+applyPackFaces(BLOCK_DEFS);

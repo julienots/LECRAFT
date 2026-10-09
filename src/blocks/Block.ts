@@ -43,6 +43,11 @@ export interface BlockTextures {
   side?: string;
   /** Face avant (établi, fourneau, citrouille...). */
   front?: string;
+  /** Face arrière (-Z, ou opposée à la face avant). */
+  back?: string;
+  /** Faces latérales distinctes (+X / -X). */
+  east?: string;
+  west?: string;
   /** Texture choisie selon la métadonnée (stades de culture). */
   byMeta?: string[];
 }

@@ -76,3 +76,19 @@ export const BIOME_DEFS: BiomeDef[] = [
   { key: 'cardboard_canyon', name: 'Canyons de carton', temperature: 0.6, humidity: -0.4, terrainHeight: 0, surfaceBlock: 'cardboard', undergroundBlock: 'cardboard', underDepth: 6, treeDensity: 0, trees: [], vegetation: [], animals: ['paper_crane'], hostiles: ['crumpled_ball', 'cardboard_golem', 'scribble'], structures: [], weather: 'none', grassColor: '#c8a070', foliageColor: '#c8a070' },
   { key: 'ink_marsh', name: 'Marais d’encre', temperature: 0.4, humidity: 0.8, terrainHeight: 0, surfaceBlock: 'newspaper_block', undergroundBlock: 'cardboard', underDepth: 3, treeDensity: 0, trees: [], vegetation: [], animals: ['origami_frog'], hostiles: ['scribble', 'crumpled_ball'], structures: [], weather: 'none', grassColor: '#d8d4cc', foliageColor: '#d8d4cc' },
 ];
+
+// v2.21 : créatures ajoutées avec les textures du pack
+for (const [biome, field, mobs] of [
+  ['swamp', 'hostiles', ['bogged']],
+  ['mangrove_swamp', 'hostiles', ['bogged']],
+  ['desert', 'hostiles', ['parched', 'camel_husk']],
+  ['dense_forest', 'hostiles', ['evoker']],
+  ['plains', 'animals', ['mule', 'wandering_trader', 'cat']],
+  ['plains', 'hostiles', ['skeleton_horse']],
+  ['savanna', 'animals', ['mule', 'wandering_trader']],
+  ['ocean', 'animals', ['pufferfish']],
+  ['swamp', 'animals', ['tadpole']],
+] as const) {
+  const b = BIOME_DEFS.find((x) => x.key === biome);
+  if (b) for (const m of mobs) if (!b[field].includes(m)) b[field].push(m);
+}

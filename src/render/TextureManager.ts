@@ -58,6 +58,11 @@ export const SKIN_PATHS: Record<string, string[]> = {
   blaze: ['entity/blaze.png'],
   snow_golem: ['entity/snow_golem.png'],
   wither_skeleton: ['entity/skeleton/wither_skeleton.png'],
+  bogged: ['entity/skeleton/bogged.png'],
+  parched: ['entity/skeleton/parched.png'],
+  piglin_brute: ['entity/piglin/piglin_brute.png'],
+  evoker: ['entity/illager/evoker.png'],
+  wandering_trader: ['entity/wandering_trader.png'],
   wither: ['entity/wither/wither.png'],
   ender_dragon: ['entity/enderdragon/dragon.png'],
   ender_dragon_eyes: ['entity/enderdragon/dragon_eyes.png'],
@@ -513,6 +518,18 @@ export class TextureManager implements SkinProvider {
         ctx.fillStyle = pal[ch] ?? '#f0f';
         ctx.fillRect(x * 2, y * 2, 2, 2);
       }
+  }
+
+  /** Image tenue en main : texture « _in_hand » du pack (lances) sinon l'icône. */
+  heldCanvas(itemId: string): HTMLCanvasElement {
+    const img = this.view?.get(`item/${itemId}_in_hand.png`);
+    if (!img) return this.iconCanvas(itemId);
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const ctx = c.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, img.width, Math.min(img.height, img.width), 0, 0, c.width, c.height);
+    return c;
   }
 
   /** URL data de l'icône (mise en cache) pour l'interface DOM. */
