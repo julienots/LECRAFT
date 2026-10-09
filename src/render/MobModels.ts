@@ -837,7 +837,7 @@ const GEO_HIDE: Record<string, string[]> = {
   evoker: ['rightarm', 'leftarm'], vindicator: ['arms'],
 };
 /** Corps couchés par l'animation d'installation des quadrupèdes de l'édition Bedrock (rotation X de 90°). */
-const GEO_BODY_90 = new Set(['cow', 'mooshroom', 'pig', 'chicken', 'llama', 'trader_llama', 'ocelot', 'cat', 'fox']);
+const GEO_BODY_90 = new Set(['llama', 'trader_llama', 'ocelot', 'cat', 'fox']);
 for (const [k, id] of Object.entries(GEO_MOBS)) {
   const g0 = VANILLA_GEO[id];
   // seuls les cubes du corps tournent (os intermédiaire) : les pattes et la tête restent en place

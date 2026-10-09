@@ -1,7 +1,7 @@
 {
   "name": "lecraft",
   "private": true,
-  "version": "2.23.0",
+  "version": "2.24.0",
   "description": "LeCraft - jeu sandbox voxel 3D hors ligne pour Android",
   "type": "module",
   "scripts": {

@@ -245,6 +245,9 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   plus réactive (baisse de résolution en 3 s) et mémorisée d'un lancement à l'autre, shaders
   désactivés par défaut en profil Bas. Créatures : saut à 1,3 bloc (comme le joueur), nage pour
   sortir de l'eau, peuvent sauter dans l'eau depuis plus haut.
+- **Créatures complètes (v2.24)** — sens des rotations des modèles officiels corrigé (pose de
+  repos, cubes tournés autour de leur centre) : vache, cochon, tortue, renard, lama, chat,
+  ocelot, poule, dauphin… s'affichent entiers et à leur place.
 - **Corrections du rendu (v2.23)** — torches (et torches de redstone, bâtons de l'End) avec le
   modèle incliné du jeu quand elles sont posées au mur ; verre teinté et vitres teintées
   réellement translucides ; cube de magma (nouvelle texture 64×64) et golem de neige (avec sa

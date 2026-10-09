@@ -127,8 +127,8 @@ export function geometryToModel(geo: BedrockGeo, skin: string): VanillaModel {
 
   const toRot = (r: number[] | undefined): [number, number, number] | undefined => {
     if (!r || (!r[0] && !r[1] && !r[2])) return undefined;
-    // rotation Bedrock (degrés) → format Java (radians) : X et Y inversés
-    return [-(r[0] ?? 0) * DEG, -(r[1] ?? 0) * DEG, (r[2] ?? 0) * DEG];
+    // rotation Bedrock (degrés, sens horaire) → format Java (radians) : seul Z change de signe
+    return [(r[0] ?? 0) * DEG, (r[1] ?? 0) * DEG, -(r[2] ?? 0) * DEG];
   };
 
   const build = (b: BedrockBone, parentPivot: [number, number, number] | null): CubePart => {
@@ -136,16 +136,21 @@ export function geometryToModel(geo: BedrockGeo, skin: string): VanillaModel {
     const relPivot: [number, number, number] = parentPivot ? [-(p[0] - parentPivot[0]), parentPivot[1] - p[1], p[2] - parentPivot[2]] : [-p[0], 24 - p[1], p[2]];
     const anim = animName(b.name);
     // l'os lui-même est un pivot sans géométrie ; ses cubes et sous-os sont ses enfants
-    const node: CubePart = { uv: [0, 0], box: [0, 0, 0, 0, 0, 0], pivot: relPivot, rot: toRot(b.rotation ?? b.bind_pose_rotation), anim, bone: b.name.toLowerCase(), children: [] };
+    const node: CubePart = { uv: [0, 0], box: [0, 0, 0, 0, 0, 0], pivot: relPivot, rot: toRot(b.rotation), anim, bone: b.name.toLowerCase(), children: [] };
+    // pose de repos (bind_pose_rotation) : ne tourne que les cubes de l'os, pas ses enfants
+    const bind = toRot(b.bind_pose_rotation);
+    const holder: CubePart = bind ? { uv: [0, 0], box: [0, 0, 0, 0, 0, 0], pivot: [0, 0, 0], rot: bind, children: [] } : node;
+    if (bind) node.children!.push(holder);
     if (!b.neverRender)
       for (const c of b.cubes ?? []) {
         if (c.rotation && (c.rotation[0] || c.rotation[1] || c.rotation[2])) {
-          // cube tourné autour de son propre pivot : nœud intermédiaire
-          const cp = v3(c.pivot ?? b.pivot);
+          // cube tourné autour de son pivot (par défaut : son centre) : nœud intermédiaire
+          const o = v3(c.origin), sz = v3(c.size);
+          const cp = c.pivot ? v3(c.pivot) : ([o[0] + sz[0] / 2, o[1] + sz[1] / 2, o[2] + sz[2] / 2] as [number, number, number]);
           const rel: [number, number, number] = [-(cp[0] - p[0]), p[1] - cp[1], cp[2] - p[2]];
           const inner = cubePart(c, cp, b, [0, 0, 0], undefined);
-          node.children!.push({ uv: [0, 0], box: [0, 0, 0, 0, 0, 0], pivot: rel, rot: toRot(c.rotation), children: [inner] });
-        } else node.children!.push(cubePart(c, p, b, [0, 0, 0], undefined));
+          holder.children!.push({ uv: [0, 0], box: [0, 0, 0, 0, 0, 0], pivot: rel, rot: toRot(c.rotation), children: [inner] });
+        } else holder.children!.push(cubePart(c, p, b, [0, 0, 0], undefined));
       }
     for (const ch of children.get(b.name) ?? []) node.children!.push(build(ch, p));
     return node;
