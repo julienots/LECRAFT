@@ -1,7 +1,9 @@
 /**
- * Serveur de mini-jeux intégré « LeCraft Network » (hors ligne) : hub avec PNJ, mini-jeux
- * (SkyWars, Spleef, TNT Run, Duel, Parkour), bots joueurs, tableau de scores latéral, chat
- * du serveur, pièces et victoires (profil local). Les autres joueurs sont des bots simulés.
+ * Serveur de mini-jeux intégré « HypXL » (hors ligne) : grand hub (place, fontaine, logo
+ * géant, quartiers), 8 mini-jeux (BedWars, SkyWars, Duel, Sumo, Block Party, TNT Run, Spleef,
+ * Parkour), cosmétiques (traînées, chapeaux, compagnons, couleurs, rangs, gadgets, boîtes
+ * mystères), menus du serveur, dizaines de bots joueurs, tableau de scores latéral, chat du
+ * serveur, pièces, niveaux et victoires (profil local). Les autres joueurs sont des bots.
  */
 import type { Session } from '../core/Session';
 import { B, BlockRegistry } from '../blocks/BlockRegistry';
@@ -12,33 +14,47 @@ import type { Mob } from '../entities/Mob';
 import { PLAYER_SKINS } from '../render/TextureManager';
 import { Rng } from '../util/math';
 import { Bot, RANKS, type Fighter } from './Bot';
+import { openCosmetics, openLobbySelector, openMysteryBox, openProfile } from '../ui/ServerUI';
 import {
-  DUELS, FLOOR, HUB, HUB_NPCS, PARKOUR, SKYWARS, SPLEEF, TNTRUN, buildSpleefFloor, buildTntRunLayers,
+  BEDWARS, BEDWARS_TEAMS, BLOCKPARTY, BLOCKPARTY_COLORS, DUELS, FLOOR, HUB, HUB_NPCS, HUB_SERVICES, PARKOUR, SKYWARS, SPLEEF, SUMO, TNTRUN,
+  bedwarsIsland, blockPartyPattern, buildBedWarsBeds, buildBlockPartyFloor, buildSpleefFloor, buildTntRunLayers, hubParkour,
   parkourCourse, skywarsCenterChests, skywarsIslands, type GameKey,
 } from './ServerMaps';
+import { COSMETICS, COSMETIC_BY_ID, MYSTERY_PRICE, Pet, RARITY_COLOR, rollMystery, setHat, type Cosmetic, type CosmeticKind, type CosmeticProfile } from './Cosmetics';
+import type * as THREE from 'three';
 
-export const SERVER_NAME = 'LeCraft Network';
+export const SERVER_NAME = 'HypXL';
+export const SERVER_IP = 'play.hypxl.net';
 const PROFILE_KEY = 'lecraft.server.v1';
 
-export interface ServerProfile {
+export interface ServerProfile extends CosmeticProfile {
   coins: number;
   wins: Partial<Record<GameKey, number>>;
   played: number;
   kills: number;
   bestParkour: number;
   xp?: number;
+  /** Bonus de bienvenue HypXL déjà reçu. */
+  welcome?: boolean;
+  /** Numéro de lobby, joueurs cachés, meilleur temps du parcours du hub. */
+  lobby?: number;
+  hidePlayers?: boolean;
+  bestHubParkour?: number;
 }
 
 function loadProfile(): ServerProfile {
   try {
-    return { coins: 0, wins: {}, played: 0, kills: 0, bestParkour: 0, ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') };
+    return { coins: 0, wins: {}, played: 0, kills: 0, bestParkour: 0, owned: [], equipped: {}, ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') };
   } catch {
     return { coins: 0, wins: {}, played: 0, kills: 0, bestParkour: 0 };
   }
 }
 
 export const GAMES: Record<GameKey, { name: string; color: string; desc: string; players: number }> = {
+  bedwars: { name: 'BedWars', color: '§c', desc: '4 équipes de 2 : protégez votre lit, achetez de l’équipement avec le fer et détruisez les lits adverses. Sans lit, plus de réapparition !', players: 8 },
   skywars: { name: 'SkyWars', color: '§e', desc: 'Îles dans le ciel : pillez les coffres, construisez des ponts, soyez le dernier en vie.', players: 8 },
+  sumo: { name: 'Sumo', color: '§6', desc: 'Poussez les autres hors de l’arène ronde. Le dernier debout gagne.', players: 6 },
+  blockparty: { name: 'Block Party', color: '§d', desc: 'Une couleur est annoncée : courez dessus avant que les autres disparaissent !', players: 10 },
   spleef: { name: 'Spleef', color: '§f', desc: 'Cassez la neige sous les pieds des autres. Tomber = éliminé.', players: 6 },
   duels: { name: 'Duel', color: '§b', desc: 'Combat 1 contre 1 avec équipement en fer.', players: 2 },
   tntrun: { name: 'TNT Run', color: '§c', desc: 'Le sol disparaît sous vos pas : ne vous arrêtez jamais !', players: 8 },
@@ -48,7 +64,8 @@ export const GAMES: Record<GameKey, { name: string; color: string; desc: string;
 // ---------- pseudos et messages des bots ----------
 const P1 = ['Pixel', 'Dark', 'Mega', 'Ultra', 'Shadow', 'Creeper', 'Diamond', 'Ender', 'Blaze', 'Frost', 'Turbo', 'Nova', 'Lucky', 'Crafty', 'Epic', 'Ninja', 'Lava', 'Sky', 'Iron', 'Golden', 'Kevin', 'Mathis', 'Lucas', 'Emma', 'Lea', 'Hugo', 'Nathan', 'Chloe', 'Tom', 'Jade'];
 const P2 = ['Master', 'King', 'Hunter', 'Miner', 'Gamer', 'Wolf', 'Fox', 'Builder', 'Slayer', 'Warrior', 'Dragon', 'Panda', 'Craft', 'PvP', 'Pro', 'Bow', 'Blade', 'Rush', 'Cube', 'Block'];
-const HUB_CHAT = ['salut tout le monde', 'qui veut duel ?', 'quelqu’un en SkyWars ?', 'le spleef c’est trop bien', 'je suis nouveau ici', 'comment on va au parkour ?', 'mdr', 'go TNT Run', 'j’ai gagné 3 parties d’affilée !', 'bonjour !', 'le parkour est dur au 4e point de contrôle', 'gg à tous', 'qui a le meilleur temps au parkour ?', 'je farm les pièces', 'quelqu’un pour une partie ?'];
+const HUB_CHAT = ['salut tout le monde', 'qui veut duel ?', 'quelqu’un en SkyWars ?', 'le spleef c’est trop bien', 'je suis nouveau ici', 'comment on va au parkour ?', 'mdr', 'go TNT Run', 'j’ai gagné 3 parties d’affilée !', 'bonjour !', 'le parkour est dur au 4e point de contrôle', 'gg à tous', 'qui a le meilleur temps au parkour ?', 'je farm les pièces', 'quelqu’un pour une partie ?',
+  'go bedwars', 'qui veut faire une team bedwars ?', 'j’ai eu un chapeau légendaire dans une boîte mystère !!', 'le block party c’est trop dur au round 10', 'vous avez vu mon compagnon ?', 'hypxl c’est le meilleur serveur', 'quelqu’un a le rang MVP+ ?', 'trop beau le nouveau spawn', 'sumo 1v1 ?', 'la fontaine est trop belle', 'j’ai fini le parkour du hub en 20 s', 'les traînées de flammes c’est stylé', 'qui veut mes pièces mdr', 'lobby 3 > tous les autres', 'gg pour la partie de skywars'];
 const START_CHAT = ['bonne chance', 'gl', 'gl hf', 'je vais gagner', 'bonne chance à tous'];
 const KILL_CHAT = ['ez', 'gg', 'trop facile', 'au suivant', 'bien essayé'];
 const DEATH_CHAT = ['gg', 'lag !', 'pas juste', 'j’ai glissé', 'noooon', 'gg wp'];
@@ -61,43 +78,116 @@ interface Part {
   kills: number;
 }
 
+/** Points d'intérêt du hub où flânent les bots. */
+const HUB_SPOTS: [number, number][] = [
+  [0, 10], [8, 8], [-8, 8], [10, -6], [-10, -6], [0, -12], [0, 22], [22, 0], [-22, 0], [0, -24], [16, 16], [-16, 16], [16, -18], [-16, -18],
+  ...HUB_NPCS.map((n): [number, number] => [n.x * 0.85, n.z * 0.85]),
+  [HUB_SERVICES.cosmetics.x - 2, HUB_SERVICES.cosmetics.z], [HUB_SERVICES.mystery.x - 2, HUB_SERVICES.mystery.z], [HUB_SERVICES.leaderboard.x, HUB_SERVICES.leaderboard.z - 3],
+  [HUB_SERVICES.parkourStart.x, HUB_SERVICES.parkourStart.z + 2], [0, 40], [6, 34], [-6, 34], [28, 28], [-28, -28], [30, -30], [-34, 30],
+];
+
+/** Gadgets du hub (objet en main → effet). */
+const GADGET_ITEM: Record<string, string> = { firework: 'firework_rocket', confetti: 'paper', leap: 'ender_pearl', storm: 'blaze_rod' };
+
 export class ServerNetwork {
   readonly profile = loadProfile();
   private rng = new Rng((Math.random() * 1e9) | 0);
   private hubBots: Bot[] = [];
   private npcs: Bot[] = [];
+  private holograms: Bot[] = [];
   private game: MiniGame | null = null;
   private chatTimer = 6;
   private sidebarTimer = 0;
-  private online = 1200 + Math.floor(Math.random() * 800);
+  private churnTimer = 15;
+  private online = 38000 + Math.floor(Math.random() * 14000);
   private usedNames = new Set<string>();
+  /** Cosmétiques des bots (traînée, chapeau) et compagnons actifs. */
+  private botTrail = new Map<Bot, string>();
+  private botHat = new Map<Bot, string>();
+  private pets = new Map<Bot | 'player', Pet>();
+  private trailTimer = 0;
+  private gadgetCooldown = 0;
+  private parkourRun: { t: number; next: number } | null = null;
+  private playerHatShown: string | null = null;
+  private hatAvatar: object | null = null;
 
-  constructor(readonly s: Session) {}
+  constructor(readonly s: Session) {
+    this.profile.owned ??= [];
+    this.profile.equipped ??= {};
+    this.profile.lobby ??= 1 + Math.floor(Math.random() * 12);
+  }
 
   // ---------- démarrage et hub ----------
   start() {
     const s = this.s;
     Object.assign(s.gamerules, { doMobSpawning: false, doDaylightCycle: false, doWeatherCycle: false, keepInventory: true, tntExplodes: false, mobGriefing: false });
     s.player.difficulty = 'normal';
-    s.dayCycle.time = 0.3;
-    this.chat(`§7Connexion à §e${SERVER_NAME}§7…`);
-    this.chat('§a§l» §r§aBienvenue sur §e§lLeCraft Network §r§a!');
-    this.chat('§7Touchez un §ePNJ§7 ou utilisez la §eboussole§7 pour choisir un jeu. §8(/hub, /jeux)');
+    s.dayCycle.time = 0.27;
+    this.chat(`§7Connexion à §e${SERVER_IP}§7…`);
+    this.chat('§6§l▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
+    this.chat('§e§l          Bienvenue sur §6§lHypXL §e§l!');
+    this.chat(`§7  8 mini-jeux · ${COSMETICS.length} cosmétiques · des milliers de joueurs`);
+    this.chat('§7  §eBoussole§7 : jeux · §eLivre§7 : profil · §eÉmeraude§7 : cosmétiques');
+    this.chat('§7  §eÉtoile§7 : lobbys · §8/menu /cosmetiques /profil /lobby');
+    this.chat('§6§l▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
+    if (!this.profile.welcome) {
+      this.profile.welcome = true;
+      this.profile.coins += 1000;
+      this.chat('§a§l+1000 pièces §r§a: cadeau de bienvenue ! Essayez une §dboîte mystère§a.');
+      this.saveProfile();
+    }
     for (const n of HUB_NPCS) {
       const g = GAMES[n.game];
       const npc = this.spawnBot(n.x + 0.5, FLOOR + 2, n.z + 0.5, 1);
       npc.npc = n.game;
       this.npcs.push(npc);
       npc.invulnerable = true;
-      npc.setTag(`${g.color}§l${g.name.toUpperCase()}\n§7${n.game === 'parkour' ? 'Solo' : `${g.players} joueurs`}\n§a▶ Toucher pour jouer`);
+      npc.setTag(`${g.color}§l${g.name.toUpperCase()}\n§7${n.game === 'parkour' ? 'Solo' : `${g.players} joueurs`} · §e${this.gameOnline(n.game).toLocaleString('fr-FR')} en jeu\n§a▶ Toucher pour jouer`);
     }
-    // PNJ vers le serveur de survie moddé
-    const smp = this.spawnBot(-9.5, FLOOR + 1, 9.5, 1);
-    smp.npc = 'smp';
-    smp.invulnerable = true;
-    smp.setTag('§2§lSURVIE MODDÉE\n§7LeCraft SMP\n§a▶ Toucher pour rejoindre');
-    this.npcs.push(smp);
+    const service = (key: string, x: number, z: number, tag: string) => {
+      const b = this.spawnBot(x + 0.5, FLOOR + 1, z + 0.5, 1);
+      b.npc = key;
+      b.invulnerable = true;
+      b.setTag(tag);
+      this.npcs.push(b);
+      return b;
+    };
+    service('cosmetics', HUB_SERVICES.cosmetics.x, HUB_SERVICES.cosmetics.z, '§d§lCOSMÉTIQUES\n§7Traînées · chapeaux · compagnons\n§a▶ Toucher pour ouvrir');
+    service('mystery', HUB_SERVICES.mystery.x, HUB_SERVICES.mystery.z, `§5§lBOÎTES MYSTÈRES\n§7${MYSTERY_PRICE} pièces la boîte\n§a▶ Toucher pour ouvrir`);
+    service('smp', HUB_SERVICES.smp.x, HUB_SERVICES.smp.z, '§2§lSURVIE MODDÉE\n§7LeCraft SMP\n§a▶ Toucher pour rejoindre');
+    // hologrammes : accueil, classement, parcours du hub
+    this.hologram(HUB.spawn.x, FLOOR + 2.2, HUB.spawn.z - 6, `§e§lBIENVENUE SUR §6§lHYPXL\n§7Le serveur de mini-jeux n°1\n§b8 jeux §7· §d${COSMETICS.length} cosmétiques §7· §a${SERVER_IP}`);
+    this.hologram(HUB_SERVICES.leaderboard.x + 0.5, FLOOR + 3.4, HUB_SERVICES.leaderboard.z + 0.5, this.leaderboardText());
+    this.hologram(HUB_SERVICES.parkourStart.x + 0.5, FLOOR + 1.6, HUB_SERVICES.parkourStart.z + 0.5, `§a§lPARCOURS DU HUB\n§7Montez sur le bloc d’or pour démarrer\n§fRecord : §e${this.profile.bestHubParkour ? this.profile.bestHubParkour.toFixed(2) + ' s' : '-'}`);
     this.toHub(true);
+  }
+
+  /** Joueurs « en jeu » affichés pour un mini-jeu (part de la population du réseau). */
+  gameOnline(k: GameKey) {
+    const share: Record<GameKey, number> = { bedwars: 0.31, skywars: 0.19, duels: 0.12, sumo: 0.05, blockparty: 0.06, tntrun: 0.05, spleef: 0.03, parkour: 0.02 };
+    return Math.round(this.online * share[k] * (0.92 + ((this.online >> 3) % 17) / 100));
+  }
+
+  private hologram(x: number, y: number, z: number, text: string) {
+    const b = this.spawnBot(x, y, z, 1);
+    b.npc = 'hologram';
+    b.invulnerable = true;
+    b.setTag(text);
+    b.object3d.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) o.visible = false;
+    });
+    b.body.gravity = 0;
+    this.holograms.push(b);
+    return b;
+  }
+
+  private leaderboardText() {
+    const r = new Rng(this.profile.lobby! * 97);
+    const rows: [string, number][] = Array.from({ length: 6 }, () => [`${r.pick(['§b[MVP§c+§b] ', '§b[MVP] ', '§a[VIP§6+§a] ', '§6[YOUTUBE] '])}${r.pick(P1)}${r.pick(P2)}`, r.int(800, 9000)]);
+    const mine = Object.values(this.profile.wins).reduce((a, n) => a + (n ?? 0), 0);
+    rows.push([`${this.rankPrefix()}${this.s.player.name}`, mine]);
+    rows.sort((a, b) => b[1] - a[1]);
+    return ['§e§lMEILLEURS JOUEURS §7(victoires)', ...rows.slice(0, 7).map(([n, w], i) => `§6${i + 1}. ${n} §7- §e${w.toLocaleString('fr-FR')}`)].join('\n');
   }
 
   private newName() {
@@ -128,6 +218,13 @@ export class ServerNetwork {
   private removeBot(b: Bot) {
     b.removed = true;
     this.usedNames.delete(b.botName);
+    this.botTrail.delete(b);
+    this.botHat.delete(b);
+    const pet = this.pets.get(b);
+    if (pet) {
+      pet.removed = true;
+      this.pets.delete(b);
+    }
   }
 
   chat(text: string) {
@@ -163,41 +260,244 @@ export class ServerNetwork {
     p.inventory.selected = 0;
   }
 
+  /** Objets du hub : jeux, profil, gadget, cosmétiques, joueurs visibles, lobbys. */
+  private hubHotbar() {
+    const inv = this.s.player.inventory;
+    const put = (slot: number, id: string, n = 1) => {
+      if (ItemRegistry.has(id)) inv.slots[slot] = makeStack(id, n);
+    };
+    put(0, 'compass');
+    put(1, 'book');
+    const g = this.equipped('gadget');
+    if (g) put(2, GADGET_ITEM[g.value] ?? 'firework_rocket');
+    put(4, 'emerald', Math.max(1, Math.min(64, Math.floor(this.profile.coins / 100) || 1)));
+    put(7, this.profile.hidePlayers ? 'gray_dye' : 'lime_dye');
+    put(8, 'nether_star');
+    inv.changed();
+  }
+
   /** Retour au hub (fin de partie, /hub, objet « Retour »). */
   toHub(first = false) {
     this.game?.dispose();
     this.game = null;
     this.resetPlayer();
-    const inv = this.s.player.inventory;
-    inv.slots[0] = makeStack('compass', 1);
-    inv.slots[8] = makeStack('emerald', Math.max(1, Math.min(64, this.profile.coins)));
-    inv.changed();
+    this.hubHotbar();
     this.s.player.spawn = [HUB.spawn.x, HUB.spawn.y, HUB.spawn.z];
     this.teleport(HUB.spawn.x, HUB.spawn.y, HUB.spawn.z, HUB.spawn.yaw);
     this.s.held.setItem('compass');
-    // population du hub
-    while (this.hubBots.length < 9) {
-      const a = this.rng.next() * Math.PI * 2, r = 6 + this.rng.next() * 16;
-      const b = this.spawnBot(HUB.x + Math.cos(a) * r, FLOOR + 1, HUB.z + Math.sin(a) * r);
-      b.brain = (bot, ctx, dt) => this.hubWander(bot, dt);
-      this.hubBots.push(b);
-    }
-    if (!first) this.chat('§7Vous êtes de retour au §ehub§7.');
+    this.populateHub(true);
+    this.applyPlayerPet();
+    if (!first) this.chat(`§7Vous êtes de retour au §elobby #${this.profile.lobby}§7.`);
     this.s.hud.markHotbarDirty?.();
+  }
+
+  /** Nombre de joueurs (bots) du hub selon la qualité graphique. */
+  private get hubCapacity() {
+    const q = this.s.game.settings.quality;
+    return q === 'HIGH' ? 40 : q === 'MEDIUM' ? 28 : 16;
+  }
+
+  private populateHub(silent: boolean) {
+    while (this.hubBots.length < this.hubCapacity) {
+      const [sx, sz] = this.rng.pick(HUB_SPOTS);
+      const b = this.spawnBot(HUB.x + sx + (this.rng.next() - 0.5) * 6, FLOOR + 1, HUB.z + sz + (this.rng.next() - 0.5) * 6);
+      b.brain = (bot, _ctx, dt) => this.hubWander(bot, dt);
+      if (this.profile.hidePlayers) b.object3d.visible = false;
+      this.dressBot(b);
+      this.hubBots.push(b);
+      if (!silent && (b.rank.tag.includes('MVP') || this.rng.next() < 0.3)) this.chat(`${b.chatName} §6a rejoint le lobby !`);
+    }
+  }
+
+  /** Cosmétiques aléatoires des bots (traînées, chapeaux, quelques compagnons). */
+  private dressBot(b: Bot) {
+    const r = this.rng;
+    if (r.next() < 0.35) this.botTrail.set(b, r.pick(COSMETICS.filter((c) => c.kind === 'trail')).value);
+    if (r.next() < 0.3) {
+      const hat = r.pick(COSMETICS.filter((c) => c.kind === 'hat')).value;
+      this.botHat.set(b, hat);
+      setHat(b.model.parts.get('head')?.[0], this.s.game.textures, hat);
+    }
+    if (r.next() < 0.12 && this.pets.size < 6) {
+      const kind = r.pick(COSMETICS.filter((c) => c.kind === 'pet')).value;
+      const pet = new Pet(kind, b.x + 1, b.y, b.z + 1, this.s.entities, () => (b.removed || b.dead ? null : b));
+      this.pets.set(b, this.s.entities.addMob(pet));
+    }
   }
 
   private wanderTarget = new Map<Bot, { x: number; z: number; t: number }>();
   private hubWander(b: Bot, dt: number) {
     let w = this.wanderTarget.get(b);
     if (!w || (w.t -= dt) <= 0) {
-      const a = Math.random() * Math.PI * 2, r = Math.random() * (HUB.radius - 5);
-      w = { x: HUB.x + Math.cos(a) * r, z: HUB.z + Math.sin(a) * r, t: 4 + Math.random() * 8 };
+      const [sx, sz] = this.rng.pick(HUB_SPOTS);
+      w = { x: HUB.x + sx + (Math.random() - 0.5) * 5, z: HUB.z + sz + (Math.random() - 0.5) * 5, t: 5 + Math.random() * 12 };
       this.wanderTarget.set(b, w);
     }
     const d = Math.hypot(w.x - b.x, w.z - b.z);
-    if (d > 1.2) b.goTo(w.x, FLOOR + 1, w.z, Math.random() < 0.3);
+    // déplacement direct (pas de recherche de chemin : le hub est plat) — peu coûteux
+    if (d > 1.4) b.ai.moveTowards(w.x, w.z, d > 10 ? 1.3 : 1, true);
     else b.ai.stop();
-    if (b.body.onGround && Math.random() < dt * 0.3) b.body.vy = 9.2;
+    if (b.body.onGround && Math.random() < dt * 0.25) b.body.vy = 9.2;
+    if (b.body.onGround && b.body.collidedH) b.body.vy = 9.2;
+  }
+
+  /** Cosmétique équipé d'un type. */
+  equipped(kind: CosmeticKind): Cosmetic | null {
+    const id = this.profile.equipped?.[kind];
+    return id ? COSMETIC_BY_ID.get(id) ?? null : null;
+  }
+  owns(id: string) {
+    return this.profile.owned!.includes(id);
+  }
+  buy(c: Cosmetic): boolean {
+    if (this.owns(c.id)) return true;
+    if (this.profile.coins < c.price) return false;
+    this.profile.coins -= c.price;
+    this.profile.owned!.push(c.id);
+    this.chat(`§aVous avez acheté ${RARITY_COLOR[c.rarity]}${c.name} §a(${KIND_LABEL[c.kind]}) !`);
+    this.s.audio.play('levelup', { volume: 0.4 });
+    this.equip(c);
+    return true;
+  }
+  equip(c: Cosmetic | null, kind?: CosmeticKind) {
+    const k = c?.kind ?? kind!;
+    if (c && !this.owns(c.id)) return;
+    if (c) this.profile.equipped![k] = c.id;
+    else delete this.profile.equipped![k];
+    this.saveProfile();
+    if (k === 'pet') this.applyPlayerPet();
+    if (k === 'gadget' && !this.game) this.hubHotbar();
+    if (k === 'rank' || k === 'color') this.chat(`§7Votre nom dans le chat : ${this.rankPrefix()}${this.s.player.name}§f: ${this.chatColor()}Bonjour !`);
+  }
+  /** Boîte mystère : tirage animé d'un cosmétique non possédé. */
+  openMystery(): Cosmetic | null {
+    if (this.profile.coins < MYSTERY_PRICE) {
+      this.chat(`§cIl vous faut ${MYSTERY_PRICE} pièces pour ouvrir une boîte mystère.`);
+      return null;
+    }
+    const c = rollMystery(new Set(this.profile.owned));
+    if (!c) {
+      this.chat('§aVous possédez déjà tous les cosmétiques !');
+      return null;
+    }
+    this.profile.coins -= MYSTERY_PRICE;
+    this.profile.owned!.push(c.id);
+    this.saveProfile();
+    const names = COSMETICS.map((x) => `${RARITY_COLOR[x.rarity]}${x.name}`);
+    let i = 0;
+    const roll = () => {
+      if (i++ < 14) {
+        this.title('§5§lBOÎTE MYSTÈRE', this.rng.pick(names));
+        this.s.audio.play('click', { volume: 0.4 });
+        setTimeout(roll, 70 + i * 14);
+        return;
+      }
+      this.title(`${RARITY_COLOR[c.rarity]}§l${c.name.toUpperCase()}`, `§7${KIND_LABEL[c.kind]} · ${c.rarity}`);
+      this.s.audio.play(c.rarity === 'légendaire' || c.rarity === 'épique' ? 'achievement' : 'levelup');
+      const p = this.s.player;
+      this.s.particles.burst(c.rarity === 'légendaire' ? 'explosion' : 'magic', p.x, p.y + 1.2, p.z, 30);
+      this.chat(`§5§l✦ §dVous avez obtenu ${RARITY_COLOR[c.rarity]}${c.name} §7(${KIND_LABEL[c.kind]}, ${c.rarity}) §d!`);
+      if (c.rarity === 'légendaire') this.chat(`§6§l✦ ${this.rankPrefix()}${p.name} §6a obtenu un cosmétique §lLÉGENDAIRE §r§6!`);
+    };
+    roll();
+    return c;
+  }
+
+  /** Préfixe de rang du joueur (acheté) et couleur de chat. */
+  rankPrefix() {
+    const r = this.equipped('rank');
+    return r ? r.value.split('|')[0] : '§7';
+  }
+  chatColor() {
+    return this.equipped('color')?.value ?? (this.equipped('rank') ? '§f' : '§7');
+  }
+  /** Ligne de chat du joueur (rang + couleur), comme sur les serveurs de mini-jeux. */
+  formatPlayerChat(text: string) {
+    const r = this.equipped('rank');
+    const nameColor = r ? r.value.split('|')[1] : '§7';
+    return `${r ? r.value.split('|')[0] : ''}${nameColor}${this.s.player.name}§f: ${this.chatColor()}${text}`;
+  }
+
+  private applyPlayerPet() {
+    const old = this.pets.get('player');
+    const want = this.equipped('pet')?.value ?? null;
+    if (old && (!want || old.def.key !== want)) {
+      old.removed = true;
+      this.pets.delete('player');
+    }
+    if (want && !this.pets.has('player')) {
+      const p = this.s.player;
+      const pet = new Pet(want, p.x + 1, p.y + 0.5, p.z + 1, this.s.entities, () => (this.s.player.dead ? null : this.s.player));
+      this.pets.set('player', this.s.entities.addMob(pet));
+    }
+  }
+
+  /** Effets cosmétiques par image : traînées, chapeau visible en vue extérieure. */
+  private cosmeticsTick(dt: number) {
+    this.trailTimer -= dt;
+    if (this.trailTimer <= 0) {
+      this.trailTimer = 0.12;
+      const fx = this.s.particles;
+      const p = this.s.player;
+      const mine = this.equipped('trail');
+      if (mine && Math.hypot(p.body.vx, p.body.vz) > 0.8) fx.burst(mine.value as never, p.x, p.y + 0.15, p.z, 2);
+      if (!this.profile.hidePlayers)
+        for (const [b, kind] of this.botTrail) if (!b.removed && Math.hypot(b.body.vx, b.body.vz) > 0.8 && Math.hypot(b.x - p.x, b.z - p.z) < 40) fx.burst(kind as never, b.x, b.y + 0.15, b.z, 1);
+    }
+    const hat = this.equipped('hat')?.value ?? null;
+    const avatar = this.s.playerAvatar;
+    if (avatar && (hat !== this.playerHatShown || avatar !== this.hatAvatar)) {
+      setHat(avatar.model.parts.get('head')?.[0], this.s.game.textures, hat);
+      this.playerHatShown = hat;
+      this.hatAvatar = avatar;
+    }
+    this.gadgetCooldown -= dt;
+  }
+
+  /** Parcours du hub : départ sur le bloc d'or, arrivée sur l'émeraude. */
+  private hubParkourTick(dt: number) {
+    const p = this.s.player;
+    if (!p.body.onGround) {
+      if (this.parkourRun) this.parkourRun.t += dt;
+      return;
+    }
+    const course = hubParkour();
+    const fx = Math.floor(p.x), fy = Math.floor(p.y - 0.2), fz = Math.floor(p.z);
+    const i = course.findIndex((c) => c.x === fx && c.y === fy && c.z === fz);
+    if (this.parkourRun) this.parkourRun.t += dt;
+    if (i === 0 && (!this.parkourRun || this.parkourRun.next > 1)) {
+      this.parkourRun = { t: 0, next: 1 };
+      this.chat('§aParcours du hub démarré ! §7Atteignez le bloc d’émeraude en haut de la tour.');
+    } else if (this.parkourRun && i >= this.parkourRun.next) {
+      this.parkourRun.next = i + 1;
+      if (i === course.length - 1) {
+        const t = this.parkourRun.t;
+        this.parkourRun = null;
+        this.title('§a§lPARCOURS RÉUSSI !', `§f${t.toFixed(2)} s`);
+        if (!this.profile.bestHubParkour || t < this.profile.bestHubParkour) {
+          this.profile.bestHubParkour = t;
+          this.chat(`§a§lNOUVEAU RECORD DU HUB : §f${t.toFixed(2)} s`);
+          this.reward(20, 'record du parcours du hub');
+        } else this.saveProfile();
+      }
+    }
+    if (this.parkourRun) {
+      this.s.hud.showTitle(`§e${this.parkourRun.t.toFixed(1)} s §7· bloc ${this.parkourRun.next}/${course.length}`, 'actionbar');
+      if (p.y < FLOOR + 0.5 && this.parkourRun.next > 1) {
+        this.parkourRun = null;
+        this.s.hud.showTitle('§cParcours annulé', 'actionbar');
+      }
+    }
+  }
+
+  /** Arrivées et départs de joueurs dans le lobby (population vivante). */
+  private churn() {
+    if (!this.hubBots.length) return;
+    const b = this.rng.pick(this.hubBots);
+    if (this.rng.next() < 0.5) this.botSay(b, this.rng.pick(['go bedwars', 'je vais en skywars', 'bye', 'à plus', 'je vais jouer au sumo']));
+    this.hubBots = this.hubBots.filter((x) => x !== b);
+    this.removeBot(b);
+    this.populateHub(false);
   }
 
   // ---------- événements du jeu ----------
@@ -208,33 +508,57 @@ export class ServerNetwork {
       // hub : invulnérable, rassasié, retour si on tombe dans le vide
       p.invulnerable = Math.max(p.invulnerable, 1);
       p.hunger = 20;
-      if (p.y < FLOOR - 20) this.teleport(HUB.spawn.x, HUB.spawn.y, HUB.spawn.z, HUB.spawn.yaw);
+      if (p.y < FLOOR - 30) this.teleport(HUB.spawn.x, HUB.spawn.y, HUB.spawn.z, HUB.spawn.yaw);
       this.chatTimer -= dt;
       if (this.chatTimer <= 0 && this.hubBots.length) {
-        this.chatTimer = 7 + Math.random() * 14;
+        this.chatTimer = 5 + Math.random() * 11;
         const b = this.hubBots[this.rng.int(0, this.hubBots.length - 1)];
         this.botSay(b, this.rng.pick(HUB_CHAT));
       }
+      this.churnTimer -= dt;
+      if (this.churnTimer <= 0) {
+        this.churnTimer = 18 + Math.random() * 25;
+        this.churn();
+      }
+      this.hubParkourTick(dt);
     }
+    this.cosmeticsTick(dt);
     this.sidebarTimer -= dt;
     if (this.sidebarTimer <= 0) {
       this.sidebarTimer = 0.5;
-      if (Math.random() < 0.2) this.online += this.rng.int(-6, 7);
-      s.hud.setSidebar(`§e§l${SERVER_NAME.toUpperCase()}`, this.sidebarLines());
+      if (Math.random() < 0.2) this.online += this.rng.int(-40, 45);
+      s.hud.setSidebar('§e§lHYPXL', this.sidebarLines());
     }
   }
 
   private sidebarLines(): string[] {
     const d = new Date();
-    const date = `§7${d.toLocaleDateString('fr-FR')} §8lobby${1 + (this.online % 7)}`;
-    if (this.game) return [date, '', ...this.game.sidebar(), '', '§elecraft.local'];
+    const date = `§7${d.toLocaleDateString('fr-FR')} §8L${this.profile.lobby}`;
+    if (this.game) return [date, '', ...this.game.sidebar(), '', `§e${SERVER_IP}`];
     const wins = Object.values(this.profile.wins).reduce((a, n) => a + (n ?? 0), 0);
-    return [date, '', `§fNiveau : §b${this.level}`, `§fPièces : §6${this.profile.coins}`, `§fVictoires : §a${wins}`, `§fÉliminations : §c${this.profile.kills}`, '', `§fEn ligne : §a${this.online}`, '', '§elecraft.local'];
+    const rank = this.equipped('rank');
+    return [
+      date, '',
+      `§fRang : ${rank ? rank.value.split('|')[0].trim() : '§7Joueur'}`,
+      `§fNiveau : §b${this.level}`,
+      `§fPièces : §6${this.profile.coins.toLocaleString('fr-FR')}`,
+      `§fVictoires : §a${wins}`,
+      `§fCosmétiques : §d${this.profile.owned!.length}/${COSMETICS.length}`, '',
+      `§fLobby : §a#${this.profile.lobby}`,
+      `§fJoueurs : §a${this.online.toLocaleString('fr-FR')}`, '',
+      `§e${SERVER_IP}`,
+    ];
   }
 
   /** Niveau du joueur (expérience gagnée en jouant : pièces cumulées). */
   get level() {
     return 1 + Math.floor(Math.sqrt((this.profile.xp ?? 0) / 40));
+  }
+  /** Progression vers le niveau suivant (0..1). */
+  get levelProgress() {
+    const xp = this.profile.xp ?? 0, l = this.level;
+    const a = (l - 1) * (l - 1) * 40, b = l * l * 40;
+    return Math.max(0, Math.min(1, (xp - a) / (b - a)));
   }
 
   saveProfile() {
@@ -245,24 +569,39 @@ export class ServerNetwork {
     }
   }
 
-  /** Le joueur touche une créature : PNJ du hub → rejoindre le jeu. */
+  /** Le joueur touche une créature : PNJ du hub → jeu, cosmétiques, boîtes mystères, survie. */
   mobInteract(m: Mob): boolean {
     const npc = (m as Bot).npc;
     if (!npc) return false;
+    if (npc === 'hologram') return true;
+    if (this.game) return this.game.interact(npc);
     if (npc === 'smp') {
       this.chat('§7Connexion à §2LeCraft SMP§7…');
       setTimeout(() => void this.s.game.joinSmp(), 0);
+      return true;
+    }
+    if (npc === 'cosmetics') {
+      openCosmetics(this.s.game, this);
+      return true;
+    }
+    if (npc === 'mystery') {
+      openMysteryBox(this.s.game, this);
       return true;
     }
     this.join(npc as GameKey);
     return true;
   }
 
-  /** Objets du hub : boussole (menu des jeux), lit (quitter la partie). */
+  /** Objets du hub : menus, gadget, joueurs visibles, lobbys ; lit (quitter la partie). */
   useItem(id: string): boolean {
-    if (id === 'compass' && !this.game) {
-      this.openSelector();
-      return true;
+    if (!this.game) {
+      if (id === 'compass') return (this.openSelector(), true);
+      if (id === 'book') return (openProfile(this.s.game, this), true);
+      if (id === 'emerald') return (openCosmetics(this.s.game, this), true);
+      if (id === 'nether_star') return (openLobbySelector(this.s.game, this), true);
+      if (id === 'lime_dye' || id === 'gray_dye') return (this.togglePlayers(), true);
+      const g = this.equipped('gadget');
+      if (g && id === (GADGET_ITEM[g.value] ?? '')) return (this.useGadget(g.value), true);
     }
     if (id === 'red_bed' && this.game) {
       this.chat('§7Vous quittez la partie.');
@@ -270,6 +609,64 @@ export class ServerNetwork {
       return true;
     }
     return false;
+  }
+
+  private togglePlayers() {
+    this.profile.hidePlayers = !this.profile.hidePlayers;
+    for (const b of this.hubBots) b.object3d.visible = !this.profile.hidePlayers;
+    for (const [owner, pet] of this.pets) if (owner !== 'player') pet.object3d.visible = !this.profile.hidePlayers;
+    this.chat(this.profile.hidePlayers ? '§7Joueurs §ccachés§7.' : '§7Joueurs §avisibles§7.');
+    this.saveProfile();
+    this.hubHotbar();
+  }
+
+  private useGadget(kind: string) {
+    if (this.gadgetCooldown > 0) {
+      this.s.hud.showTitle(`§cRecharge : ${this.gadgetCooldown.toFixed(1)} s`, 'actionbar');
+      return;
+    }
+    const p = this.s.player, fx = this.s.particles, a = this.s.audio;
+    const dx = -Math.sin(p.yaw), dz = -Math.cos(p.yaw);
+    if (kind === 'firework') {
+      const x = p.x + dx * 3, z = p.z + dz * 3;
+      fx.burst('crit', x, p.y + 2, z, 12);
+      setTimeout(() => {
+        fx.burst('explosion', x, p.y + 9, z, 26);
+        fx.burst('magic', x, p.y + 9, z, 40);
+        fx.burst('crystal', x, p.y + 9, z, 30);
+        a.play('explode', { x, y: p.y + 9, z, volume: 0.35 });
+      }, 650);
+      this.gadgetCooldown = 3;
+    } else if (kind === 'confetti') {
+      for (const k of ['magic', 'crystal', 'hearts', 'crit'] as const) fx.burst(k, p.x + dx * 1.5, p.y + 1.6, p.z + dz * 1.5, 18);
+      a.play('pop', { volume: 0.6 });
+      this.gadgetCooldown = 2;
+    } else if (kind === 'leap') {
+      p.body.vx = dx * 16;
+      p.body.vz = dz * 16;
+      p.body.vy = 13;
+      fx.burst('magic', p.x, p.y, p.z, 20);
+      a.play('whoosh', { volume: 0.5 });
+      this.gadgetCooldown = 4;
+    } else if (kind === 'storm') {
+      for (let i = 0; i < 6; i++) setTimeout(() => fx.burst('rain', p.x + (Math.random() - 0.5) * 6, p.y + 4, p.z + (Math.random() - 0.5) * 6, 20), i * 120);
+      fx.burst('smoke', p.x, p.y + 3, p.z, 30);
+      a.play('thunder', { volume: 0.4 });
+      this.gadgetCooldown = 5;
+    }
+  }
+
+  /** Changement de lobby : nouveaux joueurs, retour au point d'apparition. */
+  switchLobby(n: number) {
+    if (this.game) return;
+    for (const b of this.hubBots) this.removeBot(b);
+    this.hubBots = [];
+    this.profile.lobby = n;
+    this.saveProfile();
+    this.chat(`§7Envoi vers §aLobby #${n}§7…`);
+    this.holograms[1]?.setTag(this.leaderboardText());
+    this.toHub(true);
+    this.title(`§a§lLOBBY #${n}`, `§7${this.hubCapacity} joueurs`);
   }
 
   canEdit(x: number, y: number, z: number, action: 'break' | 'place', block: number): boolean {
@@ -297,7 +694,8 @@ export class ServerNetwork {
     if (/\b(salut|slt|bonjour|coucou|hello|yo|wesh)\b/.test(t)) reply = this.rng.pick(['salut !', 'yo', 'bonjour :)', 'salut ça va ?', 'wesh']);
     else if (/\bgg\b/.test(t)) reply = this.rng.pick(['gg', 'gg wp', 'merci, gg']);
     else if (/duel|1v1|1 v 1/.test(t)) reply = this.rng.pick(['ok go duel, touche le PNJ Duel', 'je te prends en duel quand tu veux', 'pas maintenant je fais du skywars']);
-    else if (/skywars|spleef|tnt|parkour/.test(t)) reply = this.rng.pick(['go !', 'j’arrive', 'je suis le meilleur à ça mdr', 'utilise la boussole pour rejoindre']);
+    else if (/bedwars|skywars|spleef|tnt|parkour|sumo|block ?party/.test(t)) reply = this.rng.pick(['go !', 'j’arrive', 'je suis le meilleur à ça mdr', 'utilise la boussole pour rejoindre']);
+    else if (/cosm|chapeau|pet|compagnon|boîte|boite|rang|mvp|vip/.test(t)) reply = this.rng.pick(['ouvre une boîte mystère au PNJ violet', 'mon chapeau préféré c’est la balise', 'le rang MVP+ coûte cher mais il est stylé', 'j’ai un renardeau comme compagnon']);
     else if (/\?$/.test(t)) reply = this.rng.pick(['je sais pas', 'oui', 'non', 'peut-être', 'demande au staff', 'bonne question']);
     else if (/(nul|noob|ez)/.test(t)) reply = this.rng.pick(['toi même', 'calme toi', ':(', 'on verra en duel']);
     else if (Math.random() < 0.35) reply = this.rng.pick(['mdr', 'ok', 'trop bien', 'ah oui ?', 'lol']);
@@ -308,16 +706,25 @@ export class ServerNetwork {
   command(line: string): boolean {
     const [cmd, arg] = line.trim().toLowerCase().split(/\s+/);
     if (cmd === '/hub' || cmd === '/lobby' || cmd === '/l') {
-      this.toHub();
+      if (arg && /^\d+$/.test(arg)) this.switchLobby(Math.max(1, Math.min(12, Number(arg))));
+      else this.toHub();
       return true;
     }
     if (cmd === '/server') {
       if (arg === 'smp' || arg === 'survie') setTimeout(() => void this.s.game.joinSmp(), 0);
-      else this.chat('§7Serveurs : §e/server smp §7(survie moddée). Vous êtes sur le §elobby§7.');
+      else this.chat(`§7Serveurs : §e/server smp §7(survie moddée). Vous êtes sur §6HypXL §7lobby #${this.profile.lobby}.`);
       return true;
     }
     if (cmd === '/jeux' || cmd === '/games' || cmd === '/menu') {
       this.openSelector();
+      return true;
+    }
+    if (cmd === '/cosmetiques' || cmd === '/cosmétiques' || cmd === '/cosmetics') {
+      openCosmetics(this.s.game, this);
+      return true;
+    }
+    if (cmd === '/profil' || cmd === '/profile' || cmd === '/stats') {
+      openProfile(this.s.game, this);
       return true;
     }
     if (cmd === '/play' || cmd === '/jouer') {
@@ -340,15 +747,18 @@ export class ServerNetwork {
     const g = GAMES[key];
     this.chat(`§7Envoi vers §e${g.name}-${this.rng.int(1, 40)}${'ABCDEFGH'[this.rng.int(0, 7)]}§7…`);
     this.profile.played++;
-    const Ctor = { skywars: SkyWars, spleef: Spleef, tntrun: TntRun, duels: Duel, parkour: Parkour }[key];
-    this.game = new Ctor(this, key);
-    this.game.begin();
+    const Ctor = { skywars: SkyWars, spleef: Spleef, tntrun: TntRun, duels: Duel, parkour: Parkour, sumo: Sumo, blockparty: BlockParty, bedwars: BedWars }[key];
+    const game = new Ctor(this, key);
+    this.game = game;
+    game.begin();
   }
 
   // ---------- services pour les mini-jeux ----------
   /** Bots d'une partie (hors du hub). */
   gameBot(x: number, y: number, z: number) {
-    return this.spawnBot(x, y, z);
+    const b = this.spawnBot(x, y, z);
+    if (this.rng.next() < 0.3) this.botTrail.set(b, this.rng.pick(COSMETICS.filter((c) => c.kind === 'trail')).value);
+    return b;
   }
   release(b: Bot) {
     this.removeBot(b);
@@ -393,6 +803,8 @@ export class ServerNetwork {
   }
 }
 
+const KIND_LABEL: Record<CosmeticKind, string> = { trail: 'traînée', hat: 'chapeau', pet: 'compagnon', color: 'couleur de chat', rank: 'rang', gadget: 'gadget' };
+
 // =====================================================================================
 // Mini-jeux
 // =====================================================================================
@@ -403,7 +815,7 @@ abstract class MiniGame {
   timer = 10;
   elapsed = 0;
   /** Blocs modifiés pendant la partie (restaurés à la fin). */
-  private journal = new Map<string, number>();
+  protected journal = new Map<string, number>();
   private off: (() => void) | null = null;
   protected abstract readonly box: { x0: number; z0: number; x1: number; z1: number };
 
@@ -621,6 +1033,15 @@ abstract class MiniGame {
     for (const e of this.s.entities.entities) if (e.kind === 'item' || e.kind === 'projectile') e.removed = true;
   }
 
+  /** Coéquipiers (jeux en équipes). */
+  protected ally(_a: Part, _b: Part) {
+    return false;
+  }
+  /** PNJ propre au jeu (marchand…) touché par le joueur. */
+  interact(_npc: string): boolean {
+    return false;
+  }
+
   /** Coup d'un bot sur sa cible (joueur ou bot). */
   protected strike(b: Bot, target: Part, dmg: number, kx: number, kz: number) {
     if (!target.alive) return;
@@ -632,7 +1053,7 @@ abstract class MiniGame {
   protected nearestFoe(b: Bot, part: Part): { part: Part; f: Fighter } | null {
     let best: { part: Part; f: Fighter } | null = null, bd = Infinity;
     for (const o of this.parts) {
-      if (o === part || !o.alive) continue;
+      if (o === part || !o.alive || this.ally(part, o)) continue;
       const f: Fighter = o.bot ?? this.s.player;
       const d = Math.hypot(f.x - b.x, f.z - b.z) + Math.abs(f.y - b.y) * 2;
       if (d < bd) {
@@ -1049,5 +1470,510 @@ class Parkour extends MiniGame {
   sidebar() {
     const best = this.net.profile.bestParkour;
     return ['§fJeu : §aParkour', `§fTemps : §a${this.time.toFixed(1)} s`, `§fPoint : §a${Math.round(this.check / 6)}/5`, `§fRecord : §6${best ? best.toFixed(2) + ' s' : '-'}`];
+  }
+}
+
+// ---------- Sumo ----------
+class Sumo extends MiniGame {
+  protected box = { x0: SUMO.x - 12, z0: SUMO.z - 12, x1: SUMO.x + 12, z1: SUMO.z + 12 };
+  private starts: [number, number][] = [];
+  /** Après un coup, le bot subit le recul sans pouvoir se diriger (sinon l'IA l'annule). */
+  private stun = new Map<Bot, number>();
+  setup() {
+    const n = GAMES.sumo.players;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = SUMO.x + Math.cos(a) * (SUMO.r - 2) + 0.5, z = SUMO.z + Math.sin(a) * (SUMO.r - 2) + 0.5;
+      this.starts.push([x, z]);
+      if (i === 0) {
+        this.net.teleportPlayer(x, FLOOR + 1, z, Math.atan2(SUMO.x - x, SUMO.z - z) + Math.PI);
+        continue;
+      }
+      const b = this.net.gameBot(x, FLOOR + 1, z);
+      this.parts.push({ bot: b, name: b.botName, alive: true, kills: 0 });
+    }
+    this.s.player.inventory.slots[8] = makeStack('red_bed', 1);
+  }
+  protected hold() {
+    super.hold(0);
+    const [x, z] = this.starts[0], p = this.s.player;
+    if (Math.hypot(p.x - x, p.z - z) > 1.2) this.net.teleportPlayer(x, FLOOR + 1, z);
+  }
+  center() {
+    return { x: SUMO.x, y: FLOOR, z: SUMO.z };
+  }
+  protected fallY() {
+    return SUMO.outY;
+  }
+  /** Sumo : pas de dégâts, seulement du recul (plus fort que d'habitude). */
+  protected strike(b: Bot, target: Part, _dmg: number, kx: number, kz: number) {
+    if (!target.alive) return;
+    if (target.bot) {
+      target.bot.body.vx += kx * 1.3;
+      target.bot.body.vz += kz * 1.3;
+      target.bot.body.vy = Math.max(target.bot.body.vy, 5.5);
+      target.bot.lastAttacker = b;
+      target.bot.hurtTimer = 0.3;
+      this.stun.set(target.bot, 0.55);
+    } else {
+      const p = this.s.player;
+      p.damage(0.5, 'mob', kx * 1.8, kz * 1.8, b as never);
+      p.body.vy = Math.max(p.body.vy, 5.5);
+    }
+  }
+  protected tick() {
+    const p = this.s.player;
+    p.health = 20;
+    for (const part of this.alive) {
+      const b = part.bot;
+      if (!b || b.dead) continue;
+      // coup du joueur : recul supplémentaire, la vie reste pleine
+      if (b.health < b.maxHealth) {
+        if (b.lastAttacker === 'player') {
+          const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz) || 1;
+          b.body.vx += (dx / d) * 6;
+          b.body.vz += (dz / d) * 6;
+          b.body.vy = Math.max(b.body.vy, 5);
+          this.stun.set(b, 0.55);
+        }
+        b.health = b.maxHealth;
+      }
+    }
+  }
+  think(b: Bot, part: Part, dt: number) {
+    const st = (this.stun.get(b) ?? 0) - dt;
+    this.stun.set(b, st);
+    if (st > 0) return;
+    const fromCenter = Math.hypot(b.x - SUMO.x - 0.5, b.z - SUMO.z - 0.5);
+    // trop près du bord : on revient vers le centre avant de se battre
+    if (fromCenter > SUMO.r - 1.6 && Math.random() < 0.6 + b.skill * 0.4) {
+      b.ai.moveTowards(SUMO.x + 0.5, SUMO.z + 0.5, 1.2, false);
+      return;
+    }
+    const foe = this.nearestFoe(b, part);
+    if (foe) b.fight(this.s, foe.f, dt, (dmg, kx, kz) => this.strike(b, foe.part, dmg, kx, kz));
+  }
+}
+
+// ---------- Block Party ----------
+const COLOR_FR: Record<string, string> = { red: '§cROUGE', orange: '§6ORANGE', yellow: '§eJAUNE', lime: '§aVERT', light_blue: '§bBLEU CLAIR', blue: '§9BLEU', magenta: '§dMAGENTA', white: '§fBLANC' };
+class BlockParty extends MiniGame {
+  protected box = { x0: BLOCKPARTY.x - BLOCKPARTY.half - 1, z0: BLOCKPARTY.z - BLOCKPARTY.half - 1, x1: BLOCKPARTY.x + BLOCKPARTY.half + 1, z1: BLOCKPARTY.z + BLOCKPARTY.half + 1 };
+  private round = 0;
+  private phase: 'dance' | 'call' | 'drop' = 'dance';
+  private phaseT = 4;
+  private pattern: number[] = [];
+  private color = 0;
+  private goals = new Map<Bot, { x: number; z: number; react: number }>();
+  private beat = 0;
+  private get n() {
+    return BLOCKPARTY.half * 2 + 1;
+  }
+  setup() {
+    this.newFloor();
+    const n = GAMES.blockparty.players;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = BLOCKPARTY.x + Math.cos(a) * 8 + 0.5, z = BLOCKPARTY.z + Math.sin(a) * 8 + 0.5;
+      if (i === 0) {
+        this.net.teleportPlayer(x, FLOOR + 1, z, Math.atan2(BLOCKPARTY.x - x, BLOCKPARTY.z - z) + Math.PI);
+        continue;
+      }
+      const b = this.net.gameBot(x, FLOOR + 1, z);
+      this.parts.push({ bot: b, name: b.botName, alive: true, kills: 0 });
+    }
+    this.s.player.inventory.slots[8] = makeStack('red_bed', 1);
+  }
+  center() {
+    return { x: BLOCKPARTY.x, y: FLOOR, z: BLOCKPARTY.z };
+  }
+  protected fallY() {
+    return BLOCKPARTY.outY;
+  }
+  private newFloor() {
+    const w = this.s.world;
+    this.pattern = blockPartyPattern(this.net.pick([1, 2, 3, 4, 5, 6, 7, 8, 9]) * 101 + this.round * 7);
+    buildBlockPartyFloor((x, y, z, b) => void w.setBlock(x, y, z, b), this.pattern);
+  }
+  private colorAt(x: number, z: number) {
+    const i = Math.floor(x) - (BLOCKPARTY.x - BLOCKPARTY.half), j = Math.floor(z) - (BLOCKPARTY.z - BLOCKPARTY.half);
+    if (i < 0 || j < 0 || i >= this.n || j >= this.n) return -1;
+    return this.pattern[j * this.n + i];
+  }
+  /** Temps pour rejoindre la couleur : de 5 s à 1,5 s au fil des manches. */
+  private get callTime() {
+    return Math.max(1.5, 5 - this.round * 0.3);
+  }
+  protected tick(dt: number) {
+    const p = this.s.player;
+    p.health = 20;
+    this.phaseT -= dt;
+    // musique : notes sur le temps pendant la danse
+    this.beat -= dt;
+    if (this.phase === 'dance' && this.beat <= 0) {
+      this.beat = 0.35;
+      this.s.audio.play('click', { volume: 0.25 });
+      if (Math.random() < 0.3) this.s.particles.burst('magic', BLOCKPARTY.x + (Math.random() - 0.5) * 20, FLOOR + 3, BLOCKPARTY.z + (Math.random() - 0.5) * 20, 6);
+    }
+    if (this.phaseT > 0) {
+      if (this.phase === 'call') this.s.hud.showTitle(`${COLOR_FR[BLOCKPARTY_COLORS[this.color]]} §7— §f${this.phaseT.toFixed(1)} s`, 'actionbar');
+      return;
+    }
+    const w = this.s.world;
+    if (this.phase === 'dance') {
+      // annonce d'une couleur présente sur la piste
+      this.round++;
+      const present = [...new Set(this.pattern.filter((c) => c >= 0))];
+      this.color = this.net.pick(present);
+      const key = BLOCKPARTY_COLORS[this.color];
+      const item = ItemRegistry.has(`${key}_concrete`) ? `${key}_concrete` : `${key}_wool`;
+      if (ItemRegistry.has(item)) {
+        for (let i = 0; i < 8; i++) p.inventory.slots[i] = makeStack(item, 1);
+        p.inventory.changed();
+      }
+      this.net.title(COLOR_FR[key], `§7Manche ${this.round}`);
+      this.s.audio.play('levelup', { volume: 0.4 });
+      this.phase = 'call';
+      this.phaseT = this.callTime;
+      this.goals.clear();
+    } else if (this.phase === 'call') {
+      // toutes les autres couleurs disparaissent
+      this.pattern = this.pattern.map((c) => (c === this.color ? c : -1));
+      buildBlockPartyFloor((x, y, z, b) => void w.setBlock(x, y, z, b), this.pattern);
+      this.s.audio.play('explode', { volume: 0.2 });
+      this.phase = 'drop';
+      this.phaseT = 3;
+    } else {
+      for (let i = 0; i < 8; i++) p.inventory.slots[i] = null;
+      p.inventory.changed();
+      if (this.round % 3 === 0 && this.alive.length > 1 && this.you.alive) this.net.reward(3, `manche ${this.round}`);
+      this.newFloor();
+      this.phase = 'dance';
+      this.phaseT = 3 + Math.random() * 3;
+    }
+  }
+  think(b: Bot, _part: Part, dt: number) {
+    if (this.phase === 'dance') {
+      // danse : petits déplacements au hasard
+      let g = this.goals.get(b);
+      if (!g || Math.hypot(g.x - b.x, g.z - b.z) < 0.8) {
+        g = { x: BLOCKPARTY.x + (Math.random() - 0.5) * 18, z: BLOCKPARTY.z + (Math.random() - 0.5) * 18, react: 0 };
+        this.goals.set(b, g);
+      }
+      b.ai.moveTowards(g.x, g.z, 0.8, false);
+      if (b.body.onGround && Math.random() < dt * 0.6) b.body.vy = 8;
+      return;
+    }
+    if (this.phase === 'drop') return b.ai.stop();
+    let g = this.goals.get(b);
+    if (!g) {
+      // case de la bonne couleur la plus proche (les moins bons visent parfois mal)
+      let best: [number, number] | null = null, bd = Infinity;
+      for (let j = 0; j < this.n; j++)
+        for (let i = 0; i < this.n; i++) {
+          if (this.pattern[j * this.n + i] !== this.color) continue;
+          const x = BLOCKPARTY.x - BLOCKPARTY.half + i + 0.5, z = BLOCKPARTY.z - BLOCKPARTY.half + j + 0.5;
+          const d = Math.hypot(x - b.x, z - b.z) + Math.random() * (1 - b.skill) * 6;
+          if (d < bd) {
+            bd = d;
+            best = [x, z];
+          }
+        }
+      const miss = Math.random() < 0.08 + this.round * 0.012 - b.skill * 0.08;
+      g = best && !miss ? { x: best[0], z: best[1], react: 0.25 + (1 - b.skill) * 0.7 } : { x: b.x + (Math.random() - 0.5) * 6, z: b.z + (Math.random() - 0.5) * 6, react: 0.8 };
+      this.goals.set(b, g);
+    }
+    if ((g.react -= dt) > 0) return b.ai.stop();
+    if (Math.hypot(g.x - b.x, g.z - b.z) > 0.35 && this.colorAt(b.x, b.z) !== this.color) b.ai.moveTowards(g.x, g.z, 1.3, false);
+    else b.ai.stop();
+  }
+  sidebar() {
+    return [...super.sidebar().slice(0, 3), `§fManche : §d${this.round}`, `§fTemps de course : §e${this.callTime.toFixed(1)} s`];
+  }
+}
+
+// ---------- BedWars ----------
+const BW_SHOP: [string, number, number][] = [
+  ['white_wool', 16, 4], ['oak_planks', 16, 12], ['end_stone', 12, 24], ['stone_sword', 1, 10], ['iron_sword', 1, 35],
+  ['wooden_pickaxe', 1, 10], ['iron_pickaxe', 1, 30], ['shears', 1, 20], ['chainmail_chestplate', 1, 24], ['iron_chestplate', 1, 40],
+  ['golden_apple', 1, 12], ['bow', 1, 24], ['arrow', 8, 6], ['ender_pearl', 1, 45],
+];
+class BedWars extends MiniGame {
+  protected box = { x0: BEDWARS.x - 34, z0: BEDWARS.z - 34, x1: BEDWARS.x + 34, z1: BEDWARS.z + 34 };
+  private team = new Map<Part, number>();
+  private beds = BEDWARS_TEAMS.map(() => true);
+  private bedId = BlockRegistry.has('red_bed') ? BlockRegistry.byName('red_bed').id : B.OAK_PLANKS;
+  private genT = 0;
+  private supplyT = 0;
+  private plan = new Map<Bot, number>();
+  /** Moment où l'attaquant quitte son île (après ses premiers achats). */
+  private depart = new Map<Bot, number>();
+  private shopNpc: Bot | null = null;
+  setup() {
+    const w = this.s.world;
+    buildBedWarsBeds((x, y, z, b, m) => void w.setBlock(x, y, z, b, m ?? 0));
+    const per = 2;
+    BEDWARS_TEAMS.forEach((t, ti) => {
+      const isl = bedwarsIsland(ti);
+      const wool = BlockRegistry.has(`${t.wool}_wool`) ? BlockRegistry.byName(`${t.wool}_wool`).id : B.OAK_PLANKS;
+      for (let k = 0; k < per; k++) {
+        const ox = (k - 0.5) * 1.6 * (t.dz !== 0 ? 1 : 0), oz = (k - 0.5) * 1.6 * (t.dx !== 0 ? 1 : 0);
+        if (ti === 0 && k === 0) {
+          this.team.set(this.you, 0);
+          this.net.teleportPlayer(isl.spawn[0] + ox, isl.spawn[1], isl.spawn[2] + oz, Math.atan2(-t.dx, -t.dz));
+          this.s.player.spawn = [...isl.spawn];
+          continue;
+        }
+        const b = this.net.gameBot(isl.spawn[0] + ox, isl.spawn[1], isl.spawn[2] + oz);
+        b.blockId = wool;
+        b.blocks = 24;
+        b.weapon = 'wooden_sword';
+        b.setTag(`${t.color}§l${t.name[0]} §r${t.color}${b.botName}`);
+        const part = { bot: b, name: b.botName, alive: true, kills: 0 };
+        this.parts.push(part);
+        this.team.set(part, ti);
+        // rôle : un défenseur et un attaquant par équipe (votre coéquipier défend votre lit)
+        this.plan.set(b, ti === 0 || k === 0 ? 1 : 0);
+        this.depart.set(b, 18 + Math.random() * 25);
+      }
+    });
+    // marchand sur l'île du joueur
+    const isl = bedwarsIsland(0), t = BEDWARS_TEAMS[0];
+    const sx = isl.x + (t.dz !== 0 ? 3 : 0) + 0.5, sz = isl.z + (t.dx !== 0 ? 3 : 0) + 0.5;
+    this.shopNpc = this.net.gameBot(sx, FLOOR + 1, sz);
+    this.shopNpc.npc = 'bw_shop';
+    this.shopNpc.invulnerable = true;
+    this.shopNpc.setTag('§e§lMARCHAND\n§7Payez en lingots de fer\n§a▶ Toucher');
+    const inv = this.s.player.inventory;
+    inv.slots[0] = makeStack('wooden_sword', 1);
+    if (BlockRegistry.has('red_wool')) inv.slots[1] = makeStack('red_wool', 16);
+    inv.slots[8] = makeStack('red_bed', 1);
+    inv.armor.chest = makeStack('leather_chestplate', 1);
+    inv.armor.legs = makeStack('leather_leggings', 1);
+    this.net.chat('§7Vous êtes dans l’équipe §c§lRouge§7. Le §egénérateur de fer§7 est sur votre île, le §emarchand§7 à côté.');
+  }
+  protected keyPoints(): [number, number][] {
+    return BEDWARS_TEAMS.map((_, i): [number, number] => {
+      const isl = bedwarsIsland(i);
+      return [isl.bed[1][0], isl.bed[1][2]];
+    });
+  }
+  protected hold() {
+    super.hold(0);
+  }
+  center() {
+    return { x: BEDWARS.x, y: FLOOR, z: BEDWARS.z };
+  }
+  protected fallY() {
+    return BEDWARS.outY;
+  }
+  protected ally(a: Part, b: Part) {
+    return this.team.get(a) === this.team.get(b);
+  }
+  interact(npc: string) {
+    if (npc !== 'bw_shop') return false;
+    const inv = this.s.player.inventory;
+    this.s.game.openServerShop?.(BW_SHOP.filter(([id]) => ItemRegistry.has(id)).map(([id, n, price]) => [id === 'white_wool' && ItemRegistry.has('red_wool') ? 'red_wool' : id, n, price]), () => inv.count('iron_ingot'), (id, n, price) => {
+      if (inv.count('iron_ingot') < price) return false;
+      inv.remove('iron_ingot', price);
+      const def = ItemRegistry.get(id);
+      const slot = def?.armor?.slot;
+      if (slot && !inv.armor[slot]) inv.armor[slot] = makeStack(id, 1);
+      else {
+        const left = inv.add(makeStack(id, n));
+        if (left > 0) this.s.entities.spawnItem(id, left, this.s.player.x, this.s.player.y + 1, this.s.player.z);
+      }
+      inv.changed();
+      return true;
+    });
+    return true;
+  }
+  canEdit(x: number, y: number, z: number, action: 'break' | 'place', b: number) {
+    if (this.state !== 'playing' || !this.you.alive) return false;
+    if (Math.abs(x - BEDWARS.x) > 33 || Math.abs(z - BEDWARS.z) > 33 || y > FLOOR + 18) return false;
+    if (action === 'place') return true;
+    if (b === this.bedId) {
+      const own = bedwarsIsland(0).bed.some((c) => c[0] === x && c[1] === y && c[2] === z);
+      if (own) this.s.hud.showTitle('§cVous ne pouvez pas casser votre propre lit !', 'actionbar');
+      return !own;
+    }
+    // seuls les blocs posés pendant la partie se cassent
+    return this.journal.get(`${x},${y},${z}`) === B.AIR;
+  }
+  private teamAlive(ti: number) {
+    return [...this.team].some(([p, t]) => t === ti && p.alive);
+  }
+  private destroyBed(ti: number, by: Part | null) {
+    if (!this.beds[ti]) return;
+    this.beds[ti] = false;
+    const w = this.s.world, t = BEDWARS_TEAMS[ti];
+    for (const c of bedwarsIsland(ti).bed) {
+      if (w.getBlock(c[0], c[1], c[2]) === this.bedId) w.setBlock(c[0], c[1], c[2], B.AIR);
+      this.s.particles.burst('explosion', c[0] + 0.5, c[1] + 0.5, c[2] + 0.5, 8);
+    }
+    // pas de lit ramassé (l'objet lit sert à quitter la partie)
+    for (const e of this.s.entities.entities) if (e.kind === 'item' && Math.hypot(e.x - bedwarsIsland(ti).bed[0][0], e.z - bedwarsIsland(ti).bed[0][2]) < 4) e.removed = true;
+    const who = by ? (by.bot ? by.bot.chatName : '§aVous') : '§7quelqu’un';
+    this.net.chat(`§f§lDESTRUCTION DE LIT > §r${t.color}Lit de l’équipe ${t.name} §7détruit par ${who}§7 !`);
+    this.s.audio.play('thunder', { volume: 0.4 });
+    if (ti === 0) this.net.title('§c§lLIT DÉTRUIT !', '§7Vous ne réapparaîtrez plus');
+    if (by === this.you) this.net.reward(20, 'lit détruit');
+  }
+  protected tick(dt: number) {
+    const w = this.s.world, p = this.s.player;
+    // lits cassés (par le joueur ou un bot)
+    this.beds.forEach((alive, ti) => {
+      if (!alive) return;
+      if (bedwarsIsland(ti).bed.some((c) => w.getBlock(c[0], c[1], c[2]) !== this.bedId)) {
+        let by: Part | null = null, bd = 6;
+        for (const part of this.alive) {
+          if (this.team.get(part) === ti) continue;
+          const e = part.bot ?? p;
+          const d = Math.hypot(e.x - bedwarsIsland(ti).bed[0][0], e.z - bedwarsIsland(ti).bed[0][2]);
+          if (d < bd) {
+            bd = d;
+            by = part;
+          }
+        }
+        this.destroyBed(ti, by);
+      }
+    });
+    // générateur de fer de l'île du joueur
+    this.genT -= dt;
+    if (this.genT <= 0) {
+      this.genT = 1.6;
+      const isl = bedwarsIsland(0), t = BEDWARS_TEAMS[0];
+      this.s.entities.spawnItem('iron_ingot', 1, isl.x - t.dx * 4 + 0.5, FLOOR + 1.2, isl.z - t.dz * 4 + 0.5);
+    }
+    // les bots « achètent » blocs et armes avec leur fer
+    this.supplyT -= dt;
+    if (this.supplyT <= 0) {
+      this.supplyT = 7;
+      for (const part of this.alive) {
+        const b = part.bot;
+        if (!b) continue;
+        b.blocks = Math.min(64, b.blocks + 12);
+        if (this.elapsed > 50 && b.weapon === 'wooden_sword') b.weapon = 'stone_sword';
+        if (this.elapsed > 140 && b.weapon === 'stone_sword' && Math.random() < b.skill) {
+          b.weapon = 'iron_sword';
+          b.armorFactor = armorFactor(8);
+        }
+        if (this.elapsed > 90 && b.gapples < 1 && Math.random() < 0.3) b.gapples = 1;
+      }
+    }
+  }
+  /** Mort avec le lit intact : réapparition sur son île (pas d'élimination). */
+  eliminate(part: Part, by: Bot | 'player' | null, cause: 'void' | 'killed') {
+    const ti = this.team.get(part) ?? 0;
+    if (!part.alive || !this.beds[ti]) {
+      const before = part.alive;
+      super.eliminate(part, by, cause);
+      if (before) this.net.chat('§b§lÉLIMINATION FINALE !');
+      return;
+    }
+    const killer = by === 'player' ? this.you : by ? this.parts.find((x) => x.bot === by) ?? null : null;
+    if (killer && killer !== part) killer.kills++;
+    const name = part.bot ? part.bot.chatName : '§aVous';
+    this.net.chat(killer && killer !== part ? `${name} §7a été tué par ${killer.bot ? killer.bot.chatName : '§aVous'}§7.` : `${name} §7${cause === 'void' ? 'est tombé dans le vide' : 'est mort'}.`);
+    if (killer === this.you && part !== this.you) this.net.reward(4, 'élimination');
+    const sp = bedwarsIsland(ti).spawn;
+    if (part.bot) {
+      const b = part.bot;
+      b.dead = false;
+      b.deathTimer = 0;
+      b.health = b.maxHealth;
+      b.body.setPos(sp[0], sp[1], sp[2]);
+      b.body.vx = b.body.vy = b.body.vz = 0;
+      b.body.fallDistance = 0;
+      b.lastAttacker = null;
+    } else {
+      const p = this.s.player;
+      if (p.dead) p.respawn();
+      p.health = 20;
+      this.net.teleportPlayer(sp[0], sp[1], sp[2]);
+      this.net.title('§c§lVOUS ÊTES MORT', '§eRéapparition sur votre île');
+    }
+  }
+  playerDied(cause: 'void' | 'killed') {
+    if (!this.you.alive) {
+      if (this.s.player.dead) this.s.player.respawn();
+      return;
+    }
+    const killer = this.s.player.lastAttacker;
+    const kp = cause === 'killed' && killer instanceof Bot ? this.parts.find((x) => x.bot === killer) ?? null : null;
+    this.eliminate(this.you, kp?.bot ?? null, cause);
+  }
+  checkEnd() {
+    const teams = BEDWARS_TEAMS.map((_, i) => i).filter((i) => this.teamAlive(i));
+    if (teams.length > 1) return;
+    const win = teams[0];
+    if (win === undefined) return this.finish(null);
+    this.finish(win === 0 ? this.you : [...this.team].find(([p, t]) => t === win && p.alive)?.[0] ?? null);
+  }
+  think(b: Bot, part: Part, dt: number) {
+    const ti = this.team.get(part) ?? 0;
+    const home = bedwarsIsland(ti);
+    const foe = this.nearestFoe(b, part);
+    const near = foe && Math.abs(foe.f.y - b.y) < 3 && Math.hypot(foe.f.x - b.x, foe.f.z - b.z) < 7;
+    if (near) {
+      b.fight(this.s, foe!.f, dt, (dmg, kx, kz) => this.strike(b, foe!.part, dmg, kx, kz));
+      return;
+    }
+    // défenseur : reste près de son lit tant qu'il existe
+    if (this.plan.get(b) === 1 && this.beds[ti]) {
+      const [bx, , bz] = home.bed[0];
+      if (Math.hypot(bx + 0.5 - b.x, bz + 0.5 - b.z) > 3) b.goTo(bx + 0.5, FLOOR + 1, bz + 0.5);
+      else b.ai.stop();
+      return;
+    }
+    // début de partie : achats au générateur de son île
+    if (this.elapsed < (this.depart.get(b) ?? 0)) {
+      const t = BEDWARS_TEAMS[ti];
+      const gx = home.x - t.dx * 3 + 0.5, gz = home.z - t.dz * 3 + 0.5;
+      if (Math.hypot(gx - b.x, gz - b.z) > 1.5) b.goTo(gx, FLOOR + 1, gz);
+      else b.ai.stop();
+      return;
+    }
+    // attaquant : vise le lit adverse le plus proche, sinon le joueur adverse le plus proche
+    let target: [number, number, number] | null = null, td = Infinity;
+    this.beds.forEach((alive, i) => {
+      if (!alive || i === ti) return;
+      const c = bedwarsIsland(i).bed[0];
+      const d = Math.hypot(c[0] - b.x, c[2] - b.z);
+      if (d < td) {
+        td = d;
+        target = c;
+      }
+    });
+    if (target) {
+      const [tx, ty, tz] = target as [number, number, number];
+      if (td < 2.6) {
+        // casse les deux moitiés du lit
+        for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]])
+          if (this.s.world.getBlock(tx + dx, ty, tz + dz) === this.bedId && Math.random() < dt * 2.5) b.breakBlock(this.s, tx + dx, ty, tz + dz);
+        b.ai.stop();
+        return;
+      }
+      if (b.blocks > 0) b.bridgeTo(this.s, tx + 0.5, tz + 0.5, FLOOR + 1);
+      else b.goTo(tx + 0.5, FLOOR + 1, tz + 0.5, true);
+      return;
+    }
+    if (foe) {
+      if (b.blocks > 0 && Math.abs(foe.f.y - b.y) < 4) b.bridgeTo(this.s, foe.f.x, foe.f.z, Math.floor(b.y));
+      else b.goTo(foe.f.x, foe.f.y, foe.f.z, true);
+    }
+  }
+  dispose() {
+    if (this.shopNpc) this.net.release(this.shopNpc);
+    super.dispose();
+  }
+  sidebar() {
+    const lines = [`§fJeu : §cBedWars`, this.state === 'countdown' ? `§fDébut dans §a${Math.ceil(this.timer)} s` : `§fTemps : §a${fmt(this.elapsed)}`, ''];
+    BEDWARS_TEAMS.forEach((t, i) => {
+      const n = [...this.team].filter(([p, k]) => k === i && p.alive).length;
+      lines.push(`${t.color}${t.name[0]} §f${t.name} ${this.beds[i] ? '§a✔' : n ? `§e${n}` : '§c✘'}${i === 0 ? ' §7(vous)' : ''}`);
+    });
+    lines.push('', `§fÉliminations : §a${this.you.kills}`, `§fFer : §7${this.s.player.inventory.count('iron_ingot')}`);
+    return lines;
   }
 }

@@ -207,8 +207,9 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   jusqu'à 3 blocs, nage ; évite lave, cactus et barrières ; traverse portes et portillons ouverts) pour
   poursuivre, chercher le joueur, rentrer, suivre la nourriture et errer ; si la cible est inaccessible,
   elles vont au plus près ; les morts-vivants cherchent l'**ombre** quand ils brûlent au soleil.
-- **Multijoueur : serveur de mini-jeux intégré « LeCraft Network »** (écran titre › *Multijoueur*) —
-  un serveur original (ni le nom ni la marque d'un serveur existant), qui fonctionne **hors ligne** :
+- **Multijoueur : serveur de mini-jeux intégré « HypXL »** (écran titre › *Multijoueur*, nommé
+  « LeCraft Network » avant la v2.25) — un serveur intégré, sans logo ni ressource d'un serveur
+  réel, qui fonctionne **hors ligne** :
   les autres joueurs sont des **bots** (skins du pack, pseudos, rangs VIP/MVP, chat). Liste des
   serveurs avec message du jour, joueurs en ligne et ping. **Hub** : île avec fontaine, PNJ des jeux
   (toucher pour jouer), boussole « Menu des jeux », bots qui se promènent et discutent (ils répondent
@@ -245,6 +246,33 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   plus réactive (baisse de résolution en 3 s) et mémorisée d'un lancement à l'autre, shaders
   désactivés par défaut en profil Bas. Créatures : saut à 1,3 bloc (comme le joueur), nage pour
   sortir de l'eau, peuvent sauter dans l'eau depuis plus haut.
+- **Serveur HypXL (v2.25)** — le serveur de mini-jeux devient **HypXL** (`play.hypxl.net`) :
+  - **Spawn refait** : île flottante avec stalactites, place à motifs et fontaine à étages,
+    **logo HYPXL géant**, 8 PNJ de jeux en arc de cercle sur des socles, tours, remparts,
+    jardins (cerisiers, bouleaux, chênes), arche d'entrée avec balise, boutique de cosmétiques,
+    autel des boîtes mystères, mur du classement et **parcours du hub** en spirale autour d'une
+    tour (chrono et record).
+  - **Hologrammes** : accueil, classement des meilleurs joueurs, parcours.
+  - **Beaucoup plus de joueurs** : 16 / 28 / 40 bots selon la qualité graphique. Ils arrivent et
+    partent du lobby, portent des cosmétiques et parlent des jeux.
+  - **12 lobbys** à choisir.
+  - **8 mini-jeux**. Trois sont nouveaux :
+    - **BedWars** : 4 équipes de 2. Lits, générateur de fer et marchand payé en fer.
+      Réapparition tant que le lit existe, puis élimination finale. Les bots défendent ou
+      attaquent : ils construisent des ponts de laine et cassent les lits.
+    - **Sumo** : pousser les autres hors de l'arène ronde, sans dégâts.
+    - **Block Party** : une couleur est annoncée et les autres disparaissent. Le temps pour
+      courir diminue à chaque manche.
+    - Les jeux existants restent : SkyWars, Duel, TNT Run, Spleef, Parkour.
+  - **44 cosmétiques** achetés avec les pièces : traînées de particules, chapeaux (blocs
+    portés), compagnons qui suivent, couleurs de chat, rangs (VIP, MVP, MVP+ affichés dans le
+    chat) et gadgets (feu d'artifice, confettis, bond, orage).
+  - **Boîtes mystères** à tirage animé, avec un cadeau de bienvenue de 1000 pièces.
+  - **Menus du serveur** : objets du hub (boussole pour les jeux et le nombre de joueurs, livre
+    pour le profil et les statistiques, émeraude pour les cosmétiques, colorant pour cacher les
+    joueurs, étoile pour les lobbys, gadget).
+  - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
+  - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
 - **Créatures complètes (v2.24)** — sens des rotations des modèles officiels corrigé (pose de
   repos, cubes tournés autour de leur centre) : vache, cochon, tortue, renard, lama, chat,
   ocelot, poule, dauphin… s'affichent entiers et à leur place.

@@ -115,8 +115,9 @@ export class ChatUI {
         this.add(v, 'chat');
         game.session?.runCommand(v);
       } else if (!hooks.chat?.(v)) {
-        this.add(`<${game.session?.player.name ?? 'Joueur'}> ${v}`, 'chat');
-        game.session?.server?.playerChat(v);
+        const net = game.session?.server;
+        this.add(net ? net.formatPlayerChat(v) : `<${game.session?.player.name ?? 'Joueur'}> ${v}`, 'chat');
+        net?.playerChat(v);
         game.session?.smp?.playerChat(v);
         game.session?.mp?.chat(v);
       }

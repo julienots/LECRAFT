@@ -133,6 +133,10 @@ export class Session implements GameContext {
   /** Vue : 0 = 1re personne, 1 = 3e personne arrière, 2 = 3e personne avant (F5). */
   perspective: 0 | 1 | 2 = 0;
   private avatar: PlayerAvatar | null = null;
+  /** Modèle du joueur en vue extérieure (null en première personne). */
+  get playerAvatar() {
+    return this.avatar;
+  }
   private tickAcc = 0;
   private autosaveTimer = 60;
   private progressTimer = 1;

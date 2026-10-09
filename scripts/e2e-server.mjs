@@ -21,7 +21,7 @@ try {
   await page.waitForFunction(() => window.__lecraft?.state === 'menu', null, { timeout: 120000 });
   await page.getByText('Multijoueur', { exact: true }).click();
   await wait(300);
-  await page.locator('.server-entry[data-server="LeCraft Network"]').click();
+  await page.locator('.server-entry[data-server="HypXL"]').click();
   await page.getByText('Rejoindre le serveur').click();
   await page.waitForFunction(() => window.__lecraft?.state === 'playing' && window.__lecraft.session.loaded && window.__lecraft.session.server, null, { timeout: 120000 });
   await wait(3000);
@@ -31,8 +31,8 @@ try {
     return { npcs: bots.filter((b) => b.npc).length, walkers: bots.filter((b) => !b.npc).length, compass: p.inventory.slots[0]?.id, sidebar: document.querySelector('.mc-sidebar:not(.hidden)')?.textContent ?? '', y: p.y, floor: s.world.getBlock(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) };
   });
   check('Menu Multijoueur → serveur : hub chargé (sol, boussole)', hub.floor > 0 && hub.compass === 'compass', JSON.stringify(hub));
-  check('Hub : 5 PNJ de jeux + PNJ « Survie moddée » et des bots joueurs', hub.npcs === 6 && hub.walkers >= 8, JSON.stringify(hub));
-  check('Tableau de scores latéral', /LECRAFT NETWORK/.test(hub.sidebar) && /Pièces/.test(hub.sidebar), hub.sidebar);
+  check('Hub : 8 PNJ de jeux + cosmétiques, boîtes mystères, survie, hologrammes et des bots joueurs', hub.npcs >= 14 && hub.walkers >= 20, JSON.stringify(hub));
+  check('Tableau de scores latéral', /HYPXL/.test(hub.sidebar) && /Pièces/.test(hub.sidebar), hub.sidebar);
   await G(() => { const p = window.__lecraft.session.player; p.body.flying = true; p.body.setPos(0.5, 80, 30); p.yaw = 0; p.pitch = -0.55; });
   await wait(2500);
   await shot('01-hub');
@@ -49,10 +49,95 @@ try {
   await G(() => window.__lecraft.session.server.useItem('compass'));
   await wait(400);
   const menu = await G(() => [...document.querySelectorAll('[data-game]')].map((b) => b.dataset.game));
-  check('Boussole : menu des 5 jeux', menu.length === 5, menu.join(','));
+  check('Boussole : menu des 8 jeux', menu.length === 8, menu.join(','));
   await shot('02-menu');
+  await page.keyboard.press('Escape');
+  await wait(300);
+
+  // ---------- Cosmétiques, boîtes mystères, lobbys ----------
+  await G(() => { const n = window.__lecraft.session.server; n.profile.coins = 5000; n.useItem('emerald'); });
+  await wait(400);
+  const tabs = await G(() => [...document.querySelectorAll('[data-tab]')].map((b) => b.dataset.tab));
+  check('Émeraude : menu des cosmétiques (6 onglets)', tabs.length === 6, tabs.join(','));
+  await page.locator('[data-cosmetic="trail_flame"]').click();
+  await wait(300);
+  await page.locator('[data-tab="hat"]').click();
+  await wait(200);
+  await page.locator('[data-cosmetic="hat_pumpkin"]').click();
+  const cos = await G(() => { const n = window.__lecraft.session.server; return { owned: n.profile.owned.length, trail: n.profile.equipped.trail, coins: n.profile.coins }; });
+  check('Achat et équipement d’une traînée', cos.trail === 'trail_flame' && cos.coins < 5000, JSON.stringify(cos));
+  await shot('03-cosmetics');
+  await page.keyboard.press('Escape');
+  await wait(300);
+  const box = await G(() => { const n = window.__lecraft.session.server; const before = n.profile.owned.length; const c = n.openMystery(); return { got: c?.id ?? null, before, after: n.profile.owned.length }; });
+  check('Boîte mystère : un cosmétique gagné', !!box.got && box.after === box.before + 1, JSON.stringify(box));
+  await wait(2500);
+  const pet = await G(() => { const n = window.__lecraft.session.server; n.profile.owned.push('pet_fox'); n.equip({ id: 'pet_fox', kind: 'pet', value: 'fox' }); return window.__lecraft.session.entities.mobs.filter((m) => m.def.key === 'fox' && m.invulnerable).length; });
+  check('Compagnon équipé : il apparaît', pet >= 1, `${pet} compagnon(s)`);
+  const fmtc = await G(() => { const n = window.__lecraft.session.server; n.profile.owned.push('rank_mvpp'); n.profile.equipped.rank = 'rank_mvpp'; return n.formatPlayerChat('bonjour'); });
+  check('Chat : rang du joueur affiché', /MVP/.test(fmtc), fmtc);
+  await G(() => window.__lecraft.session.server.switchLobby(7));
+  await wait(1500);
+  const lob = await G(() => { const n = window.__lecraft.session.server; return { lobby: n.profile.lobby, bots: window.__lecraft.session.entities.mobs.filter((m) => m.botName && !m.npc).length }; });
+  check('Changement de lobby', lob.lobby === 7 && lob.bots >= 20, JSON.stringify(lob));
+  await G(() => window.__lecraft.session.server.useItem('book'));
+  await wait(300);
+  await shot('03b-profile');
+  await page.keyboard.press('Escape');
+  await wait(300);
+
+  // ---------- Sumo ----------
+  await G(() => window.__lecraft.session.server.join('sumo'));
+  await page.waitForFunction(() => window.__lecraft.session.server.game?.state === 'playing', null, { timeout: 25000 });
+  await G(() => { const p = window.__lecraft.session.player; p.gameMode = 'creative'; p.body.flying = true; p.body.setPos(2400.5, 74, 14); p.yaw = 0; p.pitch = -0.7; });
+  await wait(14000);
+  const su = await net();
+  check('Sumo : 6 joueurs, les bots se poussent hors de l’arène', su.game === 'sumo' && su.parts === 6 && (su.alive < 6 || su.state === 'ended'), JSON.stringify(su));
+  await shot('09-sumo');
+  await G(() => window.__lecraft.session.server.toHub());
+  await wait(500);
+
+  // ---------- Block Party ----------
+  await G(() => window.__lecraft.session.server.join('blockparty'));
+  await page.waitForFunction(() => window.__lecraft.session.server.game?.state === 'playing', null, { timeout: 25000 });
+  await G(() => { const p = window.__lecraft.session.player; p.gameMode = 'creative'; p.body.flying = true; p.body.setPos(2800.5, 78, 20); p.yaw = 0; p.pitch = -0.7; });
+  await page.waitForFunction(() => window.__lecraft.session.server.game?.phase === 'drop', null, { timeout: 20000 });
+  const bp = await G(() => { const s = window.__lecraft.session, g = s.server.game; let solid = 0; for (let x = -12; x <= 12; x++) for (let z = -12; z <= 12; z++) if (s.world.getBlock(2800 + x, 63, z) !== 0) solid++; return { solid, round: g.round, parts: g.parts.length }; });
+  check('Block Party : couleur annoncée, les autres disparaissent', bp.parts === 10 && bp.round >= 1 && bp.solid > 0 && bp.solid < 300, JSON.stringify(bp));
+  await wait(400);
+  await shot('10-blockparty');
+  await page.waitForFunction(() => window.__lecraft.session.server.game?.phase === 'dance', null, { timeout: 10000 });
+  const bp2 = await G(() => { const s = window.__lecraft.session; let solid = 0; for (let x = -12; x <= 12; x++) for (let z = -12; z <= 12; z++) if (s.world.getBlock(2800 + x, 63, z) !== 0) solid++; return solid; });
+  check('Block Party : nouvelle piste pour la manche suivante', bp2 === 625, `${bp2} blocs`);
+  await G(() => window.__lecraft.session.server.toHub());
+  await wait(500);
+
+  // ---------- BedWars ----------
+  await G(() => window.__lecraft.session.server.join('bedwars'));
+  await page.waitForFunction(() => window.__lecraft.session.server.game?.state === 'playing', null, { timeout: 25000 });
+  const bw0 = await G(() => { const s = window.__lecraft.session, g = s.server.game; return { parts: g.parts.length, beds: g.beds.filter(Boolean).length, sword: s.player.inventory.slots[0]?.id }; });
+  check('BedWars : 4 équipes de 2, 4 lits, épée de départ', bw0.parts === 8 && bw0.beds === 4 && bw0.sword === 'wooden_sword', JSON.stringify(bw0));
+  await wait(4000);
+  const iron = await G(() => window.__lecraft.session.entities.entities.filter((e) => e.kind === 'item' && e.itemId === 'iron_ingot').length + window.__lecraft.session.player.inventory.count('iron_ingot'));
+  check('BedWars : le générateur produit du fer', iron >= 1, `${iron} lingot(s)`);
+  await G(() => { const s = window.__lecraft.session; s.player.inventory.add({ id: 'iron_ingot', count: 40 }); s.server.game.interact('bw_shop'); });
+  await wait(300);
+  await page.locator('[data-buy="stone_sword"]').click();
+  const bought = await G(() => window.__lecraft.session.player.inventory.count('stone_sword'));
+  check('BedWars : marchand (paiement en fer)', bought === 1, `${bought}`);
+  await shot('11-bedwars-shop');
+  await page.keyboard.press('Escape');
+  await G(() => { const p = window.__lecraft.session.player; p.gameMode = 'creative'; p.body.flying = true; p.body.setPos(3200.5, 90, 40); p.yaw = 0; p.pitch = -0.8; });
+  await wait(40000);
+  const bw = await G(() => { const s = window.__lecraft.session, g = s.server.game; let placed = 0; for (const [k, v] of g.journal) if (v === 0) placed++; return { placed, beds: g.beds.filter(Boolean).length, state: g.state }; });
+  check('BedWars : les bots construisent des ponts', bw.placed >= 6, JSON.stringify(bw));
+  await shot('12-bedwars');
+  await G(() => window.__lecraft.session.server.toHub());
+  await wait(500);
 
   // ---------- Duel ----------
+  await G(() => window.__lecraft.session.server.useItem('compass'));
+  await wait(400);
   await page.locator('[data-game="duels"]').click();
   await wait(1500);
   let st = await net();
