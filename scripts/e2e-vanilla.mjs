@@ -321,7 +321,7 @@ try {
   await page.getByText('Packs de ressources...').click();
   await wait(200);
   await page.locator('.mc-screen').last().locator('input[type=file]').setInputFiles(zipPath);
-  await page.waitForFunction(() => /importées depuis/.test(document.body.innerText), null, { timeout: 20000 });
+  await page.waitForFunction(() => /importés depuis/.test(document.body.innerText), null, { timeout: 20000 });
   const px = await G(() => {
     const g = window.__lecraft, t = g.textures;
     const c = t.tileByName('stone').getContext('2d').getImageData(4, 4, 1, 1).data;

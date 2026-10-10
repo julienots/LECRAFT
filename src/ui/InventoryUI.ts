@@ -329,6 +329,7 @@ export class InventoryUI {
     let t = 0;
     let fired = false;
     let downAt = 0;
+    let released = false;
     d.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -338,7 +339,11 @@ export class InventoryUI {
       downAt = e.timeStamp;
       if (target && !target.take && this.carried) this.drag = { slots: [target], one: e.button === 2 };
       if (e.pointerType === 'mouse') return;
-      t = window.setTimeout(() => {
+      released = false;
+      // le minuteur peut passer avant un relâchement déjà en file (image lente) : on laisse
+      // d'abord passer les événements en attente, puis on vérifie que le doigt est toujours posé
+      t = window.setTimeout(() => (t = window.setTimeout(() => {
+        if (released) return;
         if (this.drag && this.drag.slots.length >= 2) return;
         // appui long sans glisser : clic droit ; s'il y a ensuite un glisser, il dépose un objet par case
         if (this.drag) {
@@ -348,7 +353,7 @@ export class InventoryUI {
         fired = true;
         cb('long', e);
         this.game.platform.haptic('light');
-      }, LONG_MS);
+      }, 0)), LONG_MS);
     });
     const cancel = () => clearTimeout(t);
     d.addEventListener('pointerleave', cancel);
@@ -356,6 +361,7 @@ export class InventoryUI {
     d.addEventListener('pointerup', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      released = true;
       clearTimeout(t);
       if (this.finishDrag()) return;
       if (fired) return;
