@@ -108,7 +108,7 @@ export class Mob extends Entity {
     const dy = p.y - this.y;
     if (d > this.def.attackRange * 1.2 || dy > 2.5 || dy < -2) return;
     const dealt = p.damage(this.def.damage, 'mob', (dx / d) * 5, (dz / d) * 5, this);
-    if (dealt > 0 && this.has('poison') && p.difficulty !== 'easy') p.poisonTimer = Math.max(p.poisonTimer, p.difficulty === 'hard' ? 15 : 7);
+    if (dealt > 0 && this.has('poison') && this.def.key !== 'bee' && p.difficulty !== 'easy') p.poisonTimer = Math.max(p.poisonTimer, p.difficulty === 'hard' ? 15 : 7);
     // zombie momifié : inflige la faim
     if (dealt > 0 && this.def.key === 'husk') p.effects.add('hunger', 140, 0, true, p.effectTarget);
     // squelette wither : effet wither
@@ -241,7 +241,9 @@ export class Mob extends Entity {
     if (this.has('flies')) {
       // vol : maintien d'une altitude au-dessus du sol
       const ground = ctx.world.surfaceBelow(Math.floor(this.x), Math.floor(this.y + 1), Math.floor(this.z));
-      const want = ground + 1 + this.hoverHeight;
+      let want = ground + 1 + this.hoverHeight;
+      // abeille en colère : descend à hauteur du joueur pour piquer (sinon elle reste hors d'atteinte)
+      if (this.def.key === 'bee' && this.anger > 0 && !ctx.player.dead && this.distToPlayer < 8) want = ctx.player.y + 0.6;
       this.body.vy += ((want - this.y) * 2 - this.body.vy) * Math.min(1, dt * 3);
     }
     this.body.step(ctx.world, dt);

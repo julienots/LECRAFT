@@ -309,6 +309,7 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
       - l'ours polaire défend son petit ;
       - la chèvre charge de temps en temps ;
       - l'abeille empoisonne, perd son dard et meurt peu après.
+    - Chaque relation est vérifiée en jeu par `npm run e2e:relations` (20 vérifications).
 
 - **Blocs fonctionnels complets (v2.26)**
   - **Enchantements réels** (22, du Tranchant à l'Infinité) :

@@ -55,7 +55,7 @@ export const HUNTS: Record<string, HuntRule[]> = {
   elder_guardian: [{ prey: ['squid', 'glow_squid', 'axolotl'], water: true }],
   zoglin: [{ prey: 'all' }],
 };
-for (const z of ZOMBIES) HUNTS[z] = [{ prey: ['villager', 'wandering_trader', 'iron_golem', 'snow_golem'] }, { prey: ['turtle'], baby: true }];
+for (const z of ZOMBIES) HUNTS[z] = [{ prey: ['villager', 'wandering_trader', 'iron_golem'] }, { prey: ['turtle'], baby: true }];
 for (const i of ILLAGERS) HUNTS[i] = [{ prey: ['villager', 'wandering_trader', 'iron_golem'] }];
 
 /** Créatures fuies (à moins de 6 blocs, 8 pour les villageois). */
@@ -74,7 +74,8 @@ const NEVER_PREY = new Set(['armor_stand', 'end_crystal', 'ender_dragon', 'withe
 
 type Rel = Mob & { tamed?: boolean };
 
-const mobsOf = (m: Mob): Mob[] => (m as unknown as { spawner: { mobs?: Mob[] } }).spawner.mobs ?? [];
+// créatures présentes (les retirées restent dans la liste jusqu'à la fin de l'image)
+const mobsOf = (m: Mob): Mob[] => ((m as unknown as { spawner: { mobs?: Mob[] } }).spawner.mobs ?? []).filter((o) => !o.removed);
 const canFight = (m: Mob) => m.def.damage > 0 || !!m.def.ranged || !!HUNTS[m.def.key];
 
 function matches(h: HuntRule, hunter: Mob, t: Mob): boolean {
@@ -130,7 +131,8 @@ export function scanRelations(mob: Mob, ctx: GameContext) {
   }
   const hunts = HUNTS[m.def.key];
   if (!hunts || !free || (m.prey && !m.prey.dead)) return;
-  const range = Math.min(16, Math.max(10, m.def.detectionRange));
+  // portée de repérage des cibles : 16 blocs comme le jeu original
+  const range = 16;
   let best: Mob | null = null, bh: HuntRule | null = null, bd = range;
   for (const h of hunts) {
     if (h.chance !== undefined && Math.random() > h.chance) continue;

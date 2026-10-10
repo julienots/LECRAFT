@@ -34,6 +34,16 @@ const center = async (sel) => {
   const b = await page.locator(sel).first().boundingBox();
   return [b.x + b.width / 2, b.y + b.height / 2];
 };
+/** Réévalue `fn` dans la page jusqu'à ce que `ok(valeur)` (rendu logiciel lent : pas de délai fixe). */
+async function poll(fn, arg, ok, ms = 4000) {
+  const t0 = Date.now();
+  let v = await G(fn, arg);
+  while (!ok(v) && Date.now() - t0 < ms) {
+    await wait(150);
+    v = await G(fn, arg);
+  }
+  return v;
+}
 async function tapAt(x, y, id = 1) {
   // toucher bref : horodatages explicites à 60 ms d'écart (l'outil de test attend que chaque événement
   // soit traité ; sur une image lente en rendu logiciel l'écart réel dépasserait l'appui long)
@@ -176,9 +186,8 @@ try {
   const pv = await G(() => window.__lecraft.session.interaction.preview);
   check('Prévisualisation de pose (valide)', !!pv && pv.valid, JSON.stringify(pv));
   await tapAt(457, 206, 5);
-  await wait(300);
-  const placed = pv ? await G((v) => window.__lecraft.session.world.getBlock(v.x, v.y, v.z), pv) : -1;
   const dirtId = await G(() => window.__lecraft.debug.blockId('dirt'));
+  const placed = pv ? await poll((v) => window.__lecraft.session.world.getBlock(v.x, v.y, v.z), pv, (b) => b === dirtId) : -1;
   check('Pose d’un bloc (toucher)', placed === dirtId, `bloc posé : ${placed}`);
   void placeT;
 
@@ -186,8 +195,7 @@ try {
   await G(() => { const inv = window.__lecraft.session.player.inventory; inv.add({ id: 'oak_log', count: 4 }); });
   const [hx, hy] = await center('.mc-hotbar .mc-hslot:nth-child(3)');
   await tapAt(hx, hy, 6);
-  await wait(200);
-  check('Sélection dans la hotbar (toucher)', (await G(() => window.__lecraft.session.player.inventory.selected)) === 2);
+  check('Sélection dans la hotbar (toucher)', (await poll(() => window.__lecraft.session.player.inventory.selected, undefined, (v) => v === 2)) === 2);
 
   // ---------- inventaire à curseur & fabrication ----------
   const slot = (n) => page.locator('.gui .gslot').nth(n);
@@ -297,8 +305,7 @@ try {
   }
   check('IA : un monstre détecte et poursuit le joueur', chase === 'CHASE' || chase === 'ATTACK', `état ${chase}`);
   const hpP0 = await G(() => window.__lecraft.session.player.health);
-  await wait(3500);
-  const hpP1 = await G(() => window.__lecraft.session.player.health);
+  const hpP1 = await poll(() => window.__lecraft.session.player.health, undefined, (h) => h < hpP0, 10000);
   check('Combat : le joueur reçoit des dégâts', hpP1 < hpP0, `PV joueur ${hpP0} → ${hpP1}`);
   await shot('e2e-06-combat');
   await G((id) => { const s = window.__lecraft.session; const m = s.entities.mobs.find((x) => x.id === id); if (m) s.combat.damageMob(m, 999, { kind: 'player', fromPlayer: true }); s.dayCycle.time = 0.2; }, hostile);
