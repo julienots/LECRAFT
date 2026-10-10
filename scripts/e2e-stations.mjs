@@ -268,6 +268,62 @@ try {
   const tech = keys.filter((k) => /^(repeater_on|comparator_on|cake_inner|redstone_dust_line0|piston_head|lightning_rod_on|white_candle_lit|vault_ominous)$/.test(k));
   check('Créatif : états et morceaux de blocs masqués (comme le jeu original)', keys.length > 800 && tech.length === 0 && keys.includes('repeater') && keys.includes('crimson_stem') && keys.includes('white_candle'), `${keys.length} objets ; techniques visibles : ${tech.join(',')}`);
   await shot('07-creative');
+  await G(() => window.__lecraft.closeInventory());
+
+  // ---------- touches du clavier personnalisables ----------
+  await G(() => { window.__lecraft.showSettings(); });
+  await wait(300);
+  await page.getByText('Commandes...', { exact: true }).click();
+  await wait(300);
+  await page.getByText('Touches clavier...', { exact: true }).click();
+  await wait(300);
+  await page.locator('[data-key="forward"]').click();
+  await wait(150);
+  const waiting = await page.locator('[data-key="forward"]').textContent();
+  await page.keyboard.press('KeyL');
+  await wait(200);
+  const bound = await G(() => ({ keys: window.__lecraft.settings.keys, label: document.querySelector('[data-key="forward"]')?.textContent, saved: JSON.parse(localStorage.getItem('lecraft.settings.v1')).keys }));
+  check('Touches clavier : « Avancer » réassigné à L (enregistré)', /Appuyez/.test(waiting ?? '') && bound.keys?.forward === 'KeyL' && /L$/.test(bound.label ?? '') && bound.saved?.forward === 'KeyL', JSON.stringify(bound));
+  await G(() => { const g = window.__lecraft; g.ui.clear(); g.keyboard.enabled = true; });
+  await wait(200);
+  const move = await G(async () => {
+    const g = window.__lecraft;
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyL', bubbles: true }));
+    const l = g.input.moveY;
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyL', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }));
+    const w = g.input.moveY;
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowUp', bubbles: true }));
+    const up = g.input.moveY;
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowUp', bubbles: true }));
+    g.settings.keys = {};
+    g.applySettings(false);
+    return { l, w, up };
+  });
+  check('La nouvelle touche fait avancer (l’ancienne non, les flèches toujours)', move.l === 1 && move.w === 0 && move.up === 1, JSON.stringify(move));
+
+  // ---------- langue ----------
+  const en = await G(async () => {
+    const g = window.__lecraft;
+    g.settings.language = 'en';
+    g.applySettings(false);
+    g.showSettings();
+    await new Promise((r) => setTimeout(r, 300));
+    const texts = [...document.querySelectorAll('.mc-btn span, .mc-title')].map((e) => e.textContent);
+    g.ui.back?.();
+    g.openInventory('hand');
+    await new Promise((r) => setTimeout(r, 300));
+    const p = g.session.player;
+    p.inventory.slots[0] = { id: 'diamond_sword', count: 1 };
+    p.inventory.changed();
+    await new Promise((r) => setTimeout(r, 200));
+    g.closeInventory();
+    g.settings.language = 'fr';
+    g.applySettings(false);
+    return { texts };
+  });
+  check('Langue English : menus traduits', en.texts.includes('Video Settings...') && en.texts.includes('Controls...') && en.texts.includes('Language: English'), en.texts.slice(0, 12).join(' | '));
 } catch (e) {
   check('Exception', false, String(e?.stack ?? e));
 }

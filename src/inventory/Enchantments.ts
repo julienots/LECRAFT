@@ -5,6 +5,7 @@
  * (getDrops), protection (Player.damage), arc (PlayerInteraction.shootBow), butin des
  * créatures (DamageSystem), réparation par l'expérience (Player.addXp).
  */
+import { itemName, language } from '../ui/i18n';
 import type { ItemStack } from './Item';
 import { ItemRegistry } from './ItemRegistry';
 
@@ -79,7 +80,8 @@ export function customName(st: ItemStack | null | undefined): string | null {
 export function enchantLines(st: ItemStack | null | undefined): string[] {
   return Object.entries(enchantsOf(st)).map(([id, l]) => {
     const d = ENCHANT_BY_ID.get(id);
-    return `${d?.name ?? id}${d && d.max === 1 ? '' : ` ${roman(l)}`}`;
+    const name = language() === 'en' ? itemName(id) : d?.name ?? id;
+    return `${name}${d && d.max === 1 ? '' : ` ${roman(l)}`}`;
   });
 }
 

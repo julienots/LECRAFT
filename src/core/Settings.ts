@@ -40,6 +40,10 @@ export interface Settings {
   dynScale?: number;
   /** Multijoueur : pseudo, skin et dernière adresse de serveur saisie. */
   playerName?: string;
+  /** Touches du clavier choisies par le joueur (action → code de touche). */
+  keys?: Partial<Record<import('../input/KeyBindings').KeyAction, string>>;
+  /** Langue de l'interface. */
+  language?: 'fr' | 'en';
   playerSkin?: string;
   servers?: string[];
 }

@@ -3,6 +3,7 @@
  * classique des jeux de blocs (176 px de large, cases de 18 px). Dessinés par le code ;
  * remplacés par les images `gui/container/*.png` d'un pack de ressources s'il est installé.
  */
+import { t as tr } from './i18n';
 import type { TextureManager } from '../render/TextureManager';
 import { drawText, textWidth } from './PixelFont';
 
@@ -205,10 +206,10 @@ export function containerBackground(kind: ContainerKind, title: string, tex: Tex
     drawFigure(ctx, 27 + 8, 9 + 3, tex.skin(skinKey).image as HTMLCanvasElement);
   }
   // libellés
-  const label = (t: string, x: number, y: number) => drawText(ctx, t, x, y - 2, C.label);
+  const label = (s: string, x: number, y: number) => drawText(ctx, tr(s), x, y - 2, C.label);
   if (kind === 'inventory') label('Fabrication', 97, 8);
   else {
-    if (kind === 'furnace' || kind === 'brewing' || kind === 'dispenser') label(title, Math.round((GUI_W - textWidth(title)) / 2), 6);
+    if (kind === 'furnace' || kind === 'brewing' || kind === 'dispenser') label(title, Math.round((GUI_W - textWidth(tr(title))) / 2), 6);
     else if (kind === 'anvil') label(title, 60, 6);
     else label(title, kind === 'table' ? 29 : 8, 6);
     label('Inventaire', 8, py - 12);

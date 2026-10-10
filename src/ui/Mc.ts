@@ -3,6 +3,7 @@
  * boutons cycliques (« Difficulté : Normale »), champs de texte, écrans à titre centré.
  * Les dimensions sont exprimées en pixels d'interface (multipliés par --gs).
  */
+import { t } from './i18n';
 import type { Screen } from './UIManager';
 import { el } from './dom';
 
@@ -14,7 +15,7 @@ export function setWidgetClick(fn: () => void) {
 
 export function mcButton(label: string | Node, onClick: () => void, opts: { w?: number; disabled?: boolean; cls?: string } = {}): HTMLButtonElement {
   const b = el('button', { class: `mc-btn ${opts.cls ?? ''}`.trim(), type: 'button', style: `--w:${opts.w ?? 200}` });
-  b.append(typeof label === 'string' ? el('span', {}, label) : label);
+  b.append(typeof label === 'string' ? el('span', {}, t(label)) : label);
   b.disabled = !!opts.disabled;
   b.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -27,7 +28,7 @@ export function mcButton(label: string | Node, onClick: () => void, opts: { w?: 
 
 export function setLabel(b: HTMLElement, text: string) {
   const span = b.querySelector('span');
-  if (span) span.textContent = text;
+  if (span) span.textContent = t(text);
 }
 
 /** Bouton qui fait défiler des valeurs : « Préfixe : Valeur ». */
@@ -49,7 +50,7 @@ export function mcToggle(prefix: string, on: boolean, onChange: (v: boolean) => 
 /** Curseur : la piste sombre porte le libellé, la poignée se déplace. */
 export function mcSlider(label: (v: number) => string, min: number, max: number, step: number, value: number, onInput: (v: number) => void, w = 150): HTMLElement {
   const handle = el('div', { class: 'mc-handle' });
-  const text = el('span', {}, label(value));
+  const text = el('span', {}, t(label(value)));
   const s = el('div', { class: 'mc-slider', style: `--w:${w}`, role: 'slider', tabindex: '0' }, handle, text);
   const place = () => {
     const f = (value - min) / (max - min || 1);
@@ -65,7 +66,7 @@ export function mcSlider(label: (v: number) => string, min: number, max: number,
     v = Math.min(max, Math.max(min, +v.toFixed(4)));
     if (v !== value) {
       value = v;
-      text.textContent = label(v);
+      text.textContent = t(label(v));
       place();
       onInput(v);
     }
@@ -94,7 +95,7 @@ export function mcSlider(label: (v: number) => string, min: number, max: number,
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       const v = Math.min(max, Math.max(min, value + (e.key === 'ArrowLeft' ? -step : step)));
       value = +v.toFixed(4);
-      text.textContent = label(value);
+      text.textContent = t(label(value));
       place();
       onInput(value);
     }
@@ -109,7 +110,7 @@ export function mcInput(value: string, opts: { placeholder?: string; maxlength?:
 }
 
 export function mcLabel(text: string, cls = ''): HTMLElement {
-  return el('div', { class: `mc-label ${cls}`.trim() }, text);
+  return el('div', { class: `mc-label ${cls}`.trim() }, t(text));
 }
 
 /** Rangée de widgets centrée (espacement de 4 px d'interface entre colonnes). */
@@ -132,7 +133,7 @@ export function mcScreen(opts: { title: string; body: (HTMLElement | null)[]; fo
   const root = el(
     'div',
     { class: `screen mc-screen bg-${opts.bg ?? 'dirt'}` },
-    el('div', { class: 'mc-title' }, opts.title),
+    el('div', { class: 'mc-title' }, t(opts.title)),
     content,
     opts.footer?.length ? el('div', { class: 'mc-footer' }, ...opts.footer) : null,
   );

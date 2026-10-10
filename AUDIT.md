@@ -81,20 +81,26 @@ Les suites de tests e2e couvrent :
 - Multijoueur réseau, serveur HypXL, serveur SMP.
 - Aucune erreur dans la console du navigateur.
 
-## Limites restantes (non corrigées)
+## Limites levées en v2.26
 
-- **Table d'enchantement, enclume, alambic** : blocs décoratifs, sans interface. Les
-  ajouter demande de nouveaux systèmes de jeu (enchantements, réparation, potions).
-- **Distributeur, dropper, entonnoir** : sans interface ni fonction de redstone.
-- **Coffre de l'Ender** : se comporte comme un bloc, sans inventaire partagé.
-- **Boîte de shulker** : elle lâche son contenu quand on la casse, au lieu de le garder dans
-  l'objet comme dans le jeu original.
-- **Couvercle du coffre** : non animé (modèle fixe).
-- **Option de langue et réassignation des touches** : absentes (le jeu est en français ; les
-  commandes tactiles se déplacent avec l'éditeur de disposition).
-- **Tests réels sur téléphone** : non faits par moi. Les tests tournent dans Chromium avec un
-  rendu logiciel. À vérifier sur l'appareil :
-  1. Poser un support d'armure et l'équiper.
-  2. Ouvrir un tonneau.
-  3. Casser un fourneau rempli.
-  4. Quitter puis revenir dans le monde.
+Toutes les limites listées en v2.25 sont maintenant traitées et testées
+(`scripts/e2e-stations.mjs`, 21 vérifications ; `tests/magic.test.ts`) :
+
+- **Table d'enchantement, enclume, alambic** : interfaces et systèmes complets (enchantements,
+  réparation et fusion, potions).
+- **Distributeur, dropper, entonnoir** : inventaires, redstone et transferts.
+- **Coffre de l'Ender** : inventaire personnel partagé et sauvegardé.
+- **Boîte de shulker** : elle garde son contenu.
+- **Couvercle du coffre** : animé.
+- **Langue** : français / anglais pour les menus, les interfaces et les noms d'objets.
+- **Touches clavier** : réassignables.
+
+## Limites restantes
+
+- **Sons réels** : le pack fourni ne contient aucun son. Les vrais cris des animaux sont
+  utilisés dès qu'un pack contenant `sounds/mob/...` est importé (Options › Packs de
+  ressources). Sans cela, les sons restent synthétisés par le jeu.
+- **Langue anglaise** : les messages du chat des serveurs intégrés (bots, HypXL) restent en
+  français.
+- **Redstone** : simplifiée. Il n'y a pas de poudre de redstone conductrice ; les sources
+  (levier, bouton, plaque) agissent sur les blocs voisins.

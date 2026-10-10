@@ -273,6 +273,40 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **Blocs fonctionnels complets (v2.26)**
+  - **Enchantements réels** (22, du Tranchant à l'Infinité) :
+    - **Table d'enchantement** avec bibliothèques, lapis-lazuli et niveaux d'expérience ;
+    - **livres enchantés**, reflet violet, infobulles.
+  - **Enclume** : réparer avec le matériau ou un objet identique, fusionner les
+    enchantements, appliquer un livre, renommer. Le coût est payé en niveaux et l'enclume
+    s'abîme avec l'usage.
+  - **Alambic et 18 potions** :
+    - fioles remplies à l'eau ; verrue du Nether pour la potion étrange, puis les ingrédients ;
+    - redstone pour une durée longue, poudre lumineuse pour le niveau II ;
+    - œil d'araignée fermenté pour l'effet inverse, poudre à canon pour la potion jetable ;
+    - potions bues ou lancées.
+  - **Distributeur et dropper** :
+    - ils se déclenchent sur une impulsion de redstone (levier, bouton, plaque) ;
+    - ils tirent des flèches, lancent des boules de neige et des potions, vident ou
+      remplissent des seaux, amorcent la TNT, allument du feu, ou lâchent l'objet ;
+    - le dropper range l'objet dans le conteneur placé devant.
+  - **Entonnoir** : il aspire les objets posés dessus et le conteneur au-dessus, puis
+    remplit le conteneur en dessous.
+  - **Coffre de l'Ender** : inventaire personnel partagé entre tous les coffres de l'Ender.
+  - **Boîte de shulker** : elle garde son contenu une fois cassée.
+  - **Couvercle de coffre animé**.
+  - **Icônes** :
+    - vrais modèles 3D des blocs à modèle (enclume, chaudron…) ;
+    - textures d'objet du pack pour les variantes ;
+    - les états et morceaux de blocs (« repeater_on », « cake_inner »…) ne sont plus dans
+      l'inventaire créatif.
+  - **Vrais sons** : ceux d'un pack de ressources qui en contient (dossier
+    `sounds/mob/<créature>/`, `dig/`, `step/`, `random/`) remplacent les sons synthétisés,
+    pour chaque créature.
+  - **Distance de rendu par défaut plus grande** (6, 8 ou 12 tronçons selon la qualité,
+    curseur jusqu'à 16).
+  - **Touches du clavier personnalisables** et **langue de l'interface** (Français /
+    English).
 - **Audit et corrections (v2.25)**. Détail complet et tests dans [AUDIT.md](AUDIT.md).
   - **Plus de pertes de données** :
     - les créatures éloignées sont conservées au chargement ;

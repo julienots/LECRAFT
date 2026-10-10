@@ -2,13 +2,14 @@
  * Présentation d'une pile d'objets : nom affiché (nom personnalisé de l'enclume, nom de la
  * potion), clé d'icône (couleur de la potion) et reflet d'enchantement.
  */
+import { itemName, language } from '../ui/i18n';
 import type { ItemStack } from './Item';
 import { ItemRegistry } from './ItemRegistry';
 import { customName, isEnchanted } from './Enchantments';
 import { potionColor, potionName, potionOf } from './Potions';
 
 export function stackName(st: ItemStack): string {
-  return customName(st) ?? (potionOf(st) ? potionName(st) : ItemRegistry.get(st.id)?.name ?? st.id);
+  return customName(st) ?? (potionOf(st) && language() === 'fr' ? potionName(st) : itemName(st.id, ItemRegistry.get(st.id)?.name));
 }
 
 /** Clé d'icône : « potion#rrggbb » pour les potions (liquide teinté), sinon l'identifiant. */

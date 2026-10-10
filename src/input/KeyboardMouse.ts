@@ -1,5 +1,6 @@
 import type { Settings } from '../core/Settings';
 import type { InputState } from './InputState';
+import { actionOf, keysFor, type KeyAction } from './KeyBindings';
 
 /** Contrôles clavier/souris (développement sur ordinateur, claviers Bluetooth, ChromeOS). */
 export class KeyboardMouse {
@@ -11,6 +12,8 @@ export class KeyboardMouse {
   enabled = true;
   /** Échap = bouton retour Android. */
   onBack: () => void = () => {};
+  /** Prochaine touche capturée (réassignation des touches). */
+  capture: ((code: string) => void) | null = null;
 
   constructor(private canvas: HTMLElement, private input: InputState, private settings: Settings) {
     const kd = (e: KeyboardEvent) => this.onKey(e, true);
@@ -45,22 +48,36 @@ export class KeyboardMouse {
     );
   }
 
+  /** Une des touches de l'action est-elle enfoncée ? (touches personnalisables) */
+  private held(a: KeyAction) {
+    return keysFor(a, this.settings.keys).some((c) => this.keys.has(c));
+  }
+
   private update() {
-    const k = this.keys;
-    this.input.moveY = (k.has('KeyW') || k.has('KeyZ') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
-    this.input.moveX = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('KeyQ') || k.has('ArrowLeft') ? 1 : 0);
-    this.input.jump = k.has('Space');
+    this.input.moveY = (this.held('forward') ? 1 : 0) - (this.held('back') ? 1 : 0);
+    this.input.moveX = (this.held('right') ? 1 : 0) - (this.held('left') ? 1 : 0);
+    this.input.jump = this.held('jump');
   }
 
   private onKey(e: KeyboardEvent, down: boolean) {
     if (!this.enabled) return;
     if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
     const code = e.code;
+    // réassignation en cours (écran « Touches clavier ») : la touche est capturée
+    if (down && this.capture) {
+      e.preventDefault();
+      const cb = this.capture;
+      this.capture = null;
+      cb(code);
+      return;
+    }
+    const custom = this.settings.keys;
+    const action = actionOf(code, custom) ?? (e.key === '/' ? 'command' : null);
     if (down) {
       if (this.keys.has(code)) return;
       this.keys.add(code);
       this.input.mode = 'keyboard';
-      if (code === 'KeyW' || code === 'KeyZ' || code === 'ArrowUp') {
+      if (action === 'forward') {
         const now = performance.now();
         if (now - this.lastForward < 280) {
           this.tapSprint = true;
@@ -68,34 +85,27 @@ export class KeyboardMouse {
         }
         this.lastForward = now;
       }
-      if (code === 'KeyE' || code === 'KeyI') this.input.push('inventory');
-      else if (code === 'ShiftLeft' || code === 'ShiftRight') this.input.sneak = true;
-      else if (code === 'ControlLeft') this.input.sprint = true;
-      else if (code === 'F5') {
+      if (action === 'inventory') this.input.push('inventory');
+      else if (action === 'sneak') this.input.sneak = true;
+      else if (action === 'sprint') this.input.sprint = true;
+      else if (action === 'perspective' || action === 'debug') {
         e.preventDefault();
-        this.input.push('perspective');
-      } else if (code === 'F3') {
+        this.input.push(action);
+      } else if (action === 'drop') this.input.push('drop');
+      else if (action === 'chat' || action === 'command') {
         e.preventDefault();
-        this.input.push('debug');
-      } else if (code === 'KeyG' || code === 'KeyQ') this.input.push('drop');
-      else if (code === 'KeyT' || code === 'Enter') {
-        e.preventDefault();
-        this.input.push('chat');
-      } else if (code === 'Slash' || e.key === '/') {
-        e.preventDefault();
-        this.input.push('command');
-      }
-      else if (/^Digit[1-9]$/.test(code)) this.input.push(`slot:${Number(code.slice(5)) - 1}`);
-      else if (code === 'KeyF') this.input.push('use');
-      else if (code === 'Escape' || code === 'KeyP') this.onBack();
+        this.input.push(action);
+      } else if (/^Digit[1-9]$/.test(code)) this.input.push(`slot:${Number(code.slice(5)) - 1}`);
+      else if (action === 'use') this.input.push('use');
+      else if (action === 'pause') this.onBack();
     } else {
       this.keys.delete(code);
-      if (this.tapSprint && (code === 'KeyW' || code === 'KeyZ' || code === 'ArrowUp')) {
+      if (this.tapSprint && action === 'forward') {
         this.tapSprint = false;
-        if (!this.keys.has('ControlLeft')) this.input.sprint = false;
+        if (!this.held('sprint')) this.input.sprint = false;
       }
-      if (code === 'ShiftLeft' || code === 'ShiftRight') this.input.sneak = false;
-      else if (code === 'ControlLeft') this.input.sprint = false;
+      if (action === 'sneak') this.input.sneak = this.held('sneak');
+      else if (action === 'sprint') this.input.sprint = this.tapSprint;
     }
     this.update();
   }

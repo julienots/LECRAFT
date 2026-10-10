@@ -3,7 +3,8 @@ import { applyQuality } from '../core/Settings';
 import type { QualityLevel, Difficulty } from '../core/Config';
 import type { Screen } from './UIManager';
 import { button, el } from './dom';
-import { mcButton, mcCycle, mcGrid, mcLabel, mcRow, mcScreen, mcSlider, mcToggle } from './Mc';
+import { mcButton, mcCycle, mcGrid, mcLabel, mcRow, mcScreen, mcSlider, mcToggle, setLabel } from './Mc';
+import { KEY_ACTIONS, keyLabel, keysFor } from '../input/KeyBindings';
 import { importPack, loadInstalledPack, removePack, declineBundledPack } from '../render/ResourcePack';
 import { MusicLibrary, moodFromPath } from '../audio/Music';
 import { importAddon, listAddons, removeAddon, setAddonEnabled } from '../addons/AddonManager';
@@ -21,6 +22,13 @@ export function settingsScreen(game: Game): Screen {
     body: [
       mcGrid(
         mcSlider((v) => `Champ de vision : ${v === 70 ? 'Normal' : v >= 100 ? 'Quake Pro' : v}`, 30, 110, 1, s.fov, (v) => ((s.fov = v), apply())),
+        mcCycle<'fr' | 'en'>('Langue', [['fr', 'Français'], ['en', 'English']], s.language ?? 'fr', (v) => {
+          s.language = v;
+          apply();
+          // les écrans ouverts sont reconstruits dans la nouvelle langue
+          game.ui.back();
+          game.ui.push(settingsScreen(game));
+        }),
         mcCycle<Difficulty>('Difficulté', [['peaceful', 'Paisible'], ['easy', 'Facile'], ['normal', 'Normale'], ['hard', 'Difficile']], s.difficulty, (v) => {
           s.difficulty = v;
           if (game.session) game.session.meta.difficulty = v;
@@ -158,6 +166,7 @@ function controlsScreen(game: Game): Screen {
         }),
         mcButton('Disposition des boutons...', () => editLayout(game), { w: 150 }),
         mcButton('Réinitialiser la disposition', () => (game.touch.resetLayout(), apply()), { w: 150 }),
+        mcButton('Touches clavier...', () => game.ui.push(keysScreen(game)), { w: 150 }),
       ),
     ],
     footer: [mcButton('Terminé', () => game.ui.back())],
@@ -315,6 +324,54 @@ function addonsScreen(game: Game): Screen {
       file,
     ],
     footer: [mcButton('Terminé', () => game.ui.back())],
+  });
+}
+
+/** Touches du clavier : toucher une action puis appuyer sur la nouvelle touche. */
+function keysScreen(game: Game): Screen {
+  const s = game.settings;
+  const rows: HTMLButtonElement[] = [];
+  const label = (a: (typeof KEY_ACTIONS)[number]) => `${a.name} : ${keysFor(a.id, s.keys).filter((k) => !(a.fixed ?? []).includes(k)).map(keyLabel).join(' / ')}`;
+  const refresh = () => rows.forEach((b, i) => setLabel(b, label(KEY_ACTIONS[i])));
+  for (const a of KEY_ACTIONS) {
+    const b = mcButton(label(a), () => {
+      setLabel(b, '> Appuyez sur une touche <');
+      game.keyboard.capture = (code) => {
+        // Échap annule ; une touche déjà prise est libérée de son ancienne action
+        if (code !== 'Escape') {
+          s.keys = { ...(s.keys ?? {}) };
+          for (const o of KEY_ACTIONS) if (o.id !== a.id && keysFor(o.id, s.keys).includes(code) && !(o.fixed ?? []).includes(code)) delete s.keys[o.id];
+          s.keys[a.id] = code;
+          game.applySettings(false);
+        }
+        refresh();
+      };
+    }, { w: 150 });
+    b.dataset.key = a.id;
+    rows.push(b);
+  }
+  return mcScreen({
+    title: 'Touches clavier',
+    bg: game.session ? 'dim' : 'dirt',
+    list: true,
+    body: [mcGrid(...rows)],
+    footer: [
+      mcRow(
+        mcButton('Réinitialiser les touches', () => {
+          s.keys = {};
+          game.applySettings(false);
+          refresh();
+        }, { w: 150 }),
+        mcButton('Terminé', () => {
+          game.keyboard.capture = null;
+          game.ui.back();
+        }, { w: 150 }),
+      ),
+    ],
+    onBack: () => {
+      game.keyboard.capture = null;
+      return false;
+    },
   });
 }
 

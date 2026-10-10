@@ -1,4 +1,5 @@
 import { detectDevice, AdaptiveQuality, type DeviceInfo } from './DeviceProfiler';
+import { setLanguage } from '../ui/i18n';
 import { serversScreen, openGameSelector, openShop } from '../ui/ServerUI';
 import { SMP_NAME, SMP_SEED, SMP_WORLD_ID } from '../server/SmpServer';
 import { SERVER_NAME, type ServerNetwork } from '../server/ServerNetwork';
@@ -76,6 +77,7 @@ export class Game {
     const { settings, fresh } = loadSettings(this.device.level);
     this.settings = settings;
     if (fresh) applyQuality(this.settings, this.device.level);
+    setLanguage(this.settings.language);
     const canvas = root.querySelector('#game-canvas') as HTMLCanvasElement;
     this.textures = new TextureManager();
     this.renderer = new Renderer(canvas, this.textures, this.settings);
@@ -701,6 +703,7 @@ export class Game {
   // ---------- qualité ----------
   applySettings(remesh = false) {
     saveSettings(this.settings);
+    setLanguage(this.settings.language);
     this.loop.fpsCap = this.settings.fpsCap;
     this.renderer.camera.fov = this.settings.fov;
     this.renderer.camera.updateProjectionMatrix();

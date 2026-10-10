@@ -1,4 +1,5 @@
 import type { Game } from '../core/Game';
+import { language, t as tr } from './i18n';
 import { hasGlint, iconKey, stackName } from '../inventory/StackInfo';
 import { customName, enchantLines, isEnchanted } from '../inventory/Enchantments';
 import { potionLine, potionOf } from '../inventory/Potions';
@@ -643,11 +644,12 @@ export class InventoryUI {
     const inside = (st.meta?.items as (ItemStack | null)[] | undefined)?.filter((x): x is ItemStack => !!x) ?? [];
     for (const it of inside.slice(0, 5)) lines.push([`${stackName(it)} x${it.count}`, '#aaaaaa']);
     if (inside.length > 5) lines.push([`et ${inside.length - 5} autres…`, '#aaaaaa']);
-    if (def.food) lines.push([`Nourriture : +${def.food.hunger}`, '#aaaaaa']);
-    if (def.damage && def.tool) lines.push([`${def.damage} de dégâts d'attaque`, '#00aa00']);
-    if (def.armor) lines.push([`+${def.armor.defense} d'armure`, '#5555ff']);
-    if (st.durability !== undefined) lines.push([`Durabilité : ${st.durability} / ${ItemRegistry.maxDurability(st.id)}`, '#aaaaaa']);
-    if (def.description) lines.push([def.description, '#aaaaaa']);
+    const en = language() === 'en';
+    if (def.food) lines.push([en ? `Food: +${def.food.hunger}` : `Nourriture : +${def.food.hunger}`, '#aaaaaa']);
+    if (def.damage && def.tool) lines.push([en ? `${def.damage} Attack Damage` : `${def.damage} de dégâts d'attaque`, '#00aa00']);
+    if (def.armor) lines.push([en ? `+${def.armor.defense} Armor` : `+${def.armor.defense} d'armure`, '#5555ff']);
+    if (st.durability !== undefined) lines.push([en ? `Durability: ${st.durability} / ${ItemRegistry.maxDurability(st.id)}` : `Durabilité : ${st.durability} / ${ItemRegistry.maxDurability(st.id)}`, '#aaaaaa']);
+    if (def.description && !en) lines.push([def.description, '#aaaaaa']);
     for (const [t, c] of lines) this.tooltip.append(el('div', {}, pixelText(t, { color: c, shadow: '#3f3f3f', px: this.scale })));
     const r = sl.el!.getBoundingClientRect();
     this.tooltip.style.display = 'block';
@@ -710,7 +712,7 @@ export class InventoryUI {
       tabs.append(b);
     }
     side.append(tabs);
-    const name = TABS.find((t) => t.key === memory.tab)!.name;
+    const name = tr(TABS.find((t) => t.key === memory.tab)!.name);
     const label = pixelText(name, { color: '#404040', cls: 'gui-abs' });
     label.style.left = '8px';
     label.style.top = '26px';
@@ -814,7 +816,7 @@ export class InventoryUI {
     if (sig === this.bookSig) return;
     this.bookSig = sig;
     list.replaceChildren();
-    if (!shown.length) list.append(pixelText('Aucune recette', { color: '#606060' }));
+    if (!shown.length) list.append(pixelText(tr('Aucune recette'), { color: '#606060' }));
     for (const { r, ok } of shown) {
       const cell = el('div', { class: `brecipe${ok ? '' : ' miss'}`, 'data-item': r.result.item });
       this.stackHTML(cell, { id: r.result.item, count: r.result.count });

@@ -1,5 +1,5 @@
 import type { HudApi } from '../core/GameContext';
-import { hasGlint, iconKey } from '../inventory/StackInfo';
+import { hasGlint, iconKey, stackName } from '../inventory/StackInfo';
 import { setMcText } from './McText';
 import type { Session } from '../core/Session';
 import type { TextureManager } from '../render/TextureManager';
@@ -350,7 +350,7 @@ export class HUD implements HudApi {
       this.selEl.style.setProperty('--i', String(sel));
       this.lastSelected = sel;
       const st = p.inventory.slots[sel];
-      this.itemName.textContent = st ? ItemRegistry.get(st.id)?.name ?? st.id : '';
+      this.itemName.textContent = st ? stackName(st) : '';
       this.itemName.style.opacity = '1';
       this.nameTimer = 2;
     }
