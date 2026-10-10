@@ -228,7 +228,8 @@ try {
 
   // ---------- re-départ : le bloc témoin du Nether est toujours là ----------
   await G((f) => { const p = window.__lecraft.session.player; p.body.setPos(f.x0 + 4, f.y0 + 1, f.z0 + 3); }, frame);
-  await wait(300);
+  // hors du portail : le blocage d'arrivée se lève au tick suivant (lent en rendu logiciel)
+  await page.waitForFunction(() => !window.__lecraft.session.portalBlocked, null, { timeout: 10000 });
   await G((f) => { const p = window.__lecraft.session.player; p.body.setPos(f.x0 + 1, f.y0 + 1, f.z0 + 0.5); }, frame);
   await page.waitForFunction(() => window.__lecraft.session?.dimension === 'nether', null, { timeout: 30000 });
   await playing();

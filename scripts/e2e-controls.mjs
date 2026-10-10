@@ -19,7 +19,10 @@ const pad = (state = {}) => G((st) => {
   const buttons = Array.from({ length: 17 }, (_, i) => ({ pressed: !!st.b?.includes(i), value: st.b?.includes(i) ? 1 : 0 }));
   gp.virtual = { axes: st.axes ?? [0, 0, 0, 0], buttons };
 }, state);
-const tap = async (b, ms = 250) => { await pad({ b: [b] }); await wait(ms); await pad(); await wait(ms); };
+// la manette est lue à chaque image : on garde l'appui (et le relâchement) au moins deux images,
+// même quand le rendu logiciel est lent
+const frames = () => G(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+const tap = async (b, ms = 250) => { await pad({ b: [b] }); await wait(ms); await frames(); await pad(); await wait(ms); await frames(); };
 const A = 0, B = 1, X = 2, Y = 3, LB = 4, RB = 5, LT = 6, RT = 7, START = 9, UP = 12;
 /** Amène le curseur virtuel sur un élément (au stick gauche, comme un joueur). */
 const cursorTo = async (selector, text) => {
@@ -128,8 +131,12 @@ try {
   await G(() => { window.__lecraft.session.player.pitch = 0; });
   const y0 = await G(() => window.__lecraft.session.player.y);
   await pad({ b: [A] });
-  await wait(200);
-  const y1 = await G(() => window.__lecraft.session.player.y);
+  // plus haute position atteinte pendant l'appui (indépendant de la cadence des images)
+  let y1 = y0;
+  for (let t = 0; t < 15 && y1 <= y0 + 0.3; t++) {
+    await wait(100);
+    y1 = Math.max(y1, await G(() => window.__lecraft.session.player.y));
+  }
   await pad();
   await wait(600);
   check('A : sauter', y1 > y0 + 0.3, `${y0.toFixed(2)} → ${y1.toFixed(2)}`);
