@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyPotion } from '../inventory/Potions';
 import type { GameContext } from '../core/GameContext';
 import { raycastBlocks } from '../util/Raycast';
 import { Entity } from './Entity';
@@ -28,6 +29,8 @@ export interface ProjectileDef {
   /** Objet lâché à la fin de sa course (œil de l'Ender), avec une probabilité. */
   dropItem?: string;
   dropChance?: number;
+  /** Potion jetable : potion appliquée autour du point d'impact (4 blocs). */
+  splash?: string;
 }
 
 /** Projectiles connus (add-ons et équivalents des projectiles du jeu de référence). */
@@ -77,6 +80,9 @@ export class Projectile extends Entity {
   stuck = false;
   /** Flèche tirée par le joueur en survie : récupérable une fois plantée. */
   pickable = false;
+  /** Arc enchanté : recul supplémentaire (Frappe) et flèche enflammée (Flamme). */
+  punch = 0;
+  flame = false;
   /** Lanceur (API de script : composant projectile.owner). */
   owner: import('../scripting/Hooks').Actor | null = null;
   constructor(readonly type: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, public damage: number, public fromPlayer: boolean, readonly def?: ProjectileDef) {
@@ -181,6 +187,21 @@ export class Projectile extends Entity {
       return;
     }
     this.removed = true;
+    if (d.splash) {
+      // potion jetable : effet sur tout ce qui est à moins de 4 blocs (plus faible au bord)
+      const ents = (ctx as unknown as { entities?: { mobs: import('./Mob').Mob[] } }).entities;
+      const p = ctx.player;
+      const dp = Math.hypot(p.x - this.x, p.y + 1 - this.y, p.z - this.z);
+      if (dp < 4) applyPotion(p.effects, p.effectTarget, d.splash, 1 - dp / 4);
+      for (const m of ents?.mobs ?? []) {
+        const dm = Math.hypot(m.x - this.x, m.y + m.body.height / 2 - this.y, m.z - this.z);
+        if (dm >= 4 || m.dead) continue;
+        applyPotion(m.effects, { heal: (n) => (m.health = Math.min(m.maxHealth, m.health + n)), hurt: (n) => ctx.combat.damageMob(m, n, { kind: 'environment' }), hp: () => m.health, body: m.body }, d.splash, 1 - dm / 4);
+      }
+      ctx.particles.burst('magic', this.x, this.y + 0.3, this.z, 40);
+      ctx.audio.play('glass_break', { x: this.x, y: this.y, z: this.z });
+      return;
+    }
     if (d.explode) {
       const s = ctx as unknown as { explosions?: { explode(c: GameContext, e: unknown, x: number, y: number, z: number, p: number): void }; entities?: unknown };
       s.explosions?.explode(ctx, s.entities, this.x, this.y, this.z, d.explode);

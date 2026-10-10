@@ -1,4 +1,5 @@
 import type { HudApi } from '../core/GameContext';
+import { hasGlint, iconKey } from '../inventory/StackInfo';
 import { setMcText } from './McText';
 import type { Session } from '../core/Session';
 import type { TextureManager } from '../render/TextureManager';
@@ -277,7 +278,9 @@ export class HUD implements HudApi {
       const st = inv.slots[i];
       slot.innerHTML = '';
       if (!st) continue;
-      slot.append(el('img', { src: this.textures.iconURL(st.id), alt: '' }));
+      const src = this.textures.iconURL(iconKey(st));
+      slot.append(el('img', { src, alt: '' }));
+      if (hasGlint(st)) slot.append(el('div', { class: 'glint hud', style: `-webkit-mask-image:url(${src});mask-image:url(${src})` }));
       if (st.count > 1) slot.append(el('span', { class: 'mc-count' }, String(st.count)));
       const max = ItemRegistry.maxDurability(st.id);
       if (st.durability !== undefined && max > 0 && st.durability < max) {

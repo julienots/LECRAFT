@@ -1,5 +1,6 @@
 import { DIFFICULTY_DAMAGE, type Difficulty, type GameMode } from '../core/Config';
-import { Inventory } from '../inventory/Inventory';
+import { enchLevel, protectionFactor } from '../inventory/Enchantments';
+import { ARMOR_SLOTS, Inventory } from '../inventory/Inventory';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { clamp } from '../util/math';
 import { PlayerPhysics, EYE_HEIGHT, SNEAK_EYE_HEIGHT } from './PlayerPhysics';
@@ -15,6 +16,7 @@ export interface PlayerSnapshot {
   xp: number; level: number; spawn: [number, number, number];
   inventory: ReturnType<Inventory['serialize']>; flying: boolean;
   effects?: ActiveEffect[]; tags?: string[]; dynProps?: Record<string, unknown>;
+  enderChest?: (import('../inventory/Item').ItemStack | null)[]; enchantSeed?: number;
 }
 
 /**
@@ -42,6 +44,10 @@ export class Player {
   air = 300; // ticks
   xp = 0;
   level = 0;
+  /** Graine des propositions de la table d'enchantement (change après chaque enchantement). */
+  enchantSeed = (Math.random() * 2 ** 31) | 0;
+  /** Coffre de l'Ender : inventaire personnel partagé par tous les coffres de l'Ender. */
+  readonly enderChest = new Inventory(27);
   spawn: [number, number, number] = [0.5, 80, 0.5];
   dead = false;
   invulnerable = 0; // secondes d'invincibilité restantes
@@ -110,6 +116,11 @@ export class Player {
       const def = this.inventory.defense();
       dmg *= 1 - Math.min(0.8, def * 0.04);
       this.inventory.damageArmor(1);
+    }
+    // enchantements de protection de l'armure (Protection, Chute amortie…)
+    if (source !== 'void' && source !== 'starve' && source !== 'drown') {
+      const kind = source === 'fall' ? 'fall' : source === 'lava' || source === 'fire' ? 'fire' : source === 'explosion' ? 'explosion' : source === 'projectile' ? 'projectile' : 'any';
+      dmg *= 1 - protectionFactor(ARMOR_SLOTS.map((k) => this.inventory.armor[k]), kind);
     }
     dmg *= this.effects.damageMul(source === 'lava' || source === 'fire');
     dmg = Math.max(0, Math.round(dmg * 2) / 2);
@@ -187,6 +198,17 @@ export class Player {
   }
 
   addXp(n: number) {
+    // Raccommodage : l'expérience répare d'abord un objet porté ou tenu (2 points par point d'XP)
+    for (const st of [this.inventory.selectedStack, ...ARMOR_SLOTS.map((k) => this.inventory.armor[k])]) {
+      if (n <= 0 || !st || st.durability === undefined || !enchLevel(st, 'mending')) continue;
+      const max = ItemRegistry.maxDurability(st.id);
+      const fix = Math.min(max - st.durability, n * 2);
+      if (fix <= 0) continue;
+      st.durability += fix;
+      n -= Math.ceil(fix / 2);
+      this.inventory.changed();
+    }
+    if (n <= 0) return;
     this.xp += n;
     while (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;
@@ -247,7 +269,8 @@ export class Player {
     }
     // air
     if (this.body.headInWater && !this.effects.level('water_breathing')) {
-      this.air -= dt * 20;
+      // Apnée (casque) : l'air baisse moins vite
+      this.air -= (dt * 20) / (1 + enchLevel(this.inventory.armor.head, 'respiration'));
       if (this.air <= -20) {
         this.air = 0;
         this.damage(2, 'drown');
@@ -289,6 +312,7 @@ export class Player {
       health: this.health, hunger: this.hunger, saturation: this.saturation, exhaustion: this.exhaustion, air: this.air,
       xp: this.xp, level: this.level, spawn: this.spawn, inventory: this.inventory.serialize(), flying: this.body.flying,
       effects: this.effects.serialize(), tags: [...this.tags], dynProps: Object.fromEntries(this.dynProps),
+      enderChest: this.enderChest.serialize().slots, enchantSeed: this.enchantSeed,
     };
   }
 
@@ -305,6 +329,8 @@ export class Player {
     this.level = s.level ?? 0;
     this.spawn = s.spawn;
     this.inventory.load(s.inventory);
+    if (s.enderChest) this.enderChest.load({ slots: s.enderChest });
+    if (s.enchantSeed !== undefined) this.enchantSeed = s.enchantSeed;
     this.body.flying = !!s.flying && this.creative;
     this.effects.load(s.effects);
     this.tags.clear();

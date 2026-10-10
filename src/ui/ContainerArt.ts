@@ -6,11 +6,11 @@
 import type { TextureManager } from '../render/TextureManager';
 import { drawText, textWidth } from './PixelFont';
 
-export type ContainerKind = 'inventory' | 'table' | 'furnace' | 'chest';
+export type ContainerKind = 'inventory' | 'table' | 'furnace' | 'chest' | 'enchant' | 'anvil' | 'brewing' | 'dispenser' | 'hopper';
 
 export const GUI_W = 176;
 export function guiHeight(kind: ContainerKind, rows = 3) {
-  return kind === 'chest' ? 114 + rows * 18 : 166;
+  return kind === 'chest' ? 114 + rows * 18 : kind === 'hopper' ? 133 : 166;
 }
 
 const C = {
@@ -126,6 +126,11 @@ const PACK_FILES: Record<ContainerKind, string> = {
   table: 'gui/container/crafting_table.png',
   furnace: 'gui/container/furnace.png',
   chest: 'gui/container/generic_54.png',
+  enchant: 'gui/container/enchanting_table.png',
+  anvil: 'gui/container/anvil.png',
+  brewing: 'gui/container/brewing_stand.png',
+  dispenser: 'gui/container/dispenser.png',
+  hopper: 'gui/container/hopper.png',
 };
 
 /** Positions vanilla des cases (coin de l'objet 16x16). */
@@ -148,11 +153,11 @@ export const LAYOUT = {
 
 /** Position de l'inventaire du joueur (rangée principale) selon l'interface. */
 export function playerInvY(kind: ContainerKind, rows = 3) {
-  return kind === 'chest' ? 103 + (rows - 4) * 18 : 84;
+  return kind === 'chest' ? 103 + (rows - 4) * 18 : kind === 'hopper' ? 51 : 84;
 }
 
 /** Construit l'image de fond d'une interface (canvas 1:1 en pixels d'interface). */
-export function containerBackground(kind: ContainerKind, title: string, tex: TextureManager, rows = 3, skinKey = 'player'): HTMLCanvasElement {
+export function containerBackground(kind: ContainerKind, title: string, tex: TextureManager, rows = 3, skinKey = 'player', extraSlots: [number, number, number][] = []): HTMLCanvasElement {
   const h = guiHeight(kind, rows);
   const c = document.createElement('canvas');
   c.width = GUI_W;
@@ -189,9 +194,11 @@ export function containerBackground(kind: ContainerKind, title: string, tex: Tex
       drawSlot(ctx, L.input[0], L.input[1]);
       drawSlot(ctx, L.fuel[0], L.fuel[1]);
       drawSlot(ctx, L.result[0], L.result[1], 26);
-    } else {
+    } else if (kind === 'chest') {
       for (let r = 0; r < rows; r++) for (let i = 0; i < 9; i++) drawSlot(ctx, 8 + i * 18, 18 + r * 18);
     }
+    // interfaces des stations (table d'enchantement, enclume, alambic, distributeur, entonnoir)
+    for (const [x, y, size] of extraSlots) drawSlot(ctx, x, y, size);
   }
   if (kind === 'inventory') {
     rect(ctx, 27, 9, 49, 70, '#000000');
@@ -201,7 +208,8 @@ export function containerBackground(kind: ContainerKind, title: string, tex: Tex
   const label = (t: string, x: number, y: number) => drawText(ctx, t, x, y - 2, C.label);
   if (kind === 'inventory') label('Fabrication', 97, 8);
   else {
-    if (kind === 'furnace') label(title, Math.round((GUI_W - textWidth(title)) / 2), 6);
+    if (kind === 'furnace' || kind === 'brewing' || kind === 'dispenser') label(title, Math.round((GUI_W - textWidth(title)) / 2), 6);
+    else if (kind === 'anvil') label(title, 60, 6);
     else label(title, kind === 'table' ? 29 : 8, 6);
     label('Inventaire', 8, py - 12);
   }

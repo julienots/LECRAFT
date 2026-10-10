@@ -1,4 +1,5 @@
 import { ItemRegistry } from './ItemRegistry';
+import { unbreakingSaves } from './Enchantments';
 import type { ArmorSlot, ItemStack } from './Item';
 
 export const HOTBAR_SIZE = 9;
@@ -142,6 +143,9 @@ export class Inventory {
   damageSelected(amount = 1): boolean {
     const s = this.selectedStack;
     if (!s || s.durability === undefined) return false;
+    // Solidité : chaque point d'usure peut être évité
+    for (let i = amount; i > 0; i--) if (unbreakingSaves(s)) amount--;
+    if (amount <= 0) return false;
     s.durability -= amount;
     if (s.durability <= 0) {
       this.slots[this.selected] = null;
@@ -185,6 +189,7 @@ export class Inventory {
     for (const k of ARMOR_SLOTS) {
       const s = this.armor[k];
       if (!s || s.durability === undefined) continue;
+      if (unbreakingSaves(s, true)) continue;
       s.durability -= amount;
       if (s.durability <= 0) this.armor[k] = null;
     }

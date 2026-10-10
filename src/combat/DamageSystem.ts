@@ -1,4 +1,5 @@
 import type { DamageInfo, GameContext } from '../core/GameContext';
+import { enchLevel } from '../inventory/Enchantments';
 import { ArmorStand } from '../entities/ArmorStand';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { Mob, EntitySpawner } from '../entities/Mob';
@@ -42,7 +43,7 @@ export class DamageSystem {
       m.iframes = 0.45;
       m.hurtTimer = 0.3;
       ctx.particles.burst('damage', m.x, m.y + m.body.height * 0.7, m.z, Math.min(10, 3 + Math.round(dmg)));
-      ctx.audio.play(m.def.sounds.hurt || 'hurt', { x: m.x, y: m.y, z: m.z });
+      ctx.audio.mobSound ? ctx.audio.mobSound(m.def.key, 'hurt', m.def.sounds.hurt || 'hurt', { x: m.x, y: m.y, z: m.z }) : ctx.audio.play(m.def.sounds.hurt || 'hurt', { x: m.x, y: m.y, z: m.z });
       return dmg;
     }
     // Wither : invulnérable pendant sa charge ; son armure arrête les projectiles
@@ -102,6 +103,7 @@ export class DamageSystem {
     if (m instanceof Boss) m.onHit(ctx);
     hooks.afterHurt?.(m, dmg, ev);
     if (m.health <= 0) this.kill(m, src);
+    else if (ctx.audio.mobSound) ctx.audio.mobSound(m.def.key, 'hurt', m.def.sounds.hurt, { x: m.x, y: m.y, z: m.z });
     else ctx.audio.play(m.def.sounds.hurt, { x: m.x, y: m.y, z: m.z });
     return dmg;
   }
@@ -119,7 +121,8 @@ export class DamageSystem {
     m.health = 0;
     hooks.died?.(m, this.eventOf(src));
     m.ai.fsm.set(AIState.DEAD);
-    ctx.audio.play(m.def.sounds.death, { x: m.x, y: m.y, z: m.z });
+    if (ctx.audio.mobSound) ctx.audio.mobSound(m.def.key, 'death', m.def.sounds.death, { x: m.x, y: m.y, z: m.z });
+    else ctx.audio.play(m.def.sounds.death, { x: m.x, y: m.y, z: m.z });
     ctx.particles.burst('smoke', m.x, m.y + m.body.height / 2, m.z, 12);
     // support d'armure : rend son armure et disparaît aussitôt (pas d'animation de mort)
     if (m instanceof ArmorStand) {
@@ -128,9 +131,11 @@ export class DamageSystem {
       ctx.particles.burst('dust', m.x, m.y + 1, m.z, 16);
     }
     if (!m.baby) {
+      // Butin : jusqu'à +1 objet par niveau, et plus de chances pour les objets rares
+      const looting = src.fromPlayer || src.kind === 'player' ? enchLevel(ctx.player.inventory.selectedStack, 'looting') : 0;
       for (const d of m.def.drops) {
-        if (d.chance !== undefined && Math.random() > d.chance) continue;
-        const n = d.min + Math.floor(Math.random() * (d.max - d.min + 1));
+        if (d.chance !== undefined && Math.random() > d.chance + looting * 0.01) continue;
+        const n = d.min + Math.floor(Math.random() * (d.max - d.min + 1)) + (looting ? Math.floor(Math.random() * (looting + 1)) : 0);
         if (n > 0) this.spawner.spawnItem(d.item, n, m.x, m.y + 0.5, m.z);
       }
     }

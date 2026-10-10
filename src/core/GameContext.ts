@@ -36,6 +36,8 @@ export interface ParticleFx {
 export interface SoundFx {
   play(name: string, opts?: { x?: number; y?: number; z?: number; volume?: number; pitch?: number }): void;
   blockSound(kind: 'break' | 'place' | 'step' | 'hit', material: string, x?: number, y?: number, z?: number): void;
+  /** Cri d'une créature : son du pack (sounds/mob/…) s'il existe, sinon `fallback` (synthétisé). */
+  mobSound?(mobKey: string, kind: 'idle' | 'hurt' | 'death', fallback: string, opts?: { x?: number; y?: number; z?: number; volume?: number }): void;
 }
 export interface HudApi {
   toast(text: string, kind?: 'info' | 'achievement' | 'warn'): void;

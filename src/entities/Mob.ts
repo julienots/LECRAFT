@@ -14,7 +14,7 @@ import type { ProjectileKind } from './Projectile';
 export interface EntitySpawner {
   spawnProjectile(kind: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, damage: number, fromPlayer: boolean, def?: ProjectileDef): Projectile;
   spawnMob(key: string, x: number, y: number, z: number, opts?: { baby?: boolean; persistent?: boolean }): Mob | null;
-  spawnItem(id: string, count: number, x: number, y: number, z: number, durability?: number): void;
+  spawnItem(id: string, count: number, x: number, y: number, z: number, durability?: number, meta?: Record<string, unknown>): void;
   modelFor(key: string, scale: number): MobModel;
 }
 
@@ -26,6 +26,9 @@ export class Mob extends Entity {
   readonly kind = 'mob' as const;
   health: number;
   dead = false;
+  /** Secondes restantes en feu (Aura de feu, Flamme). */
+  fireTime = 0;
+  private fireTick = 0;
   deathTimer = 0;
   hurtTimer = 0;
   iframes = 0;
@@ -214,6 +217,16 @@ export class Mob extends Entity {
     this.body.step(ctx.world, dt);
     // dégâts de contact (lave, cactus)
     if (this.body.inLava && !this.has('fireImmune')) ctx.combat.damageMob(this, 4 * dt * 2, { kind: 'environment', fire: true });
+    // en feu (Aura de feu, flèche enflammée) : 1 point par seconde, l'eau éteint
+    if (this.fireTime > 0) {
+      this.fireTime = this.body.inWater ? 0 : this.fireTime - dt;
+      this.fireTick -= dt;
+      if (this.fireTick <= 0 && this.fireTime > 0) {
+        this.fireTick = 1;
+        ctx.combat.damageMob(this, 1, { kind: 'environment', fire: true });
+      }
+      if (Math.random() < dt * 12) ctx.particles.burst('fire', this.x, this.y + this.body.height * (0.3 + Math.random() * 0.6), this.z, 1);
+    }
     // brûlure au soleil
     if (this.has('burnsInSun') && ctx.dayCycle.daylight > 0.8 && !ctx.raining() && !this.body.inWater) {
       const l = ctx.world.getLight(Math.floor(this.x), Math.floor(this.y + this.body.height), Math.floor(this.z));
@@ -232,7 +245,10 @@ export class Mob extends Entity {
     this.idleSoundTimer -= dt;
     if (this.idleSoundTimer <= 0) {
       this.idleSoundTimer = 6 + Math.random() * 14;
-      if (this.distToPlayer < 20) ctx.audio.play(this.def.sounds.idle, { x: this.x, y: this.y, z: this.z, volume: 0.6 });
+      if (this.distToPlayer < 20) {
+        if (ctx.audio.mobSound) ctx.audio.mobSound(this.def.key, 'idle', this.def.sounds.idle, { x: this.x, y: this.y, z: this.z, volume: 0.6 });
+        else ctx.audio.play(this.def.sounds.idle, { x: this.x, y: this.y, z: this.z, volume: 0.6 });
+      }
     }
   }
 

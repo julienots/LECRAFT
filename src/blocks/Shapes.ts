@@ -75,6 +75,9 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
       return [rotate([7, 3, 0, 9, 13, 2], (meta - 1) & 3)];
     }
     case 'chest':
+      // couvercle ouvert (bit 128) : seul le corps est dans le maillage, le couvercle animé est
+      // dessiné à part (render/ChestLids.ts)
+      if (meta & 128) return [[1, 0, 1, 15, 10, 15]];
       // corps 14×14×14 et loquet 2×4×1 en relief sur la façade (comme le modèle du jeu original)
       return [[1, 0, 1, 15, 14, 15], rotate([7, 7, 0, 9, 11, 1], f)];
     case 'farmland':

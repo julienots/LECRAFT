@@ -28,6 +28,8 @@ export class ItemEntity extends Entity {
   private brightness = 1;
   private mergeTimer = Math.random() * 0.5;
 
+  /** Données de la pile (enchantements, potion, nom, contenu d'une boîte de shulker). */
+  meta?: Record<string, unknown>;
   constructor(public itemId: string, public count: number, x: number, y: number, z: number, private mesh: THREE.Mesh, public durability?: number) {
     super(0.125, 0.25);
     this.body.setPos(x, y, z);
@@ -72,12 +74,12 @@ export class ItemEntity extends Entity {
   /** Fusionne avec une pile identique voisine (même objet, sans usure), comme le jeu original. */
   tryMerge(others: ItemEntity[], dt: number) {
     this.mergeTimer -= dt;
-    if (this.mergeTimer > 0 || this.collecting > 0 || this.removed || this.durability !== undefined) return;
+    if (this.mergeTimer > 0 || this.collecting > 0 || this.removed || this.durability !== undefined || this.meta) return;
     this.mergeTimer = 0.5;
     const max = ItemRegistry.maxStack(this.itemId);
     if (this.count >= max) return;
     for (const o of others) {
-      if (o === this || o.removed || o.collecting > 0 || o.itemId !== this.itemId || o.durability !== undefined) continue;
+      if (o === this || o.removed || o.collecting > 0 || o.itemId !== this.itemId || o.durability !== undefined || o.meta) continue;
       if (Math.abs(o.body.x - this.body.x) > 0.75 || Math.abs(o.body.z - this.body.z) > 0.75 || Math.abs(o.body.y - this.body.y) > 0.25) continue;
       // la plus grosse pile absorbe la plus petite
       const [big, small] = this.count >= o.count ? [this, o] : [o, this];

@@ -42,7 +42,7 @@ export interface SavedMob {
   effects?: import('./Effects').ActiveEffect[];
   yaw?: number;
   /** Support d'armure : pièces portées. */
-  armor?: Partial<Record<ArmorSlot, { id: string; durability?: number }>>;
+  armor?: Partial<Record<ArmorSlot, import('../inventory/Item').ItemStack>>;
 }
 
 /**
@@ -156,10 +156,11 @@ export class EntityManager implements EntitySpawner {
     return m;
   }
 
-  spawnItem(id: string, count: number, x: number, y: number, z: number, durability?: number) {
+  spawnItem(id: string, count: number, x: number, y: number, z: number, durability?: number, meta?: Record<string, unknown>) {
     if (!ItemRegistry.has(id) || count <= 0) return;
     if (this.dropRedirect) return this.dropRedirect(id, count, durability);
     const e = new ItemEntity(id, count, x, y, z, this.ctx.droppedItem(id), durability);
+    if (meta) e.meta = meta;
     this.entities.push(e);
     this.group.add(e.object3d);
   }
@@ -246,6 +247,7 @@ export class EntityManager implements EntitySpawner {
         if (!it.removed && it.collecting <= 0 && it.pickupDelay <= 0 && !p.dead && it.inPickupRange(p.x, p.y, p.z, p.body.height)) {
           const stack = makeStack(it.itemId, it.count);
           if (it.durability !== undefined) stack.durability = it.durability;
+          if (it.meta) stack.meta = it.meta;
           const rest = p.inventory.add(stack);
           if (rest < it.count) {
             ctx.audio.play('pop', { volume: 0.5, pitch: 0.9 + Math.random() * 0.4 });
@@ -331,7 +333,9 @@ export class EntityManager implements EntitySpawner {
       if (pr.x > a - 0.1 && pr.x < d + 0.1 && pr.y > b && pr.y < f && pr.z > c - 0.1 && pr.z < g + 0.1) {
         const v = Math.hypot(pr.body.vx, pr.body.vz) || 1;
         if (pr.owner === e) continue;
-        if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: true, knockX: (pr.body.vx / v) * 4, knockZ: (pr.body.vz / v) * 4, itemId: pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
+        if (pr.flame && !(e as Mob).has('fireImmune')) (e as Mob).fireTime = Math.max((e as Mob).fireTime, 5);
+        const kbk = 4 + pr.punch * 6;
+        if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: true, knockX: (pr.body.vx / v) * kbk, knockZ: (pr.body.vz / v) * kbk, itemId: pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
         if (pr.type === 'frost_bolt') (e as Mob).slowTimer = 3;
         if (pr.def) {
           const m = e as Mob;

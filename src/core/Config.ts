@@ -37,7 +37,7 @@ export interface QualityProfile {
 
 export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
   LOW: {
-    renderDistance: 4,
+    renderDistance: 6,
     simulationDistance: 2,
     pixelRatio: 1,
     maxParticles: 150,
@@ -51,7 +51,7 @@ export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
     foliageAnimation: false,
   },
   MEDIUM: {
-    renderDistance: 6,
+    renderDistance: 8,
     simulationDistance: 3,
     pixelRatio: 1,
     maxParticles: 400,
@@ -65,7 +65,7 @@ export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
     foliageAnimation: true,
   },
   HIGH: {
-    renderDistance: 10,
+    renderDistance: 12,
     simulationDistance: 4,
     pixelRatio: 1,
     maxParticles: 900,

@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { ChestLids } from '../render/ChestLids';
+import { Machines } from '../world/Machines';
+import { tickBrewing } from '../crafting/Brewing';
+import type { BrewingState } from '../crafting/Brewing';
 import type { Game } from './Game';
 import type { GameContext, StatsApi } from './GameContext';
 import { CHUNK_SIZE, QUALITY_PROFILES, SEA_LEVEL, TICK_DT, WORLD_HEIGHT, type QualityProfile } from './Config';
@@ -44,6 +48,7 @@ export interface DimState {
   chests: WorldState['chests'];
   spawners: Record<string, number>;
   furnaces?: Record<string, FurnaceState>;
+  brewing?: Record<string, BrewingState>;
   mobs: SavedMob[];
 }
 import { clamp } from '../util/math';
@@ -74,6 +79,7 @@ export interface WorldState {
   fuel?: number;
   gamerules?: Partial<GameRules>;
   furnaces?: Record<string, FurnaceState>;
+  brewing?: Record<string, BrewingState>;
   mobs: SavedMob[];
   /** Dimension où se trouve le joueur (les champs coffres/fourneaux/créatures la concernent). */
   dimension?: Dimension;
@@ -228,17 +234,18 @@ export class Session implements GameContext {
     this.highlight = new BlockHighlight(game.textures);
     this.held = new HeldItem(game.textures, `player_${game.settings.playerSkin ?? 'steve'}`);
     this.explosions = new Explosions(game.textures);
+    this.chestLids = new ChestLids(game.textures);
     this.falling = new FallingBlocks(game.textures);
     this.ticker.onFall = (x, y, z, id) => this.falling.spawn(this, x, y, z, id);
     this.dropped = new DroppedItemModels(game.textures, (id) => this.iconTexture(id));
-    this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group);
+    this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group, this.chestLids.group);
     this.controller = new PlayerController(this.player, game.input, game.settings);
     this.controller.onStep = (below) => {
       if (below > 0) this.audio.blockSound('step', BlockRegistry.get(below).sound, this.player.x, this.player.y, this.player.z);
     };
     this.controller.onJump = () => this.audio.play('jump', { volume: 0.4 });
     this.interaction = new PlayerInteraction(this, game.input, this.entities, {
-      openStation: (k, x, y, z) => game.openInventory(k === 'crafting' ? 'table' : 'furnace', { x, y, z }),
+      openStation: (k, x, y, z) => game.openInventory(k === 'crafting' ? 'table' : k, { x, y, z }),
       openChest: (x, y, z) => (this.netClient ? void this.netClient.requestChest(x, y, z).then(() => game.openInventory('chest', { x, y, z })) : game.openInventory('chest', { x, y, z })),
       useCompass: (t) => this.useCompass(t),
       primeTnt: (x, y, z) => this.explosions.prime(this, x, y, z),
@@ -525,13 +532,14 @@ export class Session implements GameContext {
     if (s.weather) this.weather.load(s.weather);
     for (const [k, slots] of Object.entries(s.chests ?? {})) {
       const [x, y, z] = k.split(',').map(Number);
-      this.world.getChest(x, y, z)!.load({ slots });
+      this.world.getChest(x, y, z, true, slots.length)!.load({ slots });
     }
     this.savedSpawners = s.spawners ?? {};
     for (const b of s.defeatedBosses ?? []) this.defeatedBosses.add(b);
     if (s.progression) this.progression.load(s.progression);
     Object.assign(this.gamerules, s.gamerules ?? {});
     for (const [k, f] of Object.entries(s.furnaces ?? {})) this.world.furnaces.set(k, f);
+    for (const [k, b] of Object.entries(s.brewing ?? {})) this.world.brewing.set(k, b);
     if (s.mobs) this.pendingMobs = s.mobs;
     for (const [k, v] of Object.entries(s.scripting?.dynProps ?? {})) this.worldProps.set(k, v);
     this.scoreboard.load(s.scripting?.scoreboard);
@@ -549,11 +557,16 @@ export class Session implements GameContext {
   private pendingMobs: SavedMob[] | null = null;
   /** Minuteries à annuler en quittant le monde. */
   private timers = new Set<ReturnType<typeof setTimeout>>();
+  /** Distributeurs, droppers, entonnoirs. */
+  readonly machines = new Machines();
+  /** Couvercles animés des coffres ouverts. */
+  readonly chestLids: ChestLids;
   private disposed = false;
 
   snapshot(): WorldState {
     const chests: WorldState['chests'] = {};
-    for (const [k, inv] of this.world.chests) if (inv.slots.some((x) => x)) chests[k] = inv.serialize().slots;
+    // inventaires non vides, et entonnoirs / distributeurs même vides (ils restent actifs)
+    for (const [k, inv] of this.world.chests) if (inv.slots.some((x) => x) || inv.size !== 27) chests[k] = inv.serialize().slots;
     const spawners: Record<string, number> = { ...this.savedSpawners };
     for (const [k, s] of this.world.specials) if (s.spawned) spawners[k] = s.spawned;
     return {
@@ -566,6 +579,7 @@ export class Session implements GameContext {
       defeatedBosses: [...this.defeatedBosses],
       progression: this.progression.serialize(),
       furnaces: Object.fromEntries(this.world.furnaces),
+      brewing: Object.fromEntries(this.world.brewing),
       gamerules: { ...this.gamerules },
       // créatures pas encore réapparues (chunks non chargés) : conservées telles quelles
       mobs: [...this.entities.serialize(), ...(this.pendingMobs ?? [])],
@@ -583,6 +597,8 @@ export class Session implements GameContext {
     this.smp?.save();
     // une sauvegarde précédente ratée ne doit pas bloquer celle-ci
     if (this.saving) await this.saving.catch(() => {});
+    // couvercles refermés : la méta enregistrée des coffres reste normale
+    this.chestLids.closeAll(this.world);
     const list = this.chunks.collectUnsaved();
     const versions = list.map((c) => c.version);
     const chunks = list.map((c) => ({ cx: c.cx, cz: c.cz, blocks: c.blocks.slice(), meta: c.meta.slice() }));
@@ -885,7 +901,7 @@ export class Session implements GameContext {
   throwStack(s: ItemStack) {
     const p = this.player;
     const [, , , dx, dy, dz] = this.interaction.eye();
-    this.entities.spawnItem(s.id, s.count, p.x + dx * 0.8, p.y + p.eyeHeight - 0.3, p.z + dz * 0.8, s.durability);
+    this.entities.spawnItem(s.id, s.count, p.x + dx * 0.8, p.y + p.eyeHeight - 0.3, p.z + dz * 0.8, s.durability, s.meta);
     const it = this.entities.entities[this.entities.entities.length - 1];
     it.body.vx = dx * 6;
     it.body.vy = dy * 6 + 2;
@@ -906,6 +922,8 @@ export class Session implements GameContext {
     // invité : liquides, cultures et gravité sont simulés par l'hôte
     if (!this.meta.remote) this.ticker.tick(this);
     this.tickFurnaces(dt);
+    this.tickBrewing(dt);
+    if (!this.meta.remote) this.machines.update(this, dt);
     this.explosions.update(this, this.entities, dt);
     // fonctions « tick » des add-ons
     for (const f of this.game.addonTickFunctions) execute(this, `function ${f}`, () => {}, 0, undefined, true);
@@ -1009,6 +1027,18 @@ export class Session implements GameContext {
     });
   }
 
+  /** Alambics : infusion (20 s), son et bulles à la fin. */
+  private tickBrewing(dt: number) {
+    for (const [k, b] of this.world.brewing) {
+      if (!b.ingredient && b.time <= 0) continue;
+      if (tickBrewing(b, dt)) {
+        const [x, y, z] = k.split(',').map(Number);
+        this.audio.play('fizz', { x: x + 0.5, y: y + 0.5, z: z + 0.5, volume: 0.6 });
+        this.particles.burst('magic', x + 0.5, y + 0.9, z + 0.5, 10);
+      }
+    }
+  }
+
   /** Fourneaux : cuisson et bascule allumé/éteint du bloc (en conservant l'orientation). */
   private tickFurnaces(dt: number) {
     for (const [k, f] of this.world.furnaces) {
@@ -1022,6 +1052,7 @@ export class Session implements GameContext {
   }
 
   private updateView(dt: number) {
+    this.chestLids.update(this.world, dt, this.dayCycle.daylight);
     const game = this.game;
     const r = game.renderer;
     const p = this.player;
@@ -1160,11 +1191,11 @@ export class Session implements GameContext {
     if (!graved && (p.difficulty === 'normal' || p.difficulty === 'hard') && !this.gamerules.keepInventory) {
       for (let i = 0; i < p.inventory.size; i++) {
         const s = p.inventory.slots[i];
-        if (s) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability);
+        if (s) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability, s.meta);
       }
       for (const k of ['head', 'chest', 'legs', 'feet'] as const) {
         const s = p.inventory.armor[k];
-        if (s) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability);
+        if (s) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability, s.meta);
       }
       p.inventory.clear();
       const lost = Math.floor(p.level / 2);
@@ -1348,6 +1379,8 @@ export class Session implements GameContext {
     this.highlight.dispose();
     this.held.dispose();
     this.explosions.dispose();
+    this.scene.remove(this.chestLids.group);
+    this.chestLids.dispose();
     this.falling.clear();
     this.shadowTexture.dispose();
     this.iconTex.forEach((t) => t.dispose());

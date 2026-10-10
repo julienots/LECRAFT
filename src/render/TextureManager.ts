@@ -563,12 +563,21 @@ export class TextureManager implements SkinProvider {
   iconCanvas(itemId: string): HTMLCanvasElement {
     let c = this.iconCanvasCache.get(itemId);
     if (c) return c;
+    // potion : « potion#rrggbb » → fiole avec le liquide teinté
+    const hashAt = itemId.indexOf('#');
+    if (hashAt > 0) {
+      c = this.potionIcon(itemId.slice(0, hashAt), itemId.slice(hashAt));
+      this.iconCanvasCache.set(itemId, c);
+      return c;
+    }
     c = document.createElement('canvas');
     c.width = c.height = 32;
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     const def = ItemRegistry.get(itemId);
-    const packImg = def && this.view?.first(...(ITEM_PATHS[itemId] ?? []), `item/${def.packTexture ?? itemId}.png`);
+    // variantes de blocs (bougie allumée, rail activé, répéteur alimenté…) : texture d'objet de base
+    const base = itemId.replace(/_(lit|on|off|powered|active|inactive|unlit|triggered|crafting|ejecting|ominous)$/, '');
+    const packImg = def && this.view?.first(...(ITEM_PATHS[itemId] ?? []), `item/${def.packTexture ?? itemId}.png`, ...(base !== itemId ? [`item/${base}.png`] : []));
     if (def && packImg) {
       const data = this.view!.imageData(packImg, 16);
       const tint = def.armor?.material === 'leather' || itemId.startsWith('leather_') ? hex('#a06540') : null;
@@ -611,7 +620,9 @@ export class TextureManager implements SkinProvider {
     } else if (def && 'block' in def.icon) {
       const block = BlockRegistry.byName(def.icon.block);
       const tn = (i: number) => TileRegistry.names[i] ?? '';
-      if (this.flatIcon(block)) {
+      if (block.render === 'model' && block.visuals?.length && !block.shape) {
+        this.modelIcon(ctx, block);
+      } else if (this.flatIcon(block)) {
         const ti = block.metaTiles ? block.metaTiles[block.metaTiles.length - 1] : block.faceTiles[block.shape === 'door' ? 2 : 0];
         ctx.drawImage(this.tile(ti, this.tintFor(block.key, tn(ti))), 0, 0, 32, 32);
       } else {
@@ -643,6 +654,83 @@ export class TextureManager implements SkinProvider {
     }
     this.iconCanvasCache.set(itemId, c);
     return c;
+  }
+
+  /**
+   * Icône d'un bloc à modèle (enclume, chaudron, bougie allumée…) : vraie géométrie du modèle
+   * vue en perspective isométrique comme dans l'inventaire du jeu original (faces sud, est et
+   * dessus), chaque face texturée par une transformation affine, ombrée selon son orientation.
+   * Les petits modèles sont agrandis pour remplir la case.
+   */
+  private modelIcon(ctx: CanvasRenderingContext2D, block: { key: string; visuals?: { quads: { p: number[]; uv: number[]; tile: number }[] }[] }) {
+    const quads = block.visuals![0].quads;
+    const s = 14 / 16, k = 7 / 16;
+    const proj = (x: number, y: number, z: number): [number, number] => [x * s + (16 - z) * s, x * k - (16 - z) * k + (16 - y)];
+    type Q = { pts: [number, number][]; uv: number[]; tile: number; depth: number; shade: number };
+    const list: Q[] = [];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const q of quads) {
+      const P = (i: number) => [q.p[i * 3], q.p[i * 3 + 1], q.p[i * 3 + 2]];
+      const a = P(0), b = P(1), c = P(3);
+      // normale (produit vectoriel) : faces tournées vers l'observateur seulement
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      if (n[0] * 0.6 + n[1] * 0.8 + n[2] * 0.6 <= 0.0001) continue;
+      const len = Math.hypot(n[0], n[1], n[2]) || 1;
+      const shade = n[1] / len > 0.7 ? 0 : Math.abs(n[0] / len) > Math.abs(n[2] / len) ? 0.42 : 0.25;
+      const pts = [0, 1, 2, 3].map((i) => proj(q.p[i * 3], q.p[i * 3 + 1], q.p[i * 3 + 2]));
+      for (const [x, y] of pts) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+      let depth = 0;
+      for (let i = 0; i < 4; i++) depth += q.p[i * 3] + q.p[i * 3 + 1] + q.p[i * 3 + 2];
+      list.push({ pts, uv: q.uv, tile: q.tile, depth, shade });
+    }
+    if (!list.length) return;
+    list.sort((a, b) => a.depth - b.depth);
+    // mise à l'échelle : un modèle plein garde la taille d'un cube, un petit modèle est agrandi
+    const w = maxX - minX, h = maxY - minY;
+    const sc = Math.min(2.6, 28 / Math.max(w, h, 1));
+    const ox = 16 - ((minX + maxX) / 2) * sc, oy = 16 - ((minY + maxY) / 2) * sc;
+    for (const q of list) {
+      const P = q.pts.map(([x, y]) => [ox + x * sc, oy + y * sc]);
+      const T = [0, 1, 3].map((i) => [q.uv[i * 2], 16 - q.uv[i * 2 + 1]]);
+      // transformation affine texture → écran (coins 0, 1 et 3)
+      const du1 = T[1][0] - T[0][0], dv1 = T[1][1] - T[0][1], du2 = T[2][0] - T[0][0], dv2 = T[2][1] - T[0][1];
+      const det = du1 * dv2 - du2 * dv1;
+      if (Math.abs(det) < 1e-6) continue;
+      const ex1 = P[1][0] - P[0][0], ey1 = P[1][1] - P[0][1], ex2 = P[3][0] - P[0][0], ey2 = P[3][1] - P[0][1];
+      const a = (ex1 * dv2 - ex2 * dv1) / det, c = (ex2 * du1 - ex1 * du2) / det;
+      const b = (ey1 * dv2 - ey2 * dv1) / det, d = (ey2 * du1 - ey1 * du2) / det;
+      const e = P[0][0] - a * T[0][0] - c * T[0][1], f = P[0][1] - b * T[0][0] - d * T[0][1];
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(P[0][0], P[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(P[i][0], P[i][1]);
+      ctx.closePath();
+      ctx.clip();
+      ctx.setTransform(a, b, c, d, e, f);
+      const tex = this.tile(q.tile, this.tintFor(block.key, TileRegistry.names[q.tile] ?? ''));
+      let img: CanvasImageSource = tex;
+      if (q.shade > 0) {
+        // face ombrée : copie assombrie de la tuile (seulement ses pixels visibles)
+        const t = document.createElement('canvas');
+        t.width = tex.width;
+        t.height = tex.height;
+        const tc = t.getContext('2d')!;
+        tc.drawImage(tex, 0, 0);
+        tc.globalCompositeOperation = 'source-atop';
+        tc.fillStyle = `rgba(0,0,0,${q.shade})`;
+        tc.fillRect(0, 0, t.width, t.height);
+        img = t;
+      }
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0, 16, 16);
+      ctx.restore();
+    }
   }
 
   private drawSprite(ctx: CanvasRenderingContext2D, name: string, colors: string[]) {
@@ -685,6 +773,48 @@ export class TextureManager implements SkinProvider {
   }
 
   /** URL data de l'icône (mise en cache) pour l'interface DOM. */
+  /** Icône de potion : fiole du pack + calque du liquide teinté (ou liquide repeint sans pack). */
+  private potionIcon(base: string, color: string): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const ctx = c.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    const bottle = this.view?.get(`item/${base}.png`);
+    const overlay = this.view?.get('item/potion_overlay.png');
+    const rgb = hex(color);
+    if (bottle && overlay) {
+      ctx.drawImage(bottle, 0, 0, 32, 32);
+      const od = this.view!.imageData(overlay, 16);
+      const d = od.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = (d[i] * rgb[0]) / 255;
+        d[i + 1] = (d[i + 1] * rgb[1]) / 255;
+        d[i + 2] = (d[i + 2] * rgb[2]) / 255;
+      }
+      const tmp = document.createElement('canvas');
+      tmp.width = tmp.height = 16;
+      tmp.getContext('2d')!.putImageData(od, 0, 0);
+      ctx.drawImage(tmp, 0, 0, 32, 32);
+      return c;
+    }
+    // sans pack : la fiole dessinée, liquide (moitié basse) recoloré
+    ctx.drawImage(this.iconCanvas(base), 0, 0);
+    const img = ctx.getImageData(0, 0, 32, 32);
+    const d = img.data;
+    for (let y = 14; y < 30; y++)
+      for (let x = 6; x < 26; x++) {
+        const i = (y * 32 + x) * 4;
+        if (d[i + 3] < 128) continue;
+        const l = (d[i] + d[i + 1] + d[i + 2]) / 765;
+        if (l < 0.18 || l > 0.85) continue;
+        d[i] = rgb[0] * (0.6 + l * 0.6);
+        d[i + 1] = rgb[1] * (0.6 + l * 0.6);
+        d[i + 2] = rgb[2] * (0.6 + l * 0.6);
+      }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  }
+
   iconURL(itemId: string): string {
     let u = this.iconCache.get(itemId);
     if (!u) {

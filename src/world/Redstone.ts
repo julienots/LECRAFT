@@ -70,6 +70,14 @@ export function updatePowerAround(world: World, x: number, y: number, z: number,
       for (let dx = -2; dx <= 2; dx++) {
         const px = x + dx, py = y + dy, pz = z + dz;
         const id = world.getBlock(px, py, pz);
+        // distributeur, dropper, entonnoir : bit 8 = alimenté (front montant : tir ; entonnoir bloqué)
+        const it = id > 0 ? BlockRegistry.get(id).interact : undefined;
+        if (it === 'dispenser' || it === 'hopper') {
+          const m = world.getMeta(px, py, pz);
+          const p = poweredAt(world, px, py, pz);
+          if (p !== ((m & 8) !== 0)) world.setBlock(px, py, pz, id, p ? m | 8 : m & ~8, false);
+          continue;
+        }
         if (!isOpenable(id)) continue;
         // une seule mise à jour par porte (moitié basse)
         if (kind(id) === 'door' && world.getMeta(px, py, pz) & 8) continue;

@@ -1,4 +1,5 @@
 import type { DamageInfo, GameContext } from '../core/GameContext';
+import { bonusDamage, enchLevel, isEnchanted } from '../inventory/Enchantments';
 import { hooks } from '../scripting/Hooks';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { Mob } from '../entities/Mob';
@@ -34,15 +35,19 @@ export class CombatSystem {
     const p = ctx.player;
     const stack = p.inventory.selectedStack;
     const def = stack ? ItemRegistry.get(stack.id) : undefined;
-    const base = Math.max(0, (def?.damage ?? 1) + p.effects.attackBonus());
+    const base = Math.max(0, (def?.damage ?? 1) + p.effects.attackBonus() + bonusDamage(stack, m.def.key));
     this.cooldown = def?.attackCooldown ?? 0.4;
     this.swing = 1;
     const crit = !p.body.onGround && p.body.vy < -1 && !p.body.inWater;
     const dx = m.x - p.x, dz = m.z - p.z, d = Math.hypot(dx, dz) || 1;
-    const kb = stack?.id === 'golem_mace' ? 14 : p.sprinting ? 9 : 5;
+    const kb = (stack?.id === 'golem_mace' ? 14 : p.sprinting ? 9 : 5) + enchLevel(stack, 'knockback') * 6;
     const dealt = this.damage.damageMob(m, base, { kind: 'player', itemId: stack?.id, knockX: (dx / d) * kb, knockZ: (dz / d) * kb, fromPlayer: true, crit });
     hooks.hitEntity?.(m, stack ?? null);
     if (dealt > 0) {
+      // Aura de feu : la créature brûle (4 s par niveau)
+      const fa = enchLevel(stack, 'fire_aspect');
+      if (fa && !m.has('fireImmune')) m.fireTime = Math.max(m.fireTime, 4 * fa);
+      if (isEnchanted(stack)) ctx.particles.burst('magic', m.x, m.y + m.body.height * 0.6, m.z, 6);
       ctx.audio.play(crit ? 'crit' : 'hit', { x: m.x, y: m.y, z: m.z });
       // étincelles beiges du coup critique (comme le jeu original)
       if (crit) ctx.particles.burst('crit', m.x, m.y + m.body.height * 0.6, m.z, 16);

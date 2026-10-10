@@ -44,6 +44,8 @@ export interface ItemDef {
   rare?: boolean;
   /** Bonus de dégâts contre certaines créatures. */
   bonusVs?: Record<string, number>;
+  /** Absent de l'inventaire créatif (états et morceaux de blocs : « repeater_on », « cake_inner »…). */
+  hidden?: boolean;
   /** Onglet de l'inventaire créatif. */
   tab?: 'building' | 'nature' | 'functional' | 'tools' | 'combat' | 'food' | 'ingredients';
   /** Nom de texture dans un pack de ressources (sinon = clé). */

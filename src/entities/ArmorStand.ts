@@ -7,7 +7,7 @@
 import { AIState } from '../ai/StateMachine';
 import type { GameContext } from '../core/GameContext';
 import type { MobDef } from '../data/mobs';
-import type { ArmorSlot } from '../inventory/Item';
+import type { ArmorSlot, ItemStack } from '../inventory/Item';
 import { Mob, type EntitySpawner } from './Mob';
 
 export const ARMOR_STAND_DEF: MobDef = {
@@ -21,7 +21,7 @@ export const ARMOR_SLOTS: ArmorSlot[] = ['head', 'chest', 'legs', 'feet'];
 
 export class ArmorStand extends Mob {
   /** Pièces portées (id d'objet et usure). */
-  armor: Partial<Record<ArmorSlot, { id: string; durability?: number }>> = {};
+  armor: Partial<Record<ArmorSlot, ItemStack>> = {};
   constructor(x: number, y: number, z: number, spawner: EntitySpawner) {
     super(ARMOR_STAND_DEF, -1, x, y, z, spawner, IDLE);
     this.persistent = true;
@@ -35,7 +35,7 @@ export class ArmorStand extends Mob {
   dropExtra() {
     for (const s of ARMOR_SLOTS) {
       const it = this.armor[s];
-      if (it) this.spawner.spawnItem(it.id, 1, this.x, this.y + 0.8, this.z, it.durability);
+      if (it) this.spawner.spawnItem(it.id, 1, this.x, this.y + 0.8, this.z, it.durability, it.meta);
     }
     this.armor = {};
   }

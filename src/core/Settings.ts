@@ -109,6 +109,13 @@ export function loadSettings(fallbackQuality: QualityLevel): { settings: Setting
       if (parsed.renderDistance === undefined || parsed.renderDistance < p.renderDistance) settings.renderDistance = p.renderDistance;
       (settings as Settings & { gfxV?: number }).gfxV = 2;
     }
+    // v2.26 : distances de vue par défaut plus grandes (4/6/10 → 6/8/12) ; une distance choisie
+    // par le joueur (différente de l'ancien défaut) est conservée
+    if ((parsed.gfxV ?? 0) < 3) {
+      const old: Record<string, number> = { LOW: 4, MEDIUM: 6, HIGH: 10 };
+      if (parsed.renderDistance === old[settings.quality]) settings.renderDistance = QUALITY_PROFILES[settings.quality].renderDistance;
+      (settings as Settings & { gfxV?: number }).gfxV = 3;
+    }
     return { settings, fresh: false };
   } catch {
     return { settings: def, fresh: true };

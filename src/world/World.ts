@@ -1,4 +1,6 @@
 import { newFurnace, type FurnaceState } from '../crafting/CraftingSystem';
+import type { ItemStack } from '../inventory/Item';
+import { newBrewing, type BrewingState } from '../crafting/Brewing';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
 import { CHUNK_SIZE, WORLD_HEIGHT } from '../core/Config';
 import { Emitter } from '../core/Events';
@@ -45,6 +47,8 @@ export class World {
   readonly chests = new Map<string, Inventory>();
   /** Fourneaux (entités de bloc) : contenu et progression de cuisson. */
   readonly furnaces = new Map<string, FurnaceState>();
+  /** Alambics (fioles, ingrédient, poudre de blaze, infusion en cours). */
+  readonly brewing = new Map<string, BrewingState>();
   readonly specials = new Map<string, SpecialEntry>();
 
   constructor(readonly seed: number) {}
@@ -138,8 +142,15 @@ export class World {
       // lâchés par le code qui casse le bloc (joueur, explosion) ; l'état est retiré ici
       const kind = BlockRegistry.get(prev).interact;
       const furnaceLike = (b: number) => b === B.FURNACE || b === B.LIT_FURNACE;
-      if (kind === 'chest') this.chests.delete(`${x},${y},${z}`);
+      if (kind === 'chest' || kind === 'dispenser' || kind === 'hopper') this.chests.delete(`${x},${y},${z}`);
+      if (kind === 'brewing') this.brewing.delete(`${x},${y},${z}`);
       if (kind === 'furnace' && !(furnaceLike(prev) && furnaceLike(id))) this.furnaces.delete(`${x},${y},${z}`);
+    }
+    // entonnoir, distributeur, dropper posés : inventaire créé tout de suite (ils agissent même vides)
+    if (id > 0 && prev !== id) {
+      const kind = BlockRegistry.get(id).interact;
+      if (kind === 'hopper') this.getChest(x, y, z, true, 5);
+      else if (kind === 'dispenser') this.getChest(x, y, z, true, 9);
     }
     if ((prev === B.SPAWNER || prev === B.BOSS_ALTAR) && id !== prev) this.specials.delete(`${x},${y},${z}`);
     if (scheduleUpdates) {
@@ -195,22 +206,48 @@ export class World {
     return f ?? null;
   }
 
+  /**
+   * Boîte de shulker cassée : l'objet garde son contenu (méta « items »), comme le jeu original.
+   * Retourne null si ce n'est pas une boîte de shulker.
+   */
+  shulkerItem(x: number, y: number, z: number): ItemStack | null {
+    const b = BlockRegistry.get(this.getBlock(x, y, z));
+    if (!b.key.endsWith('shulker_box')) return null;
+    const inv = this.getChest(x, y, z, false);
+    const items = inv?.slots.some((s) => s) ? inv.serialize().slots : null;
+    return { id: b.key, count: 1, ...(items ? { meta: { items } } : {}) };
+  }
+
   /** Objets contenus dans le conteneur en (x, y, z) : coffre, tonneau, shulker, fourneaux. */
-  containerItems(x: number, y: number, z: number): { id: string; count: number; durability?: number }[] {
+  containerItems(x: number, y: number, z: number): ItemStack[] {
     const kind = BlockRegistry.get(this.getBlock(x, y, z)).interact;
-    if (kind === 'chest') return (this.getChest(x, y, z, false)?.slots ?? []).filter((s) => !!s) as { id: string; count: number; durability?: number }[];
+    // boîte de shulker : son contenu reste dans l'objet (voir shulkerItem)
+    if (BlockRegistry.get(this.getBlock(x, y, z)).key.endsWith('shulker_box')) return [];
+    if (kind === 'chest' || kind === 'dispenser' || kind === 'hopper') return (this.getChest(x, y, z, false)?.slots ?? []).filter((s) => !!s) as ItemStack[];
+    if (kind === 'brewing') {
+      const b = this.brewing.get(`${x},${y},${z}`);
+      return b ? ([...b.bottles, b.ingredient, b.fuelItem].filter((s) => !!s) as ItemStack[]) : [];
+    }
     if (kind === 'furnace') {
       const f = this.getFurnace(x, y, z, false);
-      return f ? [f.input, f.fuel, f.output].filter((s) => !!s) as { id: string; count: number; durability?: number }[] : [];
+      return f ? [f.input, f.fuel, f.output].filter((s) => !!s) as ItemStack[] : [];
     }
     return [];
   }
 
-  getChest(x: number, y: number, z: number, create = true): Inventory | null {
+  getBrewing(x: number, y: number, z: number, create = true): BrewingState | null {
+    const k = `${x},${y},${z}`;
+    let b = this.brewing.get(k);
+    if (!b && create) this.brewing.set(k, (b = newBrewing()));
+    return b ?? null;
+  }
+
+  /** Inventaire d'un conteneur (coffre 27 cases, distributeur 9, entonnoir 5). */
+  getChest(x: number, y: number, z: number, create = true, size = 27): Inventory | null {
     const k = `${x},${y},${z}`;
     let inv = this.chests.get(k);
     if (!inv && create) {
-      inv = new Inventory(27);
+      inv = new Inventory(size);
       this.chests.set(k, inv);
     }
     return inv ?? null;

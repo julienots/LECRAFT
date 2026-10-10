@@ -86,7 +86,7 @@ export interface BlockDef {
   /** Glissant (glace). */
   slippery?: boolean;
   /** Interaction (« utiliser ») : interface ou action. */
-  interact?: 'crafting' | 'furnace' | 'chest' | 'door' | 'bed' | 'tnt' | 'lever' | 'button';
+  interact?: 'crafting' | 'furnace' | 'chest' | 'door' | 'bed' | 'tnt' | 'lever' | 'button' | 'enchanting' | 'anvil' | 'brewing' | 'dispenser' | 'hopper' | 'ender_chest';
   /** Ne s'ouvre pas à la main (portes et trappes en fer : redstone seulement). */
   redstoneOnly?: boolean;
   /** Doit reposer sur un bloc solide (plantes, torches). */

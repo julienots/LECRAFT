@@ -73,7 +73,12 @@ export interface PackInfo {
   files: number;
   /** Musiques importées depuis le pack. */
   music?: number;
+  /** Sons importés (cris des créatures, blocs, sons courants). */
+  sounds?: number;
 }
+
+/** Sons utiles d'un pack (Java : assets/minecraft/sounds/…, Bedrock : sounds/…), hors musiques. */
+const SOUND_RE = /(?:^|\/)sounds\/((?:mob|dig|step|random|damage|entity|fire|item|liquid|portal|block|ambient\/weather)\/.+\.(?:ogg|mp3|wav))$/i;
 
 /** Importe un pack : extrait les PNG utiles et les enregistre localement. */
 export async function importPack(file: File, onProgress?: (f: number) => void): Promise<PackInfo> {
@@ -96,15 +101,18 @@ export async function importPack(file: File, onProgress?: (f: number) => void): 
     }
     musicCount = await MusicLibrary.add(tracks);
   }
-  if (!entries.length && musicCount) return { name: file.name, files: 0, music: musicCount };
-  if (!entries.length) throw new Error('Aucune texture trouvée (dossier assets/minecraft/textures attendu)');
+  const sounds = readEntries(buf).filter((e) => SOUND_RE.test(e.name));
+  if (!entries.length && !sounds.length && musicCount) return { name: file.name, files: 0, music: musicCount };
+  if (!entries.length && !sounds.length) throw new Error('Aucune texture ni aucun son trouvé (dossier assets/minecraft/textures ou sounds attendu)');
   const db = await openDb();
-  await new Promise<void>((res, rej) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).clear();
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
+  // pack de textures : remplace le pack précédent ; pack de sons seul : s'ajoute aux textures
+  if (entries.length)
+    await new Promise<void>((res, rej) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).clear();
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
   let n = 0;
   const batch: [string, Blob][] = [];
   const flush = async () => {
@@ -123,7 +131,14 @@ export async function importPack(file: File, onProgress?: (f: number) => void): 
     onProgress?.(++n / entries.length);
   }
   await flush();
-  const info: PackInfo = { name: file.name, files: entries.length, music: musicCount };
+  for (const e of sounds) {
+    const bytes = await extract(buf, e);
+    const rel = SOUND_RE.exec(e.name)![1].toLowerCase();
+    batch.push([`sounds/${rel}`, new Blob([bytes as BlobPart], { type: rel.endsWith('.mp3') ? 'audio/mpeg' : rel.endsWith('.wav') ? 'audio/wav' : 'audio/ogg' })]);
+    if (batch.length >= 64) await flush();
+  }
+  await flush();
+  const info: PackInfo = { name: file.name, files: entries.length, music: musicCount, sounds: sounds.length };
   const tx = db.transaction(STORE, 'readwrite');
   tx.objectStore(STORE).put(new Blob([JSON.stringify(info)], { type: 'application/json' }), '__info');
   db.close();
@@ -143,7 +158,7 @@ export async function removePack(): Promise<void> {
 /** Images du pack installé (chemin relatif à textures/ → bitmap). */
 export class LoadedPack {
   private static scratch = new Map<number, CanvasRenderingContext2D>();
-  constructor(readonly info: PackInfo, readonly images: Map<string, ImageBitmap>) {}
+  constructor(readonly info: PackInfo, readonly images: Map<string, ImageBitmap>, readonly sounds = new Map<string, Blob>()) {}
 
   get(path: string): ImageBitmap | undefined {
     return this.images.get(path);
@@ -191,11 +206,16 @@ export async function loadInstalledPack(): Promise<LoadedPack | null> {
     db.close();
     if (!all.keys.length) return null;
     const images = new Map<string, ImageBitmap>();
+    const sounds = new Map<string, Blob>();
     let info: PackInfo = { name: 'Pack', files: 0 };
     await Promise.all(
       all.keys.map(async (k, i) => {
         if (k === '__info') {
           info = JSON.parse(await all.values[i].text());
+          return;
+        }
+        if (k.startsWith('sounds/')) {
+          sounds.set(k.slice(7), all.values[i]);
           return;
         }
         try {
@@ -205,7 +225,7 @@ export async function loadInstalledPack(): Promise<LoadedPack | null> {
         }
       }),
     );
-    return new LoadedPack(info, images);
+    return new LoadedPack(info, images, sounds);
   } catch (e) {
     console.warn('Pack de ressources illisible', e);
     return null;

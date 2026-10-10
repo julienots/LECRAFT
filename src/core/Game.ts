@@ -133,6 +133,7 @@ export class Game {
       for (const [k, v] of addons.functions) this.addonFunctions.set(k, v);
       this.addonTickFunctions.push(...addons.tickFunctions);
       this.textures.applyPack(pack, addons.images);
+      this.audio.setPackSounds(pack?.sounds ?? null);
       for (const [id, snd] of addons.sounds) this.audio.addExternal(id, snd.data, snd.volume, snd.pitch);
     } catch (e) {
       console.error('Chargement des add-ons', e);
@@ -214,6 +215,7 @@ export class Game {
 
   applyPack(pack: LoadedPack | null) {
     this.textures.applyPack(pack);
+    this.audio.setPackSounds(pack?.sounds ?? null);
     this.syncSky();
     applyTheme(this.textures);
     resetMenuArt();
@@ -442,7 +444,7 @@ export class Game {
     const state = s.snapshot();
     const from = s.dimension;
     const dims = { ...(state.dims ?? {}) };
-    dims[from] = { chests: state.chests, spawners: state.spawners, furnaces: state.furnaces, mobs: state.mobs };
+    dims[from] = { chests: state.chests, spawners: state.spawners, furnaces: state.furnaces, brewing: state.brewing, mobs: state.mobs };
     const next = dims[target];
     delete dims[target];
     const k = target === 'nether' ? 1 / 8 : from === 'nether' ? 8 : 1;
@@ -460,6 +462,7 @@ export class Game {
       chests: next?.chests ?? {},
       spawners: next?.spawners ?? {},
       furnaces: next?.furnaces ?? {},
+      brewing: next?.brewing ?? {},
       mobs: next?.mobs ?? [],
       arrival: at ? undefined : { x: ax, y: p.y, z: az, kind: via },
       player: (at ? { ...state.player, ...at } : { ...state.player, x: ax, y: target === 'end' ? END_SPAWN.y : Math.min(120, Math.max(40, p.y)), z: az }) as WorldState['player'],
@@ -654,10 +657,14 @@ export class Game {
     this.touch.setVisible(false);
     this.inventoryUI = new InventoryUI(this, this.session, mode, chest);
     this.openChestPos = mode === 'chest' ? chest ?? null : null;
+    this.closeSoundPos = mode === 'chest' || mode === 'ender' ? chest ?? null : null;
+    // couvercle animé du coffre ouvert
+    if ((mode === 'chest' || mode === 'ender') && chest && this.session) this.session.chestLids.open(this.session.world, chest.x, chest.y, chest.z);
     this.ui.push(this.inventoryUI.screen);
   }
 
   private openChestPos: { x: number; y: number; z: number } | null = null;
+  private closeSoundPos: { x: number; y: number; z: number } | null = null;
 
   closeInventory() {
     if (!this.inventoryUI) return;
@@ -666,10 +673,13 @@ export class Game {
     ui.dispose();
     // partie en réseau : le coffre refermé repart chez l'hôte
     const cp = this.openChestPos;
-    if (cp) {
-      this.session?.netClient?.sendChest(cp.x, cp.y, cp.z);
-      this.audio.play('chest_close', { x: cp.x + 0.5, y: cp.y + 0.5, z: cp.z + 0.5 });
+    if (cp) this.session?.netClient?.sendChest(cp.x, cp.y, cp.z);
+    const sp = this.closeSoundPos;
+    if (sp) {
+      this.audio.play('chest_close', { x: sp.x + 0.5, y: sp.y + 0.5, z: sp.z + 0.5 });
+      this.session?.chestLids.close(sp.x, sp.y, sp.z);
     }
+    this.closeSoundPos = null;
     this.openChestPos = null;
     this.ui.remove(ui.screen);
     if (this.state === 'playing') this.touch.setVisible(true);

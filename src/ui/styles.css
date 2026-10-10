@@ -210,6 +210,20 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .ptext { image-rendering: pixelated; display: block; pointer-events: none; }
 .gslot { position: absolute; box-sizing: border-box; padding: 1px; cursor: pointer; }
 .gslot.static { position: relative; width: 18px; height: 18px; }
+/* reflet violet des objets enchantés (bande lumineuse qui défile) */
+.glint { position: absolute; left: 1px; top: 1px; width: 16px; height: 16px; pointer-events: none; mix-blend-mode: screen; opacity: 0.55;
+  background: linear-gradient(115deg, transparent 20%, rgba(170, 90, 255, 0.9) 40%, rgba(120, 60, 255, 0.4) 55%, transparent 70%); background-size: 300% 300%;
+  animation: glint 2.6s linear infinite; -webkit-mask-size: 16px 16px; }
+/* barre d'objets : même reflet à la taille de la case */
+.glint.hud { left: 0; top: 0; width: 100%; height: 100%; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; }
+@keyframes glint { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+/* boutons des stations (table d'enchantement) et champ de nom (enclume) */
+.gui-optbtn { position: absolute; box-sizing: border-box; cursor: pointer; pointer-events: auto; background: #6f5f80; border: 1px solid #2a2030;
+  box-shadow: inset 1px 1px 0 #a99ab8, inset -1px -1px 0 #3c3048; }
+.gui-optbtn:hover { background: #8d77a6; }
+.gui-optbtn.off { background: #4a3f55; box-shadow: none; cursor: default; }
+.gui-lapis { position: absolute; width: 12px; height: 13px; background: #2050c0; border: 1px solid #10286a; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+.gui-name { position: absolute; box-sizing: border-box; background: #000; color: #fff; border: 1px solid #a0a0a0; font: 8px monospace; padding: 0 2px; outline: none; pointer-events: auto; }
 .gslot:hover::after, .brecipe:hover::after { content: ''; position: absolute; left: 1px; top: 1px; right: 1px; bottom: 1px; background: rgba(255, 255, 255, 0.5); pointer-events: none; }
 .gicon { width: 16px; height: 16px; image-rendering: pixelated; display: block; pointer-events: none; }
 .gcount { position: absolute; right: 0; bottom: -2px; }

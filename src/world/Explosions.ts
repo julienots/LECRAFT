@@ -125,7 +125,14 @@ export class Explosions {
       // coffre de structure jamais ouvert : son butin est tiré et lâché lui aussi
       const meta = w.getMeta(x, y, z);
       if (id === B.CHEST && meta >> 2 > 0) for (const st of rollLoot(meta >> 2, hash3(w.seed, x, y, z))) entities.spawnItem(st.id, st.count, x + 0.5, y + 0.5, z + 0.5, st.durability);
-      for (const s of w.containerItems(x, y, z)) entities.spawnItem(s.id, s.count, x + 0.5, y + 0.5, z + 0.5, s.durability);
+      for (const s of w.containerItems(x, y, z)) entities.spawnItem(s.id, s.count, x + 0.5, y + 0.5, z + 0.5, s.durability, s.meta);
+      // boîte de shulker : toujours rendue, avec son contenu
+      const shulker = w.shulkerItem(x, y, z);
+      if (shulker) {
+        entities.spawnItem(shulker.id, 1, x + 0.5, y + 0.5, z + 0.5, undefined, shulker.meta);
+        w.setBlock(x, y, z, B.AIR);
+        continue;
+      }
       w.setBlock(x, y, z, B.AIR);
       // comme dans le jeu de référence : chaque bloc détruit a 1 chance sur `power` de lâcher son objet
       if (Math.random() < 1 / power) for (const d of getDrops(id, meta, 'diamond_pickaxe')) entities.spawnItem(d.id, d.count, x + 0.5, y + 0.5, z + 0.5);

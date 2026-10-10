@@ -57,7 +57,7 @@ function videoScreen(game: Game): Screen {
     body: [
       mcGrid(
         mcCycle<QualityLevel>('Qualité', [['LOW', 'Basse'], ['MEDIUM', 'Moyenne'], ['HIGH', 'Haute']], s.quality, (v) => (applyQuality(s, v), apply(true))),
-        mcSlider((v) => `Distance de rendu : ${v} tronçons`, 2, 12, 1, s.renderDistance, (v) => ((s.renderDistance = v), apply())),
+        mcSlider((v) => `Distance de rendu : ${v} tronçons`, 2, 16, 1, s.renderDistance, (v) => ((s.renderDistance = v), apply())),
         mcCycle<number>('FPS max', [[30, '30'], [45, '45'], [60, '60']], s.fpsCap, (v) => ((s.fpsCap = v as 30 | 45 | 60), apply())),
         mcSlider((v) => `Résolution : ${pct(v)}`, 0.75, 1, 0.05, s.resolutionScale, (v) => ((s.resolutionScale = v), apply())),
         mcCycle('Ombres', [['off', 'NON'], ['blob', 'Entités'], ['blob+ao', 'Entités + OA']], s.shadows, (v) => ((s.shadows = v as typeof s.shadows), apply())),
@@ -204,11 +204,11 @@ function packsScreen(game: Game): Screen {
     const bar = progress.firstChild as HTMLElement;
     try {
       const info = await importPack(f, (x) => (bar.style.width = `${Math.round(x * 100)}%`));
-      status.textContent = `${info.files} textures importées. Application…`;
+      status.textContent = `${info.files} textures${info.sounds ? ` et ${info.sounds} sons` : ''} importés. Application…`;
       if (info.music) await game.audio.reloadTracks();
-      const pack = info.files ? await loadInstalledPack() : null;
-      if (info.files) game.applyPack(pack);
-      status.textContent = `${info.files} textures${info.music ? ` et ${info.music} musiques` : ''} importées depuis « ${info.name} ».`;
+      const pack = info.files || info.sounds ? await loadInstalledPack() : null;
+      if (info.files || info.sounds) game.applyPack(pack);
+      status.textContent = `${info.files} textures${info.sounds ? `, ${info.sounds} sons (créatures, blocs)` : ''}${info.music ? ` et ${info.music} musiques` : ''} importés depuis « ${info.name} ».`;
     } catch (e) {
       status.textContent = `Échec de l'import : ${(e as Error).message}`;
     }

@@ -230,10 +230,38 @@ function addExtraBlocks(ids: Record<string, number>, byId: Map<number, BlockDef>
   return next;
 }
 
+/**
+ * Comme dans l'inventaire créatif du jeu original, les états et morceaux de blocs créés pour
+ * chaque texture du pack (« repeater_on », « cake_inner », « redstone_dust_line0 »,
+ * « cocoa_stage1 »…) ne sont pas proposés : ils restent posables par commande (/give, /setblock).
+ * Pour une famille sans objet de base, seule la première variante reste visible.
+ */
+const PART = /_(inner|dot|line\d|side|head|decor|singleleaf|base|tip|particle|overlay|moving|bottom|top|end|corner|post|noside|noside_alt)$|^(pink_petals|wildflowers|small_dripleaf|attached_melon|attached_pumpkin|melon|pumpkin)_stem$/;
+const STATE = /_(on|off|lit|unlit|powered|active|inactive|triggered|crafting|ejecting|ejecting_reward|ominous|on_ominous|off_ominous|ejecting_ominous|active_ominous|inactive_ominous|ejecting_reward_ominous|ready|compost|inverted|can_summon_inner|stage\d+|hydration_\d+|not_cracked|slightly_cracked|very_cracked|cracked|\d+)$/;
+function hideTechnicalBlocks() {
+  const families = new Map<string, string[]>();
+  for (const d of EXTRA_BLOCKS) {
+    const it = ItemRegistry.get(d.key);
+    if (!it || it.hidden) continue;
+    if (PART.test(d.key) && !/_(slab|stairs|wall)$/.test(d.key)) {
+      it.hidden = true;
+      continue;
+    }
+    if (!STATE.test(d.key)) continue;
+    let base = d.key;
+    while (STATE.test(base)) base = base.replace(STATE, '');
+    if (ItemRegistry.has(base) && base !== d.key) it.hidden = true;
+    else families.set(base, [...(families.get(base) ?? []), d.key]);
+  }
+  // famille sans objet de base (œufs de renifleur, ghast desséché…) : la première variante reste
+  for (const keys of families.values()) for (const k of keys.slice(1)) ItemRegistry.get(k)!.hidden = true;
+}
+
 /** Objets, tags et recettes des blocs/objets supplémentaires (après l'enregistrement des blocs). */
 function registerExtraContent(byId: Map<number, BlockDef>) {
   for (const d of byId.values()) if (EXTRA_BLOCKS.includes(d) && !ItemRegistry.has(d.key) && BlockRegistry.has(d.key)) ItemRegistry.register({ key: d.key, name: d.name, icon: { block: d.key }, place: d.key, tab: d.render === 'cross' ? 'nature' : 'building' });
   for (const it of EXTRA_ITEMS) if (!ItemRegistry.has(it.key)) ItemRegistry.register(it);
+  hideTechnicalBlocks();
   for (const [t, list] of Object.entries(EXTRA_TAGS)) {
     const cur = (RecipeRegistry.tags as Record<string, string[]>)[t];
     if (cur) for (const k of list) if (!cur.includes(k) && ItemRegistry.has(k)) cur.push(k);

@@ -1,4 +1,7 @@
+import type { ItemStack } from '../inventory/Item';
 import { setOpen, updatePowerAround } from '../world/Redstone';
+import { applyPotion, makePotion, potionColor, potionOf } from '../inventory/Potions';
+import { enchLevel, enchantsOf } from '../inventory/Enchantments';
 import { ArmorStand } from '../entities/ArmorStand';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
 import { breakTime, getDrops, blockXp, hasSupport, plantSoil, rollLoot } from '../blocks/BlockBehaviors';
@@ -35,7 +38,7 @@ export interface PlacementPreview {
 }
 
 export interface InteractionHost {
-  openStation(kind: 'crafting' | 'furnace', x: number, y: number, z: number): void;
+  openStation(kind: 'crafting' | 'furnace' | 'enchant' | 'anvil' | 'brewing' | 'dispenser' | 'dropper' | 'hopper' | 'ender', x: number, y: number, z: number): void;
   openChest(x: number, y: number, z: number): void;
   useCompass(target: string): void;
   primeTnt(x: number, y: number, z: number): void;
@@ -220,7 +223,10 @@ export class PlayerInteraction {
     }
     const p = ctx.player;
     if (this.host.canEdit && !this.host.canEdit(t.x, t.y, t.z, 'break', t.block)) return;
-    const time = breakTime(t.block, itemId, p.creative, p.body.headInWater || (!p.body.onGround && p.body.inWater));
+    const held = p.inventory.selectedStack;
+    // Affinité aquatique (casque) : pas de pénalité sous l'eau
+    const wet = (p.body.headInWater || (!p.body.onGround && p.body.inWater)) && !enchLevel(p.inventory.armor.head, 'aqua_affinity');
+    const time = breakTime(t.block, itemId, p.creative, wet, enchLevel(held, 'efficiency'));
     if (!isFinite(time)) return;
     this.miningProgress += dt / time;
     this.entities.combat.swing = Math.max(this.entities.combat.swing, 0.6);
@@ -287,16 +293,20 @@ export class PlayerInteraction {
     const b = BlockRegistry.get(id);
     // contenu des coffres
     if (b.interact === 'chest') this.ensureChestLoot(x, y, z);
+    const shulker = w.shulkerItem(x, y, z);
     // contenu des coffres, tonneaux, boîtes de shulker et fourneaux (entrée, combustible, résultat)
-    for (const s of w.containerItems(x, y, z)) this.entities.spawnItem(s.id, s.count, x + 0.5, y + 0.5, z + 0.5, s.durability);
+    for (const s of w.containerItems(x, y, z)) this.entities.spawnItem(s.id, s.count, x + 0.5, y + 0.5, z + 0.5, s.durability, s.meta);
     w.setBlock(x, y, z, B.AIR);
     ctx.particles.blockBreak(x, y, z, id);
     ctx.audio.blockSound('break', b.sound, x + 0.5, y + 0.5, z + 0.5);
     ctx.stats.inc('blocksMined');
     ctx.stats.inc(`mine:${b.key}`);
-    if (!p.creative) {
-      for (const d of getDrops(id, meta, itemId)) this.entities.spawnItem(d.id, d.count, x + 0.5, y + 0.3, z + 0.5);
-      const xp = blockXp(id);
+    // boîte de shulker : un seul objet qui garde le contenu (même en créatif s'il n'est pas vide)
+    if (shulker && (!p.creative || shulker.meta)) this.entities.spawnItem(shulker.id, 1, x + 0.5, y + 0.3, z + 0.5, undefined, shulker.meta);
+    if (!p.creative && !shulker) {
+      const ench = enchantsOf(p.inventory.selectedStack);
+      for (const d of getDrops(id, meta, itemId, Math.random, ench)) this.entities.spawnItem(d.id, d.count, x + 0.5, y + 0.3, z + 0.5);
+      const xp = ench.silk_touch ? 0 : blockXp(id);
       if (xp) p.addXp(xp);
       const tool = itemId ? ItemRegistry.get(itemId)?.tool : undefined;
       if (tool && b.hardness > 0) p.inventory.damageSelected(1);
@@ -376,9 +386,9 @@ export class PlayerInteraction {
       const slot = def?.armor?.slot;
       if (held && slot) {
         const old = st.armor[slot];
-        st.armor[slot] = { id: held.id, durability: held.durability };
+        st.armor[slot] = { ...held, count: 1 };
         if (!p.creative) {
-          inv.slots[inv.selected] = old ? { id: old.id, count: 1, durability: old.durability } : held.count > 1 ? { ...held, count: held.count - 1 } : null;
+          inv.slots[inv.selected] = old ? { ...old, count: 1 } : held.count > 1 ? { ...held, count: held.count - 1 } : null;
           inv.changed();
         }
       } else if (!held) {
@@ -386,7 +396,7 @@ export class PlayerInteraction {
         if (!s) return;
         const it = st.armor[s]!;
         delete st.armor[s];
-        if (inv.add({ id: it.id, count: 1, durability: it.durability }) > 0) this.entities.spawnItem(it.id, 1, p.x, p.y + 1, p.z, it.durability);
+        if (inv.add({ ...it, count: 1 }) > 0) this.entities.spawnItem(it.id, 1, p.x, p.y + 1, p.z, it.durability, it.meta);
         inv.changed();
       } else return;
       ctx.audio.play('equip', { x: st.x, y: st.y, z: st.z });
@@ -417,6 +427,16 @@ export class PlayerInteraction {
       const b = BlockRegistry.get(t.block);
       if (b.interact === 'crafting') return this.host.openStation('crafting', t.x, t.y, t.z);
       if (b.interact === 'furnace') return this.host.openStation('furnace', t.x, t.y, t.z);
+      if (b.interact === 'enchanting') return this.host.openStation('enchant', t.x, t.y, t.z);
+      if (b.interact === 'anvil') return this.host.openStation('anvil', t.x, t.y, t.z);
+      if (b.interact === 'brewing') return this.host.openStation('brewing', t.x, t.y, t.z);
+      if (b.interact === 'dispenser') return this.host.openStation(b.key === 'dropper' ? 'dropper' : 'dispenser', t.x, t.y, t.z);
+      if (b.interact === 'hopper') return this.host.openStation('hopper', t.x, t.y, t.z);
+      if (b.interact === 'ender_chest') {
+        ctx.audio.play('chest_open', { x: t.x, y: t.y, z: t.z });
+        ctx.particles.burst('magic', t.x + 0.5, t.y + 1, t.z + 0.5, 10);
+        return this.host.openStation('ender', t.x, t.y, t.z);
+      }
       if (b.interact === 'door') {
         // portes et trappes en fer : seulement avec la redstone (le jeu original ne les ouvre pas à la main)
         if (b.def.redstoneOnly) return;
@@ -504,6 +524,9 @@ export class PlayerInteraction {
       }
       const prevId = Math.max(0, ctx.world.getBlock(pv.x, pv.y, pv.z));
       ctx.world.setBlock(pv.x, pv.y, pv.z, pv.block, placeMeta);
+      // boîte de shulker posée : son contenu revient dans le bloc
+      const carried = held.meta?.items as (ItemStack | null)[] | undefined;
+      if (carried && blk.key.endsWith('shulker_box')) ctx.world.getChest(pv.x, pv.y, pv.z)!.load({ slots: carried });
       for (const [ex, ey, ez, eid, em] of pv.extra) ctx.world.setBlock(ex, ey, ez, eid, em);
       ctx.audio.blockSound('place', blk.sound, pv.x + 0.5, pv.y + 0.5, pv.z + 0.5);
       if (!p.creative) inv.takeFromSlot(inv.selected, 1);
@@ -513,7 +536,42 @@ export class PlayerInteraction {
       ctx.haptic('light');
       return;
     }
-    // 5) manger
+    // 5) potions : fiole remplie à l'eau, potion bue, potion jetable lancée
+    if (!repeat && held.id === 'glass_bottle') {
+      const [ox, oy, oz, dx, dy, dz] = this.eye();
+      const hit = raycastBlocks(ctx.world, ox, oy, oz, dx, dy, dz, this.reach, true);
+      if (hit && hit.block === B.WATER) {
+        if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+        if (inv.add(makePotion('water')) > 0) this.entities.spawnItem('potion', 1, p.x, p.y + 1, p.z);
+        inv.changed();
+        ctx.audio.play('bucket_fill', { x: hit.x, y: hit.y, z: hit.z });
+        return;
+      }
+    }
+    if (!repeat && held.id === 'potion') {
+      const pot = potionOf(held)!;
+      applyPotion(p.effects, p.effectTarget, pot);
+      if (!p.creative) {
+        inv.slots[inv.selected] = { id: 'glass_bottle', count: 1 };
+        inv.changed();
+      }
+      ctx.audio.play('eat', { pitch: 0.8 });
+      ctx.particles.burst('magic', p.x, p.y + 1.4, p.z, 8);
+      ctx.stats.inc('potionsDrunk');
+      return;
+    }
+    if (!repeat && held.id === 'splash_potion') {
+      const pot = potionOf(held)!;
+      const [ox, oy, oz, dx, dy, dz] = this.eye();
+      const pd = { id: `splash_potion${potionColor(held)}`, color: potionColor(held), size: 0.3, gravity: 20, damage: 0, splash: pot };
+      const pr = this.entities.spawnProjectile('custom', ox + dx * 0.6, oy + dy * 0.6, oz + dz * 0.6, dx * 14, dy * 14 + 3, dz * 14, 0, true, pd);
+      pr.owner = p;
+      ctx.audio.play('paper_whoosh', { x: ox, y: oy, z: oz });
+      this.entities.combat.swing = 1;
+      if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+      return;
+    }
+    // 6) manger
     if (!repeat && def.food) {
       if (p.eat(held.id)) {
         const eaten = { ...held };
@@ -889,14 +947,22 @@ export class PlayerInteraction {
   private shootBow(charge: number) {
     const ctx = this.ctx;
     const p = ctx.player;
-    if (!p.creative && !p.inventory.remove('arrow', 1)) {
+    const bow = p.inventory.selectedStack;
+    // Infinité : une flèche suffit (elle n'est pas consommée)
+    const infinite = enchLevel(bow, 'infinity') > 0 && p.inventory.count('arrow') > 0;
+    if (!p.creative && !infinite && !p.inventory.remove('arrow', 1)) {
       ctx.hud.toast('Pas de flèches', 'warn');
       return;
     }
     const [ox, oy, oz, dx, dy, dz] = this.eye();
     const sp = 12 + charge * 22;
-    const arrow = this.entities.spawnProjectile('player_arrow', ox + dx * 0.5, oy + dy * 0.5 - 0.1, oz + dz * 0.5, dx * sp, dy * sp, dz * sp, 2 + charge * 7, true);
-    arrow.pickable = !p.creative;
+    // Puissance : +25 % de dégâts par niveau (+25 %)
+    const power = enchLevel(bow, 'power');
+    const dmg = (2 + charge * 7) * (power ? 1 + 0.25 * (power + 1) : 1);
+    const arrow = this.entities.spawnProjectile('player_arrow', ox + dx * 0.5, oy + dy * 0.5 - 0.1, oz + dz * 0.5, dx * sp, dy * sp, dz * sp, dmg, true);
+    arrow.pickable = !p.creative && !infinite;
+    arrow.punch = enchLevel(bow, 'punch');
+    arrow.flame = enchLevel(bow, 'flame') > 0;
     ctx.audio.play('bow');
     if (!p.creative) p.inventory.damageSelected(1);
   }

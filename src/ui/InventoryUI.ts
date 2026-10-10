@@ -1,4 +1,9 @@
 import type { Game } from '../core/Game';
+import { hasGlint, iconKey, stackName } from '../inventory/StackInfo';
+import { customName, enchantLines, isEnchanted } from '../inventory/Enchantments';
+import { potionLine, potionOf } from '../inventory/Potions';
+import { AnvilStation, BrewingStation, DispenserStation, EnchantStation, type Station, type StationHost } from './Stations';
+import { BlockRegistry } from '../blocks/BlockRegistry';
 import type { Session } from '../core/Session';
 import { ARMOR_SLOTS, HOTBAR_SIZE, Inventory, canMerge } from '../inventory/Inventory';
 import { ItemRegistry } from '../inventory/ItemRegistry';
@@ -11,11 +16,12 @@ import { el } from './dom';
 import { GUI_W, LAYOUT, containerBackground, drawArrow, drawFlame, drawPanel, drawSlot, guiHeight, playerInvY, type ContainerKind } from './ContainerArt';
 import { pixelText } from './PixelFont';
 
-export type InventoryMode = 'hand' | 'table' | 'furnace' | 'chest';
+export type InventoryMode = 'hand' | 'table' | 'furnace' | 'chest' | 'ender' | 'enchant' | 'anvil' | 'brewing' | 'dispenser' | 'dropper' | 'hopper';
 
 type Group = 'main' | 'hotbar' | 'armor' | 'container' | 'grid' | 'result' | 'input' | 'fuel';
 
 interface GuiSlot {
+  canTake?(): boolean;
   x: number;
   y: number;
   group: Group;
@@ -80,23 +86,29 @@ export class InventoryUI {
   private scale = 2;
   private tooltipTimer = 0;
   private disposed = false;
+  /** Bloc fonctionnel (table d'enchantement, enclume, alambic, distributeur, entonnoir). */
+  private station: Station | null = null;
 
   constructor(private game: Game, private s: Session, private mode: InventoryMode, pos?: { x: number; y: number; z: number }) {
     const pinv = s.player.inventory;
-    this.kind = mode === 'hand' ? 'inventory' : mode;
+    this.kind = mode === 'hand' ? 'inventory' : mode === 'ender' ? 'chest' : mode === 'dropper' ? 'dispenser' : mode;
     if (mode === 'chest' && pos) this.chestInv = s.world.getChest(pos.x, pos.y, pos.z);
+    if (mode === 'ender') this.chestInv = s.player.enderChest;
+    if (pos) this.station = this.makeStation(mode, pos);
     if (mode === 'furnace' && pos) this.furnace = s.world.getFurnace(pos.x, pos.y, pos.z);
     if (mode === 'hand') this.grid = new CraftingGrid(2);
     if (mode === 'table') this.grid = new CraftingGrid(3);
-    const title = mode === 'chest' ? 'Coffre' : mode === 'table' ? 'Fabrication' : mode === 'furnace' ? 'Fourneau' : '';
+    const blockName = pos ? BlockRegistry.get(s.world.getBlock(pos.x, pos.y, pos.z)).name : '';
+    const title = this.station?.title ?? (mode === 'ender' ? "Coffre de l'Ender" : mode === 'chest' ? (blockName && !/^Coffre/.test(blockName) ? blockName : 'Coffre') : mode === 'table' ? 'Fabrication' : mode === 'furnace' ? 'Fourneau' : '');
     const h = guiHeight(this.kind);
 
     this.gui = el('div', { class: 'gui', style: `width:${GUI_W}px;height:${h}px` });
-    const bg = containerBackground(this.kind, title, game.textures, 3, `player_${game.settings.playerSkin ?? 'steve'}`);
+    const bg = containerBackground(this.kind, title, game.textures, 3, `player_${game.settings.playerSkin ?? 'steve'}`, this.station?.artSlots ?? []);
     bg.className = 'gui-bg';
     this.gui.append(bg);
     this.buildSlots(pinv);
     for (const sl of this.slots) this.gui.append(this.slotEl(sl));
+    this.station?.decorate(this.gui);
     if (this.furnace) {
       const L = LAYOUT.furnace;
       const fc = this.canvasAt(L.flame[0], L.flame[1], 14, 14);
@@ -114,7 +126,7 @@ export class InventoryUI {
       }
     }
     // bouton du livre de recettes / de l'inventaire créatif
-    if (mode !== 'chest') {
+    if (mode === 'hand' || mode === 'table' || mode === 'furnace') {
       const [bx, by] = mode === 'hand' ? LAYOUT.inventory.book : mode === 'table' ? LAYOUT.table.book : LAYOUT.furnace.book;
       const btn = this.canvasAt(bx, by, 20, 18);
       this.drawBookButton(btn.getContext('2d')!);
@@ -161,13 +173,24 @@ export class InventoryUI {
     const onResize = () => this.layout();
     window.addEventListener('resize', onResize);
     this.unsub.push(() => window.removeEventListener('resize', onResize));
-    if (this.furnace) this.timer = window.setInterval(() => this.refresh(), 100);
+    if (this.furnace || this.station?.ticking) this.timer = window.setInterval(() => this.refresh(), 100);
     requestAnimationFrame(() => this.layout());
     this.layout();
     this.refresh();
   }
 
   // ---------- construction ----------
+  private makeStation(mode: InventoryMode, pos: { x: number; y: number; z: number }): Station | null {
+    const host: StationHost = { game: this.game, s: this.s, refresh: () => this.refresh(), click: () => this.click(), canvasAt: (x, y, w, h) => this.canvasAt(x, y, w, h) };
+    const w = this.s.world;
+    if (mode === 'enchant') return new EnchantStation(host, pos);
+    if (mode === 'anvil') return new AnvilStation(host, pos);
+    if (mode === 'brewing') return new BrewingStation(host, w.getBrewing(pos.x, pos.y, pos.z)!);
+    if (mode === 'dispenser' || mode === 'dropper') return new DispenserStation(host, w.getChest(pos.x, pos.y, pos.z, true, 9)!, mode === 'dropper' ? 'Dropper' : 'Distributeur', false);
+    if (mode === 'hopper') return new DispenserStation(host, w.getChest(pos.x, pos.y, pos.z, true, 5)!, 'Entonnoir', true);
+    return null;
+  }
+
   private canvasAt(x: number, y: number, w: number, h: number): HTMLCanvasElement {
     const c = document.createElement('canvas');
     c.width = w;
@@ -234,6 +257,9 @@ export class InventoryUI {
         key: 'f_out',
       });
     }
+    if (this.station)
+      for (const st of this.station.slots)
+        s.push({ x: st.x, y: st.y, group: st.take ? 'result' : 'container', big: st.big, max: st.max, get: st.get, set: st.set, accept: st.accept, take: st.take, canTake: st.canTake, key: st.key });
     if (this.chestInv) {
       const ci = this.chestInv;
       for (let i = 0; i < ci.size; i++) s.push({ x: 8 + (i % 9) * 18, y: 18 + Math.floor(i / 9) * 18, group: 'container', get: () => ci.slots[i], set: (v) => (ci.slots[i] = v), key: `chest${i}` });
@@ -247,6 +273,7 @@ export class InventoryUI {
     const d = el('div', { class: 'gslot', style: `left:${sl.x - o}px;top:${sl.y - o}px;width:${size}px;height:${size}px` });
     if (sl.big) d.style.padding = `${o}px`;
     sl.el = d;
+    if (sl.key) d.dataset.key = sl.key;
     this.bindPress(d, (kind) => this.onSlot(sl, kind), sl);
     this.slotByEl.set(d, sl);
     return d;
@@ -425,6 +452,7 @@ export class InventoryUI {
   private takeResult(sl: GuiSlot) {
     const r = sl.get();
     if (!r) return;
+    if (sl.canTake && !sl.canTake()) return;
     if (this.carried && !(canMerge(this.carried, r) && this.carried.count + r.count <= ItemRegistry.maxStack(r.id))) return;
     if (this.carried) this.carried.count += r.count;
     else this.carried = { ...r };
@@ -457,7 +485,7 @@ export class InventoryUI {
     let targets: GuiSlot[];
     const def = ItemRegistry.get(st.id);
     if (sl.group === 'main' || sl.group === 'hotbar') {
-      if (this.chestInv) targets = this.group('container');
+      if (this.chestInv || this.station) targets = this.group('container');
       else if (this.furnace) targets = RecipeRegistry.smeltingFor(st.id) ? this.group('input') : (def?.burnTime ?? 0) > 0 ? this.group('fuel') : this.group(sl.group === 'main' ? 'hotbar' : 'main');
       else if (def?.armor && this.group('armor').some((a) => a.accept!(st) && !a.get())) targets = this.group('armor');
       else targets = this.group(sl.group === 'main' ? 'hotbar' : 'main');
@@ -532,7 +560,10 @@ export class InventoryUI {
   private stackHTML(d: HTMLElement, st: ItemStack | null) {
     d.replaceChildren();
     if (!st) return;
-    d.append(el('img', { class: 'gicon', src: this.game.textures.iconURL(st.id), alt: '', draggable: 'false' }));
+    const src = this.game.textures.iconURL(iconKey(st));
+    d.append(el('img', { class: 'gicon', src, alt: '', draggable: 'false' }));
+    // reflet limité à la forme de l'objet (masque = icône)
+    if (hasGlint(st)) d.append(el('div', { class: 'glint', style: `-webkit-mask-image:url(${src});mask-image:url(${src});mask-size:16px 16px` }));
     if (st.count > 1) {
       const t = pixelText(String(st.count), { color: '#ffffff', shadow: '#3f3f3f', cls: 'gcount' });
       d.append(t);
@@ -548,7 +579,7 @@ export class InventoryUI {
     if (this.disposed) return;
     for (const sl of this.slots) {
       const st = sl.get();
-      const sig = st ? `${st.id}:${st.count}:${st.durability ?? ''}` : '';
+      const sig = st ? `${st.id}:${st.count}:${st.durability ?? ''}${st.meta ? JSON.stringify(st.meta) : ''}` : '';
       if (sl.el!.dataset.sig !== sig) {
         sl.el!.dataset.sig = sig;
         this.stackHTML(sl.el!, st);
@@ -583,7 +614,8 @@ export class InventoryUI {
         drawArrow(ac, 0, 1, prog);
       }
     }
-    if (this.side && this.mode !== 'chest' && memory.book && !this.s.player.creative) this.refreshBook();
+    this.station?.update();
+    if (this.side && (this.mode === 'hand' || this.mode === 'table' || this.mode === 'furnace') && memory.book && !this.s.player.creative) this.refreshBook();
   }
 
   private placeCursor() {
@@ -602,7 +634,15 @@ export class InventoryUI {
     }
     const def = ItemRegistry.get(st.id);
     if (!def) return;
-    const lines: [string, string][] = [[def.name, def.rare ? '#ffff55' : '#ffffff']];
+    const named = !!customName(st);
+    const lines: [string, string][] = [[stackName(st), named ? '#55ffff' : def.rare || isEnchanted(st) ? '#ffff55' : '#ffffff']];
+    for (const t of enchantLines(st)) lines.push([t, '#aaaaaa']);
+    const pl = potionOf(st) ? potionLine(st) : null;
+    if (pl) lines.push([pl, '#5555ff']);
+    // boîte de shulker remplie : aperçu du contenu
+    const inside = (st.meta?.items as (ItemStack | null)[] | undefined)?.filter((x): x is ItemStack => !!x) ?? [];
+    for (const it of inside.slice(0, 5)) lines.push([`${stackName(it)} x${it.count}`, '#aaaaaa']);
+    if (inside.length > 5) lines.push([`et ${inside.length - 5} autres…`, '#aaaaaa']);
     if (def.food) lines.push([`Nourriture : +${def.food.hunger}`, '#aaaaaa']);
     if (def.damage && def.tool) lines.push([`${def.damage} de dégâts d'attaque`, '#00aa00']);
     if (def.armor) lines.push([`+${def.armor.defense} d'armure`, '#5555ff']);
@@ -639,7 +679,7 @@ export class InventoryUI {
   private buildSide() {
     this.side?.remove();
     this.side = null;
-    if (!memory.book || this.mode === 'chest') return;
+    if (!memory.book || !(this.mode === 'hand' || this.mode === 'table' || this.mode === 'furnace')) return;
     const creative = this.s.player.creative && this.mode === 'hand';
     const w = creative ? 176 : 147;
     const h = guiHeight(this.kind);
@@ -676,9 +716,9 @@ export class InventoryUI {
     label.style.top = '26px';
     side.append(label);
     const list = el('div', { class: 'gui-scroll', style: `left:7px;top:38px;width:${9 * 18}px;height:${h - 46}px` });
-    const items = ItemRegistry.all().filter((d) => (d.tab ?? 'ingredients') === memory.tab);
+    const items = ItemRegistry.all().filter((d) => !d.hidden && (d.tab ?? 'ingredients') === memory.tab);
     for (const d of items) {
-      const cell = el('div', { class: 'gslot static' });
+      const cell = el('div', { class: 'gslot static', 'data-item': d.key });
       this.stackHTML(cell, { id: d.key, count: 1 });
       this.bindPress(cell, (kind) => {
         // poser un objet tenu sur la palette le supprime (comme dans l'inventaire créatif)
@@ -799,6 +839,10 @@ export class InventoryUI {
     const inv = this.s.player.inventory;
     // les objets de la grille et celui tenu retournent dans l'inventaire (sinon tombent au sol)
     if (this.grid) for (const left of this.grid.clearInto(inv)) this.s.throwStack(left);
+    this.station?.dispose((st) => {
+      const rest = inv.add(st);
+      if (rest > 0) this.s.throwStack({ ...st, count: rest });
+    });
     if (this.carried) {
       const rest = inv.add(this.carried);
       if (rest > 0) this.s.throwStack({ ...this.carried, count: rest });

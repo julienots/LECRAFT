@@ -1,4 +1,5 @@
 import type { SoundFx } from '../core/GameContext';
+import { groupPackSounds, packFilesFor, packMobFiles } from './PackSounds';
 import type { Settings } from '../core/Settings';
 import { buildAmbience, buildSounds, SynthContext } from './Synth';
 import { mapSound } from './SoundMap';
@@ -37,6 +38,10 @@ export class AudioManager implements SoundFx {
   private external = new Map<string, { data: Uint8Array[]; volume: number; pitch: number }>();
   private decoded = new Map<string, AudioBuffer[]>();
   private decoding = new Set<string>();
+  /** Sons du pack de ressources groupés par préfixe, et leurs tampons décodés. */
+  private packGroups = new Map<string, Blob[]>();
+  private packDecoded = new Map<Blob[], AudioBuffer[]>();
+  private packDecoding = new Set<Blob[]>();
 
   constructor(private settings: Settings) {}
 
@@ -130,8 +135,49 @@ export class AudioManager implements SoundFx {
     if (m) this.play(m, opts);
   }
 
+  /** Sons d'un pack de ressources (chemins relatifs à sounds/). */
+  setPackSounds(files: Map<string, Blob> | null) {
+    this.packGroups = files ? groupPackSounds(files) : new Map();
+    this.packDecoded.clear();
+  }
+  get packSoundCount() {
+    let n = 0;
+    for (const g of this.packGroups.values()) n += g.length;
+    return n;
+  }
+
+  /**
+   * Joue un son du pack s'il est décodé (variante au hasard) ; sinon lance le décodage et
+   * retourne faux (le son synthétisé est joué cette fois-ci).
+   */
+  private playPack(files: Blob[], opts: { x?: number; y?: number; z?: number; volume?: number; pitch?: number }): boolean {
+    const bufs = this.packDecoded.get(files);
+    if (bufs?.length) {
+      this.playBuffer(bufs[Math.floor(Math.random() * bufs.length)], { ...opts, pitch: (opts.pitch ?? 1) * (0.95 + Math.random() * 0.1) });
+      return true;
+    }
+    if (bufs || this.packDecoding.has(files) || !this.ctx) return false;
+    this.packDecoding.add(files);
+    const c = this.ctx;
+    Promise.all(files.map((b) => b.arrayBuffer().then((a) => c.decodeAudioData(a)).catch(() => null)))
+      .then((list) => this.packDecoded.set(files, list.filter((b): b is AudioBuffer => !!b)))
+      .finally(() => this.packDecoding.delete(files));
+    return false;
+  }
+
+  mobSound(mobKey: string, kind: 'idle' | 'hurt' | 'death', fallback: string, opts: { x?: number; y?: number; z?: number; volume?: number } = {}) {
+    if (!this.ctx || !this.ready || this.ctx.state !== 'running') return;
+    const files = this.packGroups.size ? packMobFiles(this.packGroups, mobKey, kind) : null;
+    if (files && this.playPack(files, opts)) return;
+    if (fallback) this.play(fallback, opts);
+  }
+
   play(name: string, opts: { x?: number; y?: number; z?: number; volume?: number; pitch?: number } = {}) {
     if (!this.ctx || !this.ready || this.ctx.state !== 'running') return;
+    if (this.packGroups.size) {
+      const files = packFilesFor(this.packGroups, name);
+      if (files && this.playPack(files, opts)) return;
+    }
     const buf = this.buffers.get(name);
     if (!buf) {
       // son d'add-on (créatures d'add-ons, scripts)

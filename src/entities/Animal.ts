@@ -102,7 +102,8 @@ export class Animal extends Mob {
     this.loveTimer = 30;
     this.persistent = true;
     ctx.particles.burst('hearts', this.x, this.y + this.body.height, this.z, 5);
-    ctx.audio.play(this.def.sounds.idle, { x: this.x, y: this.y, z: this.z });
+    if (ctx.audio.mobSound) ctx.audio.mobSound(this.def.key, 'idle', this.def.sounds.idle, { x: this.x, y: this.y, z: this.z });
+    else ctx.audio.play(this.def.sounds.idle, { x: this.x, y: this.y, z: this.z });
     if (this.def.category === 'neutral') this.anger = 0;
     return true;
   }

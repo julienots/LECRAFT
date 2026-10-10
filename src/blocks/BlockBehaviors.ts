@@ -8,7 +8,7 @@ import { Rng } from '../util/math';
 import { FACING_DIR } from './Shapes';
 
 /** Temps de minage en secondes (Infinity = incassable). */
-export function breakTime(blockId: number, itemId: string | undefined, creative: boolean, underwater: boolean): number {
+export function breakTime(blockId: number, itemId: string | undefined, creative: boolean, underwater: boolean, efficiency = 0): number {
   const b = BlockRegistry.get(blockId);
   if (creative) return 0.05;
   if (b.hardness < 0) return Infinity;
@@ -18,6 +18,8 @@ export function breakTime(blockId: number, itemId: string | undefined, creative:
   const harvest = canHarvest(blockId, itemId);
   let speed = correct ? tool!.speed : 1;
   if (tool?.type === 'sword' && (b.render === 'cutout' || b.key === 'cactus')) speed = 1.5;
+  // Efficacité : plus rapide avec le bon outil (niveau² + 1)
+  if (efficiency > 0 && correct) speed += efficiency * efficiency + 1;
   let t = (b.hardness * (harvest ? 1.5 : 5)) / speed;
   if (underwater) t *= 3;
   return Math.max(0.05, t);
@@ -31,9 +33,11 @@ export function canHarvest(blockId: number, itemId: string | undefined): boolean
 }
 
 /** Objets obtenus en cassant un bloc. */
-export function getDrops(blockId: number, meta: number, itemId: string | undefined, rng: () => number = Math.random): ItemStack[] {
+export function getDrops(blockId: number, meta: number, itemId: string | undefined, rng: () => number = Math.random, ench?: Record<string, number>): ItemStack[] {
   const b = BlockRegistry.get(blockId);
   if (!canHarvest(blockId, itemId)) return [];
+  // Toucher de soie : le bloc lui-même (minerais, verre, herbe…), sauf blocs en deux parties
+  if (ench?.silk_touch && ItemRegistry.has(b.key) && !b.def.doublePlant && b.shape !== 'door' && b.shape !== 'bed' && b.shape !== 'slab' && b.interact !== 'chest') return [makeStack(b.key, 1)];
   // plante haute : seule la moitié basse donne quelque chose (la haute la fait tomber)
   if (b.def.doublePlant && meta & 1) return [];
   const out: ItemStack[] = [];
@@ -75,10 +79,14 @@ export function getDrops(blockId: number, meta: number, itemId: string | undefin
     if (tool?.type === 'shovel') add('snowball', (meta & 7) + 1);
     return out;
   }
+  // Fortune : minerais qui lâchent un objet (charbon, diamant, lapis…) multipliés
+  const fortune = ench?.fortune ?? 0;
   for (const d of b.drops) {
     if (d.chance !== undefined && rng() > d.chance) continue;
     const min = d.min ?? 1, max = d.max ?? min;
-    add(d.item, min + Math.floor(rng() * (max - min + 1)));
+    let n = min + Math.floor(rng() * (max - min + 1));
+    if (fortune && b.key.includes('_ore') && d.item !== b.key) n *= Math.max(1, Math.floor(rng() * (fortune + 2)));
+    add(d.item, n);
   }
   return out;
 }
