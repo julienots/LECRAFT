@@ -7,6 +7,8 @@ export enum AIState {
   FLEE = 'FLEE',
   SEARCH = 'SEARCH',
   RETURN = 'RETURN',
+  /** Chasse d'une autre créature (entities/MobRelations.ts). */
+  HUNT = 'HUNT',
   DEAD = 'DEAD',
 }
 

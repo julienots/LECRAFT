@@ -13,7 +13,7 @@ const WOODS = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak'];
 const DIRECT: Record<string, string> = {
   azalea_leaves_flowered: 'flowering_azalea_leaves', note_block: 'noteblock', lit_pumpkin: 'jack_o_lantern', magma_block: 'magma', stained_glass: 'white_stained_glass',
   concrete: 'white_concrete', stained_hardened_clay: 'white_terracotta', hardened_clay: 'terracotta', red_nether_brick: 'red_nether_bricks', quartz_ore: 'netherrack',
-  slime: 'slime_block', grass_path: 'dirt_path', stonebrick: 'stone_bricks', end_bricks: 'end_stone_bricks', melon_block: 'melon', double_plant: 'short_grass',
+  slime: 'slime_block', grass_path: 'dirt_path', ender_chest: 'ender_chest_block', stonebrick: 'stone_bricks', end_bricks: 'end_stone_bricks', melon_block: 'melon', double_plant: 'short_grass',
 };
 
 const RULES: [RegExp, (m: RegExpExecArray, k: string) => string | null][] = [

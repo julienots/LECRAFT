@@ -7,7 +7,7 @@ import { buildJavaVisuals } from './JavaModels';
 /** Nombre maximal de blocs (identifiants sur 16 bits, tables de lookup bornées). */
 export const MAX_BLOCKS = 4096;
 const RENDER_TYPES = ['none', 'cube', 'cutout', 'cross', 'liquid', 'translucent', 'model'] as const;
-export const SHAPES: ShapeKind[] = ['slab', 'stairs', 'door', 'ladder', 'fence', 'pane', 'bed', 'torch', 'chest', 'farmland', 'snow_layer', 'cactus', 'plate', 'lantern', 'custom', 'trapdoor', 'fence_gate', 'lever', 'button', 'lily_pad', 'wall', 'carpet', 'end_frame', 'end_portal'];
+export const SHAPES: ShapeKind[] = ['slab', 'stairs', 'door', 'ladder', 'fence', 'pane', 'bed', 'torch', 'chest', 'farmland', 'snow_layer', 'cactus', 'plate', 'lantern', 'custom', 'trapdoor', 'fence_gate', 'lever', 'button', 'lily_pad', 'wall', 'carpet', 'end_frame', 'end_portal', 'shulker'];
 
 /**
  * Registre des blocs : convertit les définitions data-driven en objets compacts
@@ -49,6 +49,8 @@ class BlockRegistryImpl {
         : k === 'dispenser' || k === 'dropper' ? 'dispenser' : k === 'hopper' ? 'hopper' : k === 'ender_chest_block' || k === 'ender_chest' ? 'ender_chest' : undefined;
       if (it) def = { ...def, interact: it };
     }
+    // boîte de shulker : couvercle qui se soulève en tournant (render/ChestLids.ts), comme le jeu original
+    if (def.key.endsWith('shulker_box') && !def.shape && !def.bedrock) def = { ...def, render: 'model', shape: 'shulker' };
     const id = this.blocks.length;
     if (id >= MAX_BLOCKS) throw new Error(`Maximum ${MAX_BLOCKS} blocs`);
     // modèle 3D du jeu de référence (lanternes, chaudrons, enclumes…) : rendu par quads précalculés

@@ -8,6 +8,7 @@ import { AIController } from '../ai/AIController';
 import { AIState, type StateHandlers } from '../ai/StateMachine';
 import { MobModel } from '../render/MobModels';
 import { Entity } from './Entity';
+import { scanRelations } from './MobRelations';
 import type { ProjectileKind } from './Projectile';
 
 /** Services fournis par l'EntityManager aux entités. */
@@ -49,6 +50,14 @@ export class Mob extends Entity {
   walkPhase = 0;
   /** Clé de la cage/autel d'origine. */
   origin: string | null = null;
+  /** Relations entre créatures (entities/MobRelations.ts) : proie, vengeance, prédateur fui. */
+  prey: Mob | null = null;
+  revenge = false;
+  relHunt: import('./MobRelations').HuntRule | null = null;
+  fleeFrom: { x: number; z: number } | null = null;
+  private relTimer = Math.random();
+  /** Abeille : dard perdu après une piqûre (elle meurt peu après). */
+  private stingDeath = 0;
   readonly ai: AIController;
   model: MobModel;
   object3d: THREE.Object3D;
@@ -93,6 +102,8 @@ export class Mob extends Entity {
     this.attackTimer = this.def.attackCooldown;
     this.attackAnim = 1;
     const p = ctx.player;
+    // abeille sans dard : ne pique plus
+    if (this.def.key === 'bee' && this.dynProps.get('__stung')) return;
     const dx = p.x - this.x, dz = p.z - this.z, d = Math.hypot(dx, dz) || 1;
     const dy = p.y - this.y;
     if (d > this.def.attackRange * 1.2 || dy > 2.5 || dy < -2) return;
@@ -102,6 +113,13 @@ export class Mob extends Entity {
     if (dealt > 0 && this.def.key === 'husk') p.effects.add('hunger', 140, 0, true, p.effectTarget);
     // squelette wither : effet wither
     if (dealt > 0 && this.def.key === 'wither_skeleton') p.effects.add('wither', 200, 0, true, p.effectTarget);
+    // abeille : poison (normal 10 s, difficile 18 s), puis elle perd son dard et meurt en 50 à 60 s
+    if (dealt > 0 && this.def.key === 'bee') {
+      if (p.difficulty !== 'easy') p.effects.add('poison', p.difficulty === 'hard' ? 360 : 200, 0, true, p.effectTarget);
+      this.anger = 0;
+      this.stingDeath = 50 + Math.random() * 10;
+      this.dynProps.set('__stung', true);
+    }
     if (dealt > 0) {
       ctx.audio.play('hurt', { volume: 0.9 });
       ctx.haptic('medium');
@@ -207,6 +225,18 @@ export class Mob extends Entity {
     }
     this.ai.update(ctx, dt);
     this.customUpdate(ctx, dt);
+    // relations avec les autres créatures (chasse, fuite, protection des petits)
+    this.relTimer -= dt;
+    if (this.relTimer <= 0) {
+      this.relTimer = 0.8 + Math.random() * 0.4;
+      scanRelations(this, ctx);
+    }
+    if (this.stingDeath <= 0 && this.def.key === 'bee' && this.dynProps.get('__stung')) this.stingDeath = 50 + Math.random() * 10;
+    if (this.stingDeath > 0) {
+      this.stingDeath -= dt;
+      if (this.stingDeath <= 0) ctx.combat.damageMob(this, this.health + 1, { kind: 'environment' });
+      if (this.dead) return;
+    }
     if (this.has('aquatic')) this.swim(ctx, dt);
     if (this.has('flies')) {
       // vol : maintien d'une altitude au-dessus du sol

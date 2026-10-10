@@ -1,4 +1,5 @@
 import type { ItemStack } from '../inventory/Item';
+import { isRailKey } from '../world/Rails';
 import { setOpen, updatePowerAround } from '../world/Redstone';
 import { applyPotion, makePotion, potionColor, potionOf } from '../inventory/Potions';
 import { enchLevel, enchantsOf } from '../inventory/Enchantments';
@@ -654,6 +655,8 @@ export class PlayerInteraction {
       return this.validate(mk(x, y, z, look, [[x + dx, y, z + dz, block, look | 4]]));
     }
     // feuilles posées par le joueur : persistantes (ne se décomposent pas)
+    // rail : nord-sud ou est-ouest selon le regard (puis raccordé aux voisins, world/Rails.ts)
+    if (isRailKey(b.key)) return this.validate(mk(x, y, z, look & 1));
     return this.validate(mk(x, y, z, b.orientable ? opposite(look) : b.key.endsWith('_leaves') ? 1 : 0));
   }
 

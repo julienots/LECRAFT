@@ -1,4 +1,6 @@
 import { newFurnace, type FurnaceState } from '../crafting/CraftingSystem';
+import { isRailKey, updateRailsAround } from './Rails';
+import { updateDripstoneColumn } from './Dripstone';
 import type { ItemStack } from '../inventory/Item';
 import { newBrewing, type BrewingState } from '../crafting/Brewing';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
@@ -49,6 +51,7 @@ export class World {
   readonly furnaces = new Map<string, FurnaceState>();
   /** Alambics (fioles, ingrédient, poudre de blaze, infusion en cours). */
   readonly brewing = new Map<string, BrewingState>();
+  private dripBusy = false;
   readonly specials = new Map<string, SpecialEntry>();
 
   constructor(readonly seed: number) {}
@@ -145,6 +148,22 @@ export class World {
       if (kind === 'chest' || kind === 'dispenser' || kind === 'hopper') this.chests.delete(`${x},${y},${z}`);
       if (kind === 'brewing') this.brewing.delete(`${x},${y},${z}`);
       if (kind === 'furnace' && !(furnaceLike(prev) && furnaceLike(id))) this.furnaces.delete(`${x},${y},${z}`);
+    }
+    // rails : raccordement automatique aux voisins (pose, casse)
+    if (!this.dripBusy && (isRailKey(BlockRegistry.get(id).key) || (prev > 0 && isRailKey(BlockRegistry.get(prev).key)))) {
+      this.dripBusy = true;
+      updateRailsAround(this, x, y, z);
+      this.dripBusy = false;
+    }
+    // spéléothèmes : segments recalculés quand la colonne (ou son support) change
+    if (!this.dripBusy && (BlockRegistry.get(id).key === 'pointed_dripstone' || BlockRegistry.get(Math.max(0, prev)).key === 'pointed_dripstone' || id === 0)) {
+      this.dripBusy = true;
+      updateDripstoneColumn(this, x, y, z);
+      if (id === 0) {
+        updateDripstoneColumn(this, x, y - 1, z);
+        updateDripstoneColumn(this, x, y + 1, z);
+      }
+      this.dripBusy = false;
     }
     // entonnoir, distributeur, dropper posés : inventaire créé tout de suite (ils agissent même vides)
     if (id > 0 && prev !== id) {

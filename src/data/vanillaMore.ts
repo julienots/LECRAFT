@@ -98,7 +98,13 @@ cube('blast_furnace', 'Haut fourneau', (t) => { t.grain(['#5a5a5e', '#6a6a6e', '
 cube('smoker', 'Fumoir', (t) => { paint.planks(t, '#5a4028'); t.rect(3, 8, 10, 6, hex('#1a1a1a')); }, { hardness: 3.5, tool: 'axe', minTier: 0, sound: 'wood', color: '#5a4028' });
 cube('beehive', 'Ruche', (t) => { paint.planks(t, '#c8a050'); t.rect(5, 6, 6, 4, hex('#3a2a10')); }, { hardness: 0.6, tool: 'axe', minTier: 0, sound: 'wood', color: '#c8a050' });
 cube('bee_nest', 'Nid d’abeilles', (t) => { t.grain(['#e0b030', '#d0a020', '#f0c040'].map(hex), 0.4, 2); for (let y = 1; y < 16; y += 3) t.hline(0, 15, y, hex('#b88818')); t.rect(6, 6, 4, 4, hex('#3a2a10')); }, { hardness: 0.3, tool: 'axe', minTier: 0, sound: 'wood', color: '#e0b030' });
-cube('ender_chest_block', 'Bloc d’ender', (t) => { t.grain(['#14261e', '#1a3028', '#0e1c16'].map(hex), 0.5, 2); t.border(hex('#2a6a5a')); t.rect(6, 6, 4, 4, hex('#30c090')); }, { hardness: 22.5, color: '#14261e' });
+// coffre de l'Ender : modèle et couvercle du coffre (comme le jeu original), texture
+// entity/chest/ender.png du pack (render/TextureManager.ts) ou dessin d'obsidienne verdâtre
+const enderBase: P = (t) => { t.grain(['#14261e', '#1a3028', '#0e1c16', '#102420'].map(hex), 0.5, 2); t.border(hex('#0a1410')); };
+tile('ender_chest_top', (t) => { enderBase(t); t.rect(6, 6, 4, 4, hex('#1e3a30')); });
+tile('ender_chest_side', (t) => { enderBase(t); t.hline(0, 15, 5, hex('#0a1410')); });
+tile('ender_chest_front', (t) => { enderBase(t); t.hline(0, 15, 5, hex('#0a1410')); t.rect(7, 4, 2, 4, hex('#30c090')); t.set(7, 6, hex('#a0ffd8')); t.set(8, 6, hex('#a0ffd8')); });
+B.push({ key: 'ender_chest_block', name: 'Coffre de l’Ender', textures: { top: 'ender_chest_top', bottom: 'ender_chest_top', side: 'ender_chest_side', front: 'ender_chest_front' }, hardness: 22.5, tool: 'pickaxe', minTier: 1, render: 'model', shape: 'chest', orientable: true, light: 7, sound: 'stone', color: '#14261e' });
 cube('respawn_anchor', 'Ancre de réapparition', (t) => { t.grain(['#1a1028', '#20142e'].map(hex), 0.5, 2); t.border(hex('#4a2a7a')); t.rect(5, 5, 6, 6, hex('#a040ff')); }, { hardness: 50, minTier: 4, light: 3, color: '#1a1028' });
 for (const [k, n, c, light] of [['red_mushroom_block', 'Bloc de champignon rouge', '#c02a20', 0], ['brown_mushroom_block', 'Bloc de champignon brun', '#956b4a', 0], ['mushroom_stem', 'Pied de champignon', '#d8d0c4', 0]] as const)
   cube(k, n, (t) => { t.grain(paint.ramp(c, 4, 0.15), 0.4, 2); if (k === 'red_mushroom_block') t.speckle(hex('#f0f0f0'), 10, 2); }, { hardness: 0.2, tool: 'axe', minTier: 0, sound: 'wood', light, color: c });

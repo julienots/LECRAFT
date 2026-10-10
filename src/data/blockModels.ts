@@ -395,8 +395,24 @@ for (const [k, tex] of [
 for (let s = 0; s < 4; s++) def(`beetroots_stage${s}`, { els: crop(`beetroots_stage${s}`), collision: [] });
 for (let s = 0; s < 3; s++) def(`nether_wart_stage${s}`, { els: crop(`nether_wart_stage${s}`), collision: [] });
 for (let s = 0; s < 2; s++) def(`torchflower_crop_stage${s}`, { els: crop(`torchflower_crop_stage${s}`), collision: [] });
-for (const k of ['rail', 'rail_corner', 'powered_rail', 'powered_rail_on', 'detector_rail', 'detector_rail_on', 'activator_rail', 'activator_rail_on', 'redstone_dust_dot', 'redstone_dust_line0', 'redstone_dust_line1', 'leaf_litter', 'pink_petals_stem', 'wildflowers', 'wildflowers_stem', 'frogspawn', 'tripwire', 'sculk_vein', 'resin_clump', 'pale_moss_carpet_side_small', 'pale_moss_carpet_side_tall'])
-  def(k, { facing: true, els: flat(k, k === 'frogspawn' ? 1.5 : 0.25), collision: [] });
+// ---------- rails : 10 formes comme le jeu original (méta = forme, voir world/Rails.ts) ----------
+// 0 nord-sud, 1 est-ouest, 2-5 montées (est, ouest, nord, sud), 6-9 virages (sud-est, sud-ouest,
+// nord-ouest, nord-est) ; les rails spéciaux (propulseurs, détecteurs, activateurs) n'ont pas de virage
+const railFlat = (t: string): JElement[] => [{ from: [0, 1, 0], to: [16, 1, 16], faces: { up: { t, uv: [0, 0, 16, 16] }, down: { t, uv: [0, 16, 16, 0] } } }];
+const railRaised = (t: string, a: number): JElement[] => [
+  { from: [0, 9, 0], to: [16, 9, 16], rot: { o: [8, 9, 8], axis: 'x', a, rescale: true }, faces: { up: { t, uv: [0, 0, 16, 16] }, down: { t, uv: [0, 16, 16, 0] } } },
+];
+export function railModel(t: string, corner: string | null): JModel {
+  const v = (els: JElement[], steps: number): JModel => ({ els, steps, collision: [] });
+  const variants = [v(railFlat(t), 0), v(railFlat(t), 1), v(railRaised(t, 45), 1), v(railRaised(t, -45), 1), v(railRaised(t, 45), 0), v(railRaised(t, -45), 0)];
+  if (corner) for (let k = 0; k < 4; k++) variants.push(v(railFlat(corner), k));
+  return { els: [], collision: [], variants };
+}
+M.rail = railModel('rail', 'rail_corner');
+for (const k of ['powered_rail', 'powered_rail_on', 'detector_rail', 'detector_rail_on', 'activator_rail', 'activator_rail_on']) M[k] = railModel(k, null);
+
+for (const k of ['rail_corner', 'redstone_dust_dot', 'redstone_dust_line0', 'redstone_dust_line1', 'leaf_litter', 'pink_petals_stem', 'wildflowers', 'wildflowers_stem', 'frogspawn', 'tripwire', 'sculk_vein', 'resin_clump', 'pale_moss_carpet_side_small', 'pale_moss_carpet_side_tall'])
+  if (!M[k] || k === 'rail_corner') def(k, { facing: true, els: flat(k, k === 'frogspawn' ? 1.5 : 0.25), collision: [] });
 
 // ---------- torches (au sol et au mur, inclinées comme dans le jeu) ----------
 const torchEls = (t: string, wall: boolean): JElement[] => {
@@ -421,6 +437,19 @@ M.end_rod = {
     ...[3, 0, 1, 2].map((steps) => ({ els: endRodEls().map((e) => ({ ...e, rot: { o: [8, 8, 8], axis: 'z' as const, a: -90 } })), steps, collision: [] })),
   ],
 };
+
+// ---------- portail du Nether : plaque de 4 px d'épaisseur, deux grandes faces (comme le jeu) ----------
+// méta = axe du cadre (0 : le long de x, 1 : le long de z)
+const portalPane = (t: string): JModel => ({
+  els: [],
+  collision: [],
+  variants: [
+    { els: [box([0, 0, 6], [16, 16, 10], t, { skip: ['up', 'down', 'east', 'west'], trans: true })], collision: [] },
+    { els: [box([6, 0, 0], [10, 16, 16], t, { skip: ['up', 'down', 'north', 'south'], trans: true })], collision: [] },
+  ],
+});
+M.nether_portal = portalPane('nether_portal');
+M.paper_portal = portalPane('paper_portal');
 
 /** Modèles par clé de bloc. */
 export const BLOCK_MODELS: Record<string, JModel> = M;

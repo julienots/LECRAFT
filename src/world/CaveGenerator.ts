@@ -1,4 +1,5 @@
 import { CHUNK_SIZE, WORLD_HEIGHT, SEA_LEVEL } from '../core/Config';
+import { dripSegment } from './Dripstone';
 import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { SimplexNoise } from './Noise';
 import { idx, type ChunkData } from './ChunkData';
@@ -154,10 +155,22 @@ export class CaveGenerator {
             if (I.pointed_dripstone) {
               if (ceil && rng.next() < 0.12) {
                 const len = 1 + rng.int(0, 2);
-                for (let k = 0; k < len && at(x, y - k, z) === B.AIR; k++) blocks[idx(x, y - k, z)] = I.pointed_dripstone;
+                let n = 0;
+                while (n < len && at(x, y - n, z) === B.AIR) n++;
+                // stalactite : base contre le plafond, pointe en bas (méta : segment, vers le bas)
+                for (let k = 0; k < n; k++) {
+                  blocks[idx(x, y - k, z)] = I.pointed_dripstone;
+                  c.meta[idx(x, y - k, z)] = dripSegment(k, n);
+                }
               } else if (floor && rng.next() < 0.08) {
                 const len = 1 + rng.int(0, 2);
-                for (let k = 0; k < len && at(x, y + k, z) === B.AIR; k++) blocks[idx(x, y + k, z)] = I.pointed_dripstone;
+                let n = 0;
+                while (n < len && at(x, y + n, z) === B.AIR) n++;
+                // stalagmite : base au sol, pointe en haut (bit 4 : vers le haut)
+                for (let k = 0; k < n; k++) {
+                  blocks[idx(x, y + k, z)] = I.pointed_dripstone;
+                  c.meta[idx(x, y + k, z)] = 4 | dripSegment(k, n);
+                }
               }
             }
           } else if (floor) {

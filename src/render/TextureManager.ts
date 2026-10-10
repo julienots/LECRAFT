@@ -32,7 +32,7 @@ const PACK_RENAME: Record<string, string> = {
   carved_pumpkin_top: 'pumpkin_top', carved_pumpkin_side: 'carved_pumpkin', jack_o_lantern_top: 'pumpkin_top', jack_o_lantern_side: 'jack_o_lantern',
   campfire_top: 'campfire_log_lit', campfire_side: 'campfire_log_lit', azalea: 'azalea_top', fire: 'fire_0', soul_fire: 'soul_fire_0', pointed_dripstone: 'pointed_dripstone_down_tip', end_portal_frame_eye: 'end_portal_frame_eye', end_portal_frame_top: 'end_portal_frame_top',
   // palette v2.19
-  stripped_oak_log_side: 'stripped_oak_log', oak_wood: 'oak_log', stripped_spruce_log_side: 'stripped_spruce_log', spruce_wood: 'spruce_log', stripped_birch_log_side: 'stripped_birch_log', birch_wood: 'birch_log', stripped_jungle_log_side: 'stripped_jungle_log', jungle_wood: 'jungle_log', stripped_acacia_log_side: 'stripped_acacia_log', acacia_wood: 'acacia_log', stripped_dark_oak_log_side: 'stripped_dark_oak_log', dark_oak_wood: 'dark_oak_log', stripped_cherry_log_side: 'stripped_cherry_log', cherry_wood: 'cherry_log', stripped_mangrove_log_side: 'stripped_mangrove_log', mangrove_wood: 'mangrove_log', stripped_pale_oak_log_side: 'stripped_pale_oak_log', pale_oak_wood: 'pale_oak_log', stripped_crimson_stem_side: 'stripped_crimson_stem', crimson_hyphae: 'crimson_stem', stripped_warped_stem_side: 'stripped_warped_stem', warped_hyphae: 'warped_stem', ochre_froglight: 'ochre_froglight_side', verdant_froglight: 'verdant_froglight_side', pearlescent_froglight: 'pearlescent_froglight_side', sculk_catalyst: 'sculk_catalyst_side', sculk_shrieker: 'sculk_shrieker_side', sculk_sensor: 'sculk_sensor_side', bamboo_plant: 'bamboo_stalk', sweet_berry_bush: 'sweet_berry_bush_stage3', sunflower: 'sunflower_front', small_dripleaf: 'small_dripleaf_top', glow_berries_vines: 'cave_vines_lit', honey_block: 'honey_block_side', bee_nest: 'bee_nest_front', beehive: 'beehive_front', blast_furnace: 'blast_furnace_front', smoker: 'smoker_front', crafter: 'crafter_north', piston: 'piston_side', sticky_piston: 'piston_side', dispenser: 'dispenser_front', dropper: 'dropper_front', observer: 'observer_front', respawn_anchor: 'respawn_anchor_side0', target: 'target_side', lodestone: 'lodestone_side', chiseled_bookshelf: 'chiseled_bookshelf_occupied', dried_kelp_block: 'dried_kelp_side', mycelium: 'mycelium_top', polished_basalt: 'polished_basalt_side', smooth_sandstone: 'sandstone_top', smooth_red_sandstone: 'red_sandstone_top', reinforced_deepslate: 'reinforced_deepslate_side', quartz_pillar: 'quartz_pillar', kelp_plant: 'kelp_plant', ender_chest_block: 'obsidian',
+  stripped_oak_log_side: 'stripped_oak_log', oak_wood: 'oak_log', stripped_spruce_log_side: 'stripped_spruce_log', spruce_wood: 'spruce_log', stripped_birch_log_side: 'stripped_birch_log', birch_wood: 'birch_log', stripped_jungle_log_side: 'stripped_jungle_log', jungle_wood: 'jungle_log', stripped_acacia_log_side: 'stripped_acacia_log', acacia_wood: 'acacia_log', stripped_dark_oak_log_side: 'stripped_dark_oak_log', dark_oak_wood: 'dark_oak_log', stripped_cherry_log_side: 'stripped_cherry_log', cherry_wood: 'cherry_log', stripped_mangrove_log_side: 'stripped_mangrove_log', mangrove_wood: 'mangrove_log', stripped_pale_oak_log_side: 'stripped_pale_oak_log', pale_oak_wood: 'pale_oak_log', stripped_crimson_stem_side: 'stripped_crimson_stem', crimson_hyphae: 'crimson_stem', stripped_warped_stem_side: 'stripped_warped_stem', warped_hyphae: 'warped_stem', ochre_froglight: 'ochre_froglight_side', verdant_froglight: 'verdant_froglight_side', pearlescent_froglight: 'pearlescent_froglight_side', sculk_catalyst: 'sculk_catalyst_side', sculk_shrieker: 'sculk_shrieker_side', sculk_sensor: 'sculk_sensor_side', bamboo_plant: 'bamboo_stalk', sweet_berry_bush: 'sweet_berry_bush_stage3', sunflower: 'sunflower_front', small_dripleaf: 'small_dripleaf_top', glow_berries_vines: 'cave_vines_lit', honey_block: 'honey_block_side', bee_nest: 'bee_nest_front', beehive: 'beehive_front', blast_furnace: 'blast_furnace_front', smoker: 'smoker_front', crafter: 'crafter_north', piston: 'piston_side', sticky_piston: 'piston_side', dispenser: 'dispenser_front', dropper: 'dropper_front', observer: 'observer_front', respawn_anchor: 'respawn_anchor_side0', target: 'target_side', lodestone: 'lodestone_side', chiseled_bookshelf: 'chiseled_bookshelf_occupied', dried_kelp_block: 'dried_kelp_side', mycelium: 'mycelium_top', polished_basalt: 'polished_basalt_side', smooth_sandstone: 'sandstone_top', smooth_red_sandstone: 'red_sandstone_top', reinforced_deepslate: 'reinforced_deepslate_side', quartz_pillar: 'quartz_pillar', kelp_plant: 'kelp_plant',
 };
 const WATER_TINT = hex('#3f76e4');
 
@@ -146,7 +146,11 @@ export const SKIN_PATHS: Record<string, string[]> = {
  * couvercle 14×14×5 en (0,0), base 14×14×10 en (0,19), loquet 2×4×1 en (0,0).
  * Les bandes latérales sont stockées à l'envers dans la texture (modèle en repère « y vers le bas »).
  */
-const CHEST_TILES: Record<string, true> = { chest_top: true, chest_side: true, chest_front: true };
+/** Tuiles des coffres composées depuis la texture d'entité (coffre normal, coffre de l'Ender). */
+const CHEST_TILES: Record<string, [string, string]> = {
+  chest_top: ['normal', 'chest_top'], chest_side: ['normal', 'chest_side'], chest_front: ['normal', 'chest_front'],
+  ender_chest_top: ['ender', 'chest_top'], ender_chest_side: ['ender', 'chest_side'], ender_chest_front: ['ender', 'chest_front'],
+};
 function chestTile(img: ImageBitmap, name: string): ImageData {
   const k = img.width / 64;
   const c = document.createElement('canvas');
@@ -272,8 +276,9 @@ export class TextureManager implements SkinProvider {
       if (!img) {
         // le coffre n'a pas de texture de bloc dans le jeu original : on compose ses faces
         // à partir de la texture d'entité (entity/chest/normal.png)
-        const chest = CHEST_TILES[name] && pack.get('entity/chest/normal.png');
-        if (chest) out.set(full, chestTile(chest, name));
+        const ct = CHEST_TILES[name];
+        const chest = ct && pack.get(`entity/chest/${ct[0]}.png`);
+        if (chest) out.set(full, chestTile(chest, ct[1]));
         continue;
       }
       const frames = Math.max(1, Math.floor(img.height / img.width));

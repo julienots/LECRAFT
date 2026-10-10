@@ -80,6 +80,9 @@ export function modelBoxes(id: number, meta: number, nb: NeighborFn): Box[] {
       if (meta & 128) return [[1, 0, 1, 15, 10, 15]];
       // corps 14×14×14 et loquet 2×4×1 en relief sur la façade (comme le modèle du jeu original)
       return [[1, 0, 1, 15, 14, 15], rotate([7, 7, 0, 9, 11, 1], f)];
+    case 'shulker':
+      // couvercle ouvert (bit 128) : seule la base est dans le maillage (couvercle animé à part)
+      return meta & 128 ? [[0, 0, 0, 16, 8, 16]] : [FULL];
     case 'farmland':
       return [[0, 0, 0, 16, 15, 16]];
     case 'snow_layer':

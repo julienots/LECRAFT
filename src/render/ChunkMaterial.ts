@@ -68,6 +68,9 @@ uniform vec3 uSunGlow;
 uniform sampler2D uShadowMap;
 uniform float uShadowTexel;
 uniform float uPortalTile;
+uniform sampler2D uEndSky;
+uniform sampler2D uEndPortal;
+uniform float uEndTex;
 uniform vec2 uResolution;
 varying vec2 vUv;
 varying float vTile;
@@ -125,10 +128,37 @@ vec3 endPortalSky() {
   return c;
 }
 
+/**
+ * Portail de l'End du jeu original (rendertype_end_portal) : ciel de l'End teinté puis 15 couches
+ * de la texture des étoiles (entity/end_portal.png), chacune avec sa couleur, sa rotation, son
+ * échelle et sa dérive lente, en espace écran.
+ */
+const vec3 EPC[16] = vec3[](
+  vec3(0.022087, 0.098399, 0.110818), vec3(0.011892, 0.095924, 0.089485), vec3(0.027636, 0.101689, 0.100326), vec3(0.046564, 0.109883, 0.114838),
+  vec3(0.064901, 0.117696, 0.097189), vec3(0.063761, 0.086895, 0.123646), vec3(0.084817, 0.111994, 0.166380), vec3(0.097489, 0.154120, 0.091064),
+  vec3(0.106152, 0.131144, 0.195191), vec3(0.097721, 0.110188, 0.187229), vec3(0.133516, 0.138278, 0.148582), vec3(0.070006, 0.243332, 0.235792),
+  vec3(0.196766, 0.142899, 0.214696), vec3(0.047281, 0.315338, 0.321970), vec3(0.204675, 0.390010, 0.302066), vec3(0.080955, 0.314821, 0.661491)
+);
+vec3 endPortalPack() {
+  vec2 sp = gl_FragCoord.xy / max(uResolution.y, 1.0) * 0.5 + 0.25;
+  vec3 c = texture(uEndSky, sp).rgb * EPC[0];
+  // temps de jeu du jeu original (fraction de journée) : dérive très lente
+  float gt = uTime * (20.0 / 24000.0);
+  for (int i = 0; i < 15; i++) {
+    float l = float(i + 1);
+    vec2 p = sp + vec2(17.0 / l, (2.0 + l / 1.5) * gt * 1.5);
+    float a = radians((l * l * 4321.0 + l * 9.0) * 2.0);
+    p = mat2(cos(a), sin(a), -sin(a), cos(a)) * p;
+    p *= 4.5 - l / 4.0;
+    c += texture(uEndPortal, p).rgb * EPC[i];
+  }
+  return c;
+}
+
 void main() {
   float tile = floor(vTile + 0.5);
   if (uPortalTile >= 0.0 && abs(tile - uPortalTile) < 0.5) {
-    vec3 sky = endPortalSky();
+    vec3 sky = uEndTex > 0.5 ? endPortalPack() : endPortalSky();
     float fogP = smoothstep(uFogNear, uFogFar, vDist);
     gl_FragColor = vec4(mix(sky, uFogColor, fogP), 1.0);
     return;
@@ -232,6 +262,9 @@ export interface ChunkUniforms {
   uShadowMatrix: THREE.IUniform<THREE.Matrix4>;
   uShadowTexel: THREE.IUniform<number>;
   uPortalTile: THREE.IUniform<number>;
+  uEndSky: THREE.IUniform<THREE.Texture | null>;
+  uEndPortal: THREE.IUniform<THREE.Texture | null>;
+  uEndTex: THREE.IUniform<number>;
   uResolution: THREE.IUniform<THREE.Vector2>;
 }
 
@@ -259,6 +292,9 @@ export function createChunkMaterials(atlas: THREE.Texture) {
     uShadowMatrix: { value: new THREE.Matrix4() },
     uShadowTexel: { value: 1 / 1024 },
     uPortalTile: { value: -1 },
+    uEndSky: { value: null },
+    uEndPortal: { value: null },
+    uEndTex: { value: 0 },
     uResolution: { value: new THREE.Vector2(1, 1) },
   };
   const opaque = new THREE.ShaderMaterial({

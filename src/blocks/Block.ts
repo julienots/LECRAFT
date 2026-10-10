@@ -26,7 +26,8 @@ export type ShapeKind =
   | 'wall'
   | 'carpet'
   | 'end_frame'
-  | 'end_portal';
+  | 'end_portal'
+  | 'shulker';
 
 export interface DropDef {
   item: string;

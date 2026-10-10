@@ -6,6 +6,7 @@ import type { Mob, EntitySpawner } from '../entities/Mob';
 import { Boss } from '../entities/Boss';
 import { AIState } from '../ai/StateMachine';
 import { hooks, type DamageEvent } from '../scripting/Hooks';
+import { onMobHurtByMob } from '../entities/MobRelations';
 
 /**
  * Application des dégâts aux créatures : faiblesses, coups critiques, invincibilité temporaire,
@@ -100,6 +101,9 @@ export class DamageSystem {
         if (m.ai.state !== AIState.ATTACK) m.ai.fsm.set(AIState.CHASE);
       }
     }
+    // frappée par une autre créature : vengeance ou fuite (relations du jeu original)
+    const by = src.attacker as Mob | null | undefined;
+    if (!src.fromPlayer && src.kind !== 'player' && by && (by as { kind?: string }).kind === 'mob' && 'def' in by) onMobHurtByMob(m, by);
     if (m instanceof Boss) m.onHit(ctx);
     hooks.afterHurt?.(m, dmg, ev);
     if (m.health <= 0) this.kill(m, src);

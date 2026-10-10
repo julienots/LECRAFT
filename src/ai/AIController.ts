@@ -4,6 +4,7 @@ import { raycastBlocks } from '../util/Raycast';
 import { BlockRegistry } from '../blocks/BlockRegistry';
 import { AIState, StateMachine, type StateHandlers } from './StateMachine';
 import { findPath } from './Pathfinder';
+import { huntStep } from '../entities/MobRelations';
 
 /**
  * Contrôleur d'IA : perception (distance, ligne de vue), déplacement (steering simple,
@@ -282,8 +283,12 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
     [AIState.FLEE]: {
       update: (m, dt) => {
         m.fleeTimer -= dt;
-        if (m.fleeTimer <= 0) return AIState.WANDER;
-        const p = ai.ctx.player;
+        if (m.fleeTimer <= 0) {
+          m.fleeFrom = null;
+          return AIState.WANDER;
+        }
+        // fuit le joueur, ou la créature qui l'a attaquée / son prédateur
+        const p = m.fleeFrom ?? ai.ctx.player;
         const dx = m.x - p.x, dz = m.z - p.z, d = Math.hypot(dx, dz) || 1;
         ai.moveTowards(m.x + (dx / d) * 6, m.z + (dz / d) * 6, 1.6);
       },
@@ -334,6 +339,17 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
         if (wantsChase(m)) return AIState.CHASE;
         const d = ai.navigateTo(m.homeX, ai.surfaceY(m.homeX, m.homeZ), m.homeZ, 0.7);
         if (d < 2 || ai.fsm.timeInState > 15) return AIState.WANDER;
+      },
+    },
+    [AIState.HUNT]: {
+      update: (m) => {
+        if (m.fleeTimer > 0) return AIState.FLEE;
+        // les monstres préfèrent le joueur (sauf s'ils se vengent d'une créature)
+        if (!m.revenge && wantsChase(m)) {
+          m.prey = null;
+          return AIState.CHASE;
+        }
+        if (!huntStep(m, ai.ctx)) return AIState.WANDER;
       },
     },
     [AIState.DEAD]: { update: () => ai.stop() },

@@ -1051,6 +1051,28 @@ export class Session implements GameContext {
     }
   }
 
+  /** Textures du pack pour le portail de l'End (ciel de l'End + étoiles), comme le jeu original. */
+  private endTex: { sky: THREE.Texture; portal: THREE.Texture } | null | undefined;
+  private syncEndPortalTextures(u: { uEndSky: { value: THREE.Texture | null }; uEndPortal: { value: THREE.Texture | null }; uEndTex: { value: number } }) {
+    if (this.endTex === undefined) {
+      const tm = this.game.textures;
+      const sky = tm.packImage('environment/end_sky.png'), portal = tm.packImage('entity/end_portal.png');
+      const mk = (img: ImageBitmap) => {
+        const t = new THREE.Texture(img as unknown as HTMLImageElement);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.magFilter = THREE.NearestFilter;
+        t.minFilter = THREE.LinearMipmapLinearFilter;
+        t.colorSpace = THREE.NoColorSpace;
+        t.needsUpdate = true;
+        return t;
+      };
+      this.endTex = sky && portal ? { sky: mk(sky), portal: mk(portal) } : null;
+    }
+    u.uEndSky.value = this.endTex?.sky ?? null;
+    u.uEndPortal.value = this.endTex?.portal ?? null;
+    u.uEndTex.value = this.endTex ? 1 : 0;
+  }
+
   private updateView(dt: number) {
     this.chestLids.update(this.world, dt, this.dayCycle.daylight);
     const game = this.game;
@@ -1085,6 +1107,7 @@ export class Session implements GameContext {
     const u = r.materials.uniforms;
     u.uTime.value = this.elapsed;
     u.uPortalTile.value = TileRegistry.has('end_portal') ? TileRegistry.index('end_portal') : -1;
+    this.syncEndPortalTextures(u);
     u.uResolution.value.set(r.gl.domElement.width, r.gl.domElement.height);
     u.uDaylight.value = nether ? 0 : paper ? 1 : Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
     u.uAmbient.value = this.dimension === 'end' ? 0.7 : nether ? 0.3 : paper ? 0.28 : 0.035;
@@ -1383,6 +1406,8 @@ export class Session implements GameContext {
     this.chestLids.dispose();
     this.falling.clear();
     this.shadowTexture.dispose();
+    this.endTex?.sky.dispose();
+    this.endTex?.portal.dispose();
     this.iconTex.forEach((t) => t.dispose());
     this.scene.remove(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group);
     this.audio.stopAmbience();

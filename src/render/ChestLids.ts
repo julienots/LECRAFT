@@ -2,7 +2,9 @@
  * Couvercles animés des coffres (comme le jeu original) : à l'ouverture, le bloc passe en
  * « couvercle ouvert » (bit 128 de la méta : le maillage ne contient que le corps) et un
  * couvercle 3D texturé pivote autour de sa charnière arrière ; à la fermeture il redescend,
- * puis le bloc reprend son maillage complet.
+ * puis le bloc reprend son maillage complet. Coffre de l'Ender : même couvercle. Boîte de
+ * shulker : le couvercle monte d'un demi-bloc en tournant de trois quarts de tour. Tonneau : le
+ * dessus passe à la texture « ouvert » tant que l'interface est ouverte.
  */
 import * as THREE from 'three';
 import { BlockRegistry } from '../blocks/BlockRegistry';
@@ -13,12 +15,26 @@ import type { World } from '../world/World';
 const OPEN_FLAG = 128;
 const SPEED = 4; // ouverture complète en 0,25 s
 const MAX_ANGLE = 1.25;
+const SHULKER_SPEED = 2; // 10 ticks comme le jeu original
+type Kind = 'chest' | 'shulker' | 'barrel';
+
+function kindOf(world: World, x: number, y: number, z: number): Kind | null {
+  const id = world.getBlock(x, y, z);
+  if (id <= 0) return null;
+  const b = BlockRegistry.get(id);
+  if (b.shape === 'chest') return 'chest';
+  if (b.shape === 'shulker') return 'shulker';
+  if (b.key === 'barrel' && b.metaTiles) return 'barrel';
+  return null;
+}
 
 interface Lid {
   x: number; y: number; z: number;
   t: number;
   target: number;
-  pivot: THREE.Group;
+  kind: Kind;
+  /** Couvercle (null pour le tonneau, dont seule la texture change). */
+  pivot: THREE.Group | null;
   /** Axe de rotation et sens (charnière à l'arrière, côté opposé au loquet). */
   axis: 'x' | 'z';
   sign: number;
@@ -76,11 +92,12 @@ export class ChestLids {
     return out;
   }
 
-  /** Ouvre le couvercle du coffre en (x, y, z) (sans effet si ce n'est pas un coffre). */
+  /** Ouvre le coffre, la boîte de shulker ou le tonneau en (x, y, z) (sans effet sur un autre bloc). */
   open(world: World, x: number, y: number, z: number) {
+    const kind = kindOf(world, x, y, z);
+    if (!kind) return;
     const id = world.getBlock(x, y, z);
-    const b = id > 0 ? BlockRegistry.get(id) : null;
-    if (!b || b.shape !== 'chest') return;
+    const b = BlockRegistry.get(id);
     const k = `${x},${y},${z}`;
     const cur = this.lids.get(k);
     if (cur) {
@@ -88,6 +105,25 @@ export class ChestLids {
       return;
     }
     const meta = world.getMeta(x, y, z);
+    if (kind === 'barrel') {
+      this.lids.set(k, { x, y, z, t: 0, target: 1, kind, pivot: null, axis: 'x', sign: 1 });
+      world.setBlock(x, y, z, id, meta | OPEN_FLAG, false);
+      return;
+    }
+    if (kind === 'shulker') {
+      // couvercle (moitié haute) : pivote autour de l'axe vertical du centre du bloc
+      const tiles = { top: b.faceTiles[2], bottom: b.faceTiles[3], side: b.faceTiles[0], front: b.faceTiles[0] };
+      const pivot = new THREE.Group();
+      pivot.position.set(x + 0.5, y, z + 0.5);
+      const inner = new THREE.Group();
+      inner.position.set(-0.5, 0, -0.5);
+      for (const m of this.box([0, 8, 0, 16, 16, 16], tiles, -1)) inner.add(m);
+      pivot.add(inner);
+      this.group.add(pivot);
+      this.lids.set(k, { x, y, z, t: 0, target: 1, kind, pivot, axis: 'x', sign: 1 });
+      world.setBlock(x, y, z, id, meta | OPEN_FLAG, false);
+      return;
+    }
     const f = meta & 3;
     // loquet tourné comme dans Shapes : il indique la façade
     const latch = rotate([7, 7, 0, 9, 11, 1], f);
@@ -105,7 +141,7 @@ export class ChestLids {
     this.group.add(pivot);
     const axis = frontDir === 4 || frontDir === 5 ? 'x' : 'z';
     const sign = frontDir === 5 ? 1 : frontDir === 4 ? -1 : frontDir === 1 ? -1 : 1;
-    this.lids.set(k, { x, y, z, t: 0, target: 1, pivot, axis, sign });
+    this.lids.set(k, { x, y, z, t: 0, target: 1, kind, pivot, axis, sign });
     world.setBlock(x, y, z, id, meta | OPEN_FLAG, false);
   }
 
@@ -117,9 +153,18 @@ export class ChestLids {
   /** Animation (chaque image) et luminosité selon l'éclairage du bloc. */
   update(world: World, dt: number, daylight: number) {
     for (const [k, l] of this.lids) {
-      l.t = l.target > l.t ? Math.min(1, l.t + dt * SPEED) : Math.max(0, l.t - dt * SPEED);
+      const sp = l.kind === 'shulker' ? SHULKER_SPEED : SPEED;
+      l.t = l.target > l.t ? Math.min(1, l.t + dt * sp) : Math.max(0, l.t - dt * sp);
       const e = l.t * l.t * (3 - 2 * l.t);
-      if (l.axis === 'x') l.pivot.rotation.x = l.sign * e * MAX_ANGLE;
+      if (!l.pivot) {
+        // tonneau : rien à animer, la texture revient à la fermeture
+        if (l.target === 0) this.finish(world, k, l);
+        continue;
+      }
+      if (l.kind === 'shulker') {
+        l.pivot.position.y = l.y + e * 0.5;
+        l.pivot.rotation.y = e * Math.PI * 1.5;
+      } else if (l.axis === 'x') l.pivot.rotation.x = l.sign * e * MAX_ANGLE;
       else l.pivot.rotation.z = l.sign * e * MAX_ANGLE;
       const li = world.getLight(l.x, l.y, l.z);
       const v = 0.18 + 0.82 * Math.max(li.block / 15, (li.sky / 15) * daylight);
@@ -129,11 +174,13 @@ export class ChestLids {
   }
 
   private finish(world: World, k: string, l: Lid) {
-    this.group.remove(l.pivot);
-    l.pivot.traverse((o) => (o as THREE.Mesh).isMesh && (o as THREE.Mesh).geometry.dispose());
+    if (l.pivot) {
+      this.group.remove(l.pivot);
+      l.pivot.traverse((o) => (o as THREE.Mesh).isMesh && (o as THREE.Mesh).geometry.dispose());
+    }
     this.lids.delete(k);
     const id = world.getBlock(l.x, l.y, l.z);
-    if (id > 0 && BlockRegistry.get(id).shape === 'chest') world.setBlock(l.x, l.y, l.z, id, world.getMeta(l.x, l.y, l.z) & ~OPEN_FLAG, false);
+    if (id > 0 && kindOf(world, l.x, l.y, l.z) === l.kind) world.setBlock(l.x, l.y, l.z, id, world.getMeta(l.x, l.y, l.z) & ~OPEN_FLAG, false);
   }
 
   /** Avant une sauvegarde : tous les couvercles refermés (la méta enregistrée reste normale). */

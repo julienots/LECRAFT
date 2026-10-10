@@ -18,7 +18,8 @@ export function applyPackFaces(defs: BlockDef[]) {
   for (const d of defs) {
     const f = PACK_FACES[d.key];
     if (!f) continue;
-    d.textures = { ...f };
+    // le tonneau garde son dessus « ouvert » (méta)
+    d.textures = d.key === 'barrel' && d.textures?.byMeta ? { ...f, byMeta: d.textures.byMeta } : { ...f };
     if (PACK_ORIENT.includes(d.key)) d.orientable = true;
   }
 }

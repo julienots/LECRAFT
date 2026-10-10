@@ -158,7 +158,7 @@ tile('paper_portal', (t) => {
   for (let k = 0; k < 16; k += 4) t.vline(k, 0, 15, hex('#d8d0c0'), 200);
   for (let i = 0; i < 8; i++) t.set(t.rng.int(0, 15), t.rng.int(0, 15), hex(['#f090c0', '#f0d050', '#7cc850'][i % 3]), 255);
 });
-B.push({ key: 'paper_portal', name: 'Portail de la Pâte à papier', textures: { all: 'paper_portal' }, hardness: -1, render: 'translucent', solid: false, light: 12, lightFilter: 0, sound: 'glass', drops: [], color: '#f6f3ea' });
+B.push({ key: 'paper_portal', name: 'Portail de la Pâte à papier', textures: { all: 'paper_portal' }, hardness: -1, render: 'model', solid: false, light: 12, lightFilter: 0, sound: 'glass', drops: [], color: '#f6f3ea' });
 
 // ---------- objets ----------
 const item = (key: string, name: string, sprite: string, colors: string[], o: Partial<ItemDef> = {}) => I.push({ key, name, icon: { sprite, colors }, tab: 'ingredients', ...o });

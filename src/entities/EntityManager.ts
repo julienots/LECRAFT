@@ -20,6 +20,7 @@ import { ItemEntity } from './ItemEntity';
 import { Projectile, type ProjectileKind, type ProjectileDef } from './Projectile';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { makeStack } from '../inventory/Inventory';
+import { onMobHurtByMob } from './MobRelations';
 import { DamageSystem } from '../combat/DamageSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 import { BOSS } from '../world/StructureGenerator';
@@ -335,7 +336,10 @@ export class EntityManager implements EntitySpawner {
         if (pr.owner === e) continue;
         if (pr.flame && !(e as Mob).has('fireImmune')) (e as Mob).fireTime = Math.max((e as Mob).fireTime, 5);
         const kbk = 4 + pr.punch * 6;
-        if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: true, knockX: (pr.body.vx / v) * kbk, knockZ: (pr.body.vz / v) * kbk, itemId: pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
+        // projectile d'une créature (golem de neige, lama, squelette contre une autre créature) : pas un tir du joueur
+        const byMob = !!pr.owner && (pr.owner as { kind?: string }).kind === 'mob';
+        if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: !byMob, knockX: (pr.body.vx / v) * kbk, knockZ: (pr.body.vz / v) * kbk, itemId: byMob ? undefined : pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
+        else if (byMob) onMobHurtByMob(e as Mob, pr.owner as unknown as Mob);
         if (pr.type === 'frost_bolt') (e as Mob).slowTimer = 3;
         if (pr.def) {
           const m = e as Mob;

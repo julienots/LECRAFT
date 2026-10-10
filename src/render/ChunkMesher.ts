@@ -451,7 +451,9 @@ export class ChunkMesher {
       const shade = Math.round(255 * (q.shade >= 0 ? FACE_SHADE[q.shade] : 0.85));
       const builder = q.trans ? this.trans : this.opaque;
       const p = q.p, uv = q.uv;
-      const ids = [0, 1, 2, 3].map((k) => builder.vertex(x + p[k * 3] / 16, y + p[k * 3 + 1] / 16, z + p[k * 3 + 2] / 16, uv[k * 2], uv[k * 2 + 1], q.tile, 0, sl, bl, 255, 255, 255, shade));
+      // tuiles animées (portail du Nether) : images successives de l'atlas
+      const fl = TileRegistry.animFrames[q.tile] > 1 ? FLAG_ANIM : 0;
+      const ids = [0, 1, 2, 3].map((k) => builder.vertex(x + p[k * 3] / 16, y + p[k * 3 + 1] / 16, z + p[k * 3 + 2] / 16, uv[k * 2], uv[k * 2 + 1], q.tile, fl, sl, bl, 255, 255, 255, shade));
       builder.quad(ids[0], ids[1], ids[2], ids[3], false);
     }
   }

@@ -273,6 +273,43 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **Portails, rails, animations et relations entre créatures (v2.27)**
+  - **Portails comme le jeu original** :
+    - portail du Nether : plan fin et translucide, orienté selon le cadre, avec le
+      tourbillon animé (16 images, celles du pack s'il en contient) ;
+    - portail de l'End : le champ d'étoiles du jeu original (15 couches de
+      `entity/end_portal.png` sur `environment/end_sky.png`) quand le pack les fournit.
+  - **Rails** : ils se raccordent tout seuls à leurs voisins (lignes droites, montées d'un
+    bloc, virages pour le rail simple), avec les vrais modèles.
+  - **Spéléothèmes** : stalactites et stalagmites dessinées par segments (base, milieu,
+    tronc, pointe), recalculées quand la colonne change.
+  - **Animations d'ouverture** :
+    - le coffre et le **coffre de l'Ender** (nouveau modèle de coffre, texture du pack) ont
+      un couvercle animé ;
+    - le couvercle de la **boîte de shulker** monte en tournant ;
+    - le **tonneau** s'ouvre (texture « ouvert ») tant que son interface est ouverte.
+  - **Relations entre créatures** :
+    - **Chasse** :
+      - les loups sauvages chassent moutons, lapins, renards et squelettes ;
+      - les renards chassent poules, lapins et poissons ;
+      - les chats et les ocelots chassent lapins et poules ;
+      - les ours polaires attaquent les renards ;
+      - les axolotls attaquent poissons, calmars, noyés et gardiens ;
+      - les grenouilles avalent les petits slimes et les petits cubes de magma.
+    - **Ennemis naturels** :
+      - zombies et illageois contre villageois et golems ;
+      - golem de neige (boules de neige) contre les monstres ;
+      - lama (crachats) contre les loups ;
+      - piglins contre squelettes wither ;
+      - enderman contre endermites.
+    - **Fuite** : creeper devant les chats, squelettes devant les loups, villageois devant
+      les zombies, lapins et renards devant leurs prédateurs.
+    - **Vengeance** : une créature frappée par une autre se défend (la meute de loups aussi).
+    - **Comportements particuliers** :
+      - l'ours polaire défend son petit ;
+      - la chèvre charge de temps en temps ;
+      - l'abeille empoisonne, perd son dard et meurt peu après.
+
 - **Blocs fonctionnels complets (v2.26)**
   - **Enchantements réels** (22, du Tranchant à l'Infinité) :
     - **Table d'enchantement** avec bibliothèques, lapis-lazuli et niveaux d'expérience ;

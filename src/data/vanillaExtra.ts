@@ -204,6 +204,13 @@ sided('barrel', 'Tonneau', (t) => {
   t.hline(0, 15, 3, hex('#4a4a4a'));
   t.hline(0, 15, 12, hex('#4a4a4a'));
 });
+// dessus « ouvert » quand l'interface est ouverte (bit 128 de la méta, render/ChestLids.ts)
+B[B.length - 1].textures!.byMeta = ['barrel_top', 'barrel_top_open'];
+tile('barrel_top_open', (t) => {
+  paint.planks(t, '#8a6236');
+  t.rect(2, 2, 12, 12, hex('#2a1c0e'));
+  t.rect(3, 3, 10, 10, hex('#1e140a'));
+});
 sided('composter', 'Composteur', (t) => {
   paint.planks(t, '#8a6236');
   t.rect(2, 2, 12, 12, hex('#5a3e1e'));
@@ -436,16 +443,18 @@ for (const [w, n, moss] of [['crimson', 'carmin', ['#8a0e12', '#a01418', '#b81c1
   B.push({ key: `${w}_roots`, name: `Racines ${n === 'carmin' ? 'carmin' : 'biscornues'}`, textures: { all: `${w}_roots` }, hardness: 0, render: 'cross', solid: false, replaceable: true, sound: 'grass', needsSupport: true, supportBlocks: [`${w}_nylium`, 'netherrack', 'soul_soil'], drops: [], color: moss[1] });
 }
 cube('shroomlight', 'Champilampe', grainT(['#f09030', '#f8b048', '#ffd070', '#e07820'], 0.4, 2), { hardness: 1, tool: 'hoe', minTier: 0, light: 15, sound: 'wool', color: '#f8a040' });
-tile('nether_portal', (t) => {
+tile('nether_portal', (t, frame = 0) => {
   const c = ['#3a0a7a', '#5a14b0', '#7a2ad8', '#9a50f0', '#c890ff'].map(hex);
+  // tourbillon qui tourne d'une image à l'autre (16 images, comme la texture animée du jeu)
+  const turn = (frame / 16) * Math.PI * 2;
   for (let y = 0; y < 16; y++)
     for (let x = 0; x < 16; x++) {
       const dx = x - 7.5, dy = y - 7.5;
-      const v = (Math.sin(Math.atan2(dy, dx) * 3 + Math.hypot(dx, dy) * 0.9) + 1) / 2;
+      const v = (Math.sin(Math.atan2(dy, dx) * 3 + Math.hypot(dx, dy) * 0.9 - turn) + 1) / 2;
       t.set(x, y, c[Math.min(4, Math.floor(v * 4 + t.rng.next() * 1.2))], 190);
     }
 });
-B.push({ key: 'nether_portal', name: 'Portail du Nether', textures: { all: 'nether_portal' }, hardness: -1, render: 'translucent', solid: false, light: 11, lightFilter: 0, sound: 'glass', drops: [], color: '#7a2ad8' });
+B.push({ key: 'nether_portal', name: 'Portail du Nether', textures: { all: 'nether_portal' }, hardness: -1, render: 'model', solid: false, light: 11, lightFilter: 0, sound: 'glass', drops: [], color: '#7a2ad8' });
 tile('fire', (t) => {
   t.clear();
   const c = ['#a01a00', '#e04a00', '#f88a10', '#ffc830', '#fff0a0'].map(hex);
@@ -504,7 +513,8 @@ tile('pointed_dripstone', (t) => {
     for (let x = 7 - w; x <= 8 + w; x++) t.set(x, y, c[(x + y) % 3]);
   }
 });
-B.push({ key: 'pointed_dripstone', name: 'Spéléothème pointu', textures: { all: 'pointed_dripstone' }, hardness: 1.5, tool: 'pickaxe', render: 'cross', solid: false, sound: 'stone', contactDamage: 1, color: '#866a54' });
+// segments du jeu original selon la méta (Dripstone.ts) : pointe, tronc, milieu, base ; vers le bas puis vers le haut
+B.push({ key: 'pointed_dripstone', name: 'Spéléothème pointu', textures: { all: 'pointed_dripstone', byMeta: ['pointed_dripstone', 'pointed_dripstone_down_frustum', 'pointed_dripstone_down_middle', 'pointed_dripstone_down_base', 'pointed_dripstone_up_tip', 'pointed_dripstone_up_frustum', 'pointed_dripstone_up_middle', 'pointed_dripstone_up_base'] }, hardness: 1.5, tool: 'pickaxe', render: 'cross', solid: false, sound: 'stone', contactDamage: 1, color: '#866a54' });
 for (const [k, n, lit] of [['cave_vines', 'Lianes des grottes', false], ['cave_vines_lit', 'Lianes des grottes à baies', true]] as const) {
   tile(k, (t) => {
     t.clear();
