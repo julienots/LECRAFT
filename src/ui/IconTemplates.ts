@@ -5,6 +5,10 @@
  * k = contour sombre, w = blanc, . = transparent
  */
 export const ICON_TEMPLATES: Record<string, string[]> = {
+  card: [
+    '................', '................', '................', '.kkkkkkkkkkkkkk.', 'kaaaaaaaaaaaaaak', 'kaeeeeeeeeeeeeak', 'kabbbaaaaaaaaaak', 'kabbbaaawwwwwaak',
+    'kabbbaaaaaaaaaak', 'kaaaaaaawwwaaaak', 'kaaaaaaaaaaaaaak', 'kakkkkkkkkkkkkak', 'kaddddddddddddak', '.kkkkkkkkkkkkkk.', '................', '................',
+  ],
   stick: [
     '................', '................', '.............kk.', '............kaak', '...........kaak.', '..........kaak..', '.........kaak...', '........kaak....',
     '.......kaak.....', '......kaak......', '.....kaak.......', '....kaak........', '...kaak.........', '...kak..........', '....k...........', '................',

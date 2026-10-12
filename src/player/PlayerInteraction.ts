@@ -438,6 +438,16 @@ export class PlayerInteraction {
         ctx.particles.burst('magic', t.x + 0.5, t.y + 1, t.z + 0.5, 10);
         return this.host.openStation('ender', t.x, t.y, t.z);
       }
+      if (b.interact === 'door' && b.def.keyItem) {
+        // porte à carte : la carte d'accès en main ouvre (et la porte se referme seule)
+        if (held?.id !== b.def.keyItem) {
+          ctx.audio.play('deny', { x: t.x + 0.5, y: t.y + 0.5, z: t.z + 0.5 });
+          ctx.hud.toast("Carte d'accès requise", 'warn');
+          return;
+        }
+        ctx.audio.play('click', { x: t.x + 0.5, y: t.y + 0.5, z: t.z + 0.5, pitch: 1.6 });
+        return this.toggleDoor(t.x, t.y, t.z, 5000);
+      }
       if (b.interact === 'door') {
         // portes et trappes en fer : seulement avec la redstone (le jeu original ne les ouvre pas à la main)
         if (b.def.redstoneOnly) return;
@@ -708,7 +718,7 @@ export class PlayerInteraction {
     return !this.entities.occupies(x, y, z);
   }
 
-  private toggleDoor(x: number, y: number, z: number) {
+  private toggleDoor(x: number, y: number, z: number, autoCloseMs = 0) {
     const w = this.ctx.world;
     const id = w.getBlock(x, y, z);
     const meta = w.getMeta(x, y, z);
@@ -721,6 +731,13 @@ export class PlayerInteraction {
     }
     this.ctx.audio.play(open ? 'door_open' : 'door_close', { x: x + 0.5, y: by + 1, z: z + 0.5 });
     this.entities.combat.swing = 0.7;
+    // fermeture automatique (porte à carte), si la porte est toujours là et toujours ouverte
+    if (open && autoCloseMs > 0)
+      setTimeout(() => {
+        if (this.ctx.world !== w || w.getBlock(x, by, z) !== id || !(w.getMeta(x, by, z) & 4)) return;
+        for (const yy of [by, by + 1]) if (w.getBlock(x, yy, z) === id) w.setBlock(x, yy, z, id, w.getMeta(x, yy, z) & ~4, false);
+        this.ctx.audio.play('door_close', { x: x + 0.5, y: by + 1, z: z + 0.5 });
+      }, autoCloseMs);
   }
   /** Trappe ou portillon : ouvert / fermé. */
   private toggleOpenable(x: number, y: number, z: number) {

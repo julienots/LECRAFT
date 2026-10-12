@@ -68,6 +68,11 @@ uniform vec3 uSunGlow;
 uniform sampler2D uShadowMap;
 uniform float uShadowTexel;
 uniform float uPortalTile;
+// vue de l'autre dimension à travers les portails (render/PortalView.ts)
+uniform sampler2D uPortalView;
+uniform float uPortalViewOn;
+uniform float uViewTileA;
+uniform float uViewTileB;
 uniform sampler2D uEndSky;
 uniform sampler2D uEndPortal;
 uniform float uEndTex;
@@ -157,6 +162,15 @@ vec3 endPortalPack() {
 
 void main() {
   float tile = floor(vTile + 0.5);
+  // portail du Nether (16 images animées) ou de la Pâte à papier : on voit la dimension d'arrivée
+  if (uPortalViewOn > 0.5 && ((uViewTileA >= 0.0 && tile > uViewTileA - 0.5 && tile < uViewTileA + 15.5) || (uViewTileB >= 0.0 && abs(tile - uViewTileB) < 0.5))) {
+    vec3 v = texture(uPortalView, gl_FragCoord.xy / max(uResolution, vec2(1.0))).rgb;
+    // léger voile violet ondulant sur les bords du cadre, comme une surface de portail
+    float wob = 0.06 + 0.04 * sin(uTime * 2.0 + vWorld.y * 3.0 + vWorld.x * 2.0 + vWorld.z * 2.0);
+    vec3 tint = abs(tile - uViewTileB) < 0.5 ? vec3(0.9, 0.85, 0.7) : vec3(0.55, 0.2, 0.9);
+    gl_FragColor = vec4(mix(v, tint, wob), 1.0);
+    return;
+  }
   if (uPortalTile >= 0.0 && abs(tile - uPortalTile) < 0.5) {
     vec3 sky = uEndTex > 0.5 ? endPortalPack() : endPortalSky();
     float fogP = smoothstep(uFogNear, uFogFar, vDist);
@@ -262,6 +276,10 @@ export interface ChunkUniforms {
   uShadowMatrix: THREE.IUniform<THREE.Matrix4>;
   uShadowTexel: THREE.IUniform<number>;
   uPortalTile: THREE.IUniform<number>;
+  uPortalView: THREE.IUniform<THREE.Texture | null>;
+  uPortalViewOn: THREE.IUniform<number>;
+  uViewTileA: THREE.IUniform<number>;
+  uViewTileB: THREE.IUniform<number>;
   uEndSky: THREE.IUniform<THREE.Texture | null>;
   uEndPortal: THREE.IUniform<THREE.Texture | null>;
   uEndTex: THREE.IUniform<number>;
@@ -292,6 +310,10 @@ export function createChunkMaterials(atlas: THREE.Texture) {
     uShadowMatrix: { value: new THREE.Matrix4() },
     uShadowTexel: { value: 1 / 1024 },
     uPortalTile: { value: -1 },
+    uPortalView: { value: null },
+    uPortalViewOn: { value: 0 },
+    uViewTileA: { value: -1 },
+    uViewTileB: { value: -1 },
     uEndSky: { value: null },
     uEndPortal: { value: null },
     uEndTex: { value: 0 },

@@ -256,17 +256,57 @@ try {
   // ---------- inventaire créatif : pas de blocs techniques ----------
   await G(() => { const s = window.__lecraft.session; s.player.gameMode = 'creative'; window.__lecraft.openInventory('hand'); });
   await wait(300);
-  await tapSel('.gui-btn');
-  await wait(600);
+  await wait(300);
   const keys = [];
-  const tabs = await page.locator('.gui-tab').count();
-  for (let t = 0; t < tabs; t++) {
-    await tapSel(`.gui-tab >> nth=${t}`);
+  const perTab = {};
+  for (const t of ['building', 'colored', 'nature', 'functional', 'redstone', 'tools', 'combat', 'food', 'ingredients', 'spawn_eggs']) {
+    await tapSel(`.cr-tab[data-tab="${t}"]`);
     await wait(250);
-    keys.push(...(await G(() => [...document.querySelectorAll('[data-item]')].map((e) => e.dataset.item))));
+    const k = await G(() => [...document.querySelectorAll('.cr-grid [data-item]')].map((e) => e.dataset.item));
+    perTab[t] = k;
+    keys.push(...k);
   }
   const tech = keys.filter((k) => /^(repeater_on|comparator_on|cake_inner|redstone_dust_line0|piston_head|lightning_rod_on|white_candle_lit|vault_ominous)$/.test(k));
   check('Créatif : états et morceaux de blocs masqués (comme le jeu original)', keys.length > 800 && tech.length === 0 && keys.includes('repeater') && keys.includes('crimson_stem') && keys.includes('white_candle'), `${keys.length} objets ; techniques visibles : ${tech.join(',')}`);
+  const tabsOk = perTab.colored.includes('white_wool') && perTab.colored.includes('red_concrete') && perTab.redstone.includes('repeater') && perTab.redstone.includes('lever') && perTab.spawn_eggs.length > 10 && perTab.spawn_eggs.every((k) => k.endsWith('_spawn_egg')) && perTab.building.includes('bricks') && !perTab.building.includes('white_wool');
+  check('Créatif : onglets du jeu original (couleurs, redstone, œufs…)', tabsOk, Object.entries(perTab).map(([k, v]) => `${k}:${v.length}`).join(' '));
+  const ui = await G(() => ({ tabs: document.querySelectorAll('.cr-tab').length, hotbar: document.querySelectorAll('.gslot[data-key^="inv"]').length, trash: !!document.querySelector('.gslot[data-key="trash"]'), grid: !!document.querySelector('.cr-grid') }));
+  check('Créatif : 12 onglets, barre d’objets et grille défilante', ui.tabs === 12 && ui.hotbar === 9 && !ui.trash && ui.grid, JSON.stringify(ui));
+  // recherche
+  await tapSel('.cr-tab[data-tab="search"]');
+  await wait(250);
+  await page.locator('.cr-search').fill('carte');
+  await wait(250);
+  const found = await G(() => [...document.querySelectorAll('.cr-grid [data-item]')].map((e) => e.dataset.item));
+  check('Créatif : la recherche trouve la carte d’accès', found.includes('keycard') && found.length < 40, found.slice(0, 8).join(','));
+  // prendre un objet de la palette, le poser dans la barre, puis le reposer sur la grille (supprimé)
+  await tapSel('.cr-grid [data-item="keycard"]');
+  await wait(250);
+  await tapSel('.gslot[data-key="inv0"]');
+  await wait(250);
+  const inHotbar = await G(() => window.__lecraft.session.player.inventory.slots[0]?.id);
+  await tapSel('.gslot[data-key="inv0"]');
+  await wait(250);
+  await tapSel('.cr-grid [data-item="keycard_door"]');
+  await wait(250);
+  const afterDrop = await G(() => ({ slot: window.__lecraft.session.player.inventory.slots[0]?.id ?? null, carried: window.__lecraft.inventoryUI?.carried ?? null }));
+  check('Créatif : objet pris dans la palette, posé, puis supprimé en le reposant sur la grille', inHotbar === 'keycard' && afterDrop.slot === null && afterDrop.carried === null, JSON.stringify({ inHotbar, afterDrop }));
+  // onglet inventaire de survie
+  await tapSel('.cr-tab[data-tab="inventory"]');
+  await wait(250);
+  const surv = await G(() => ({ armor: document.querySelectorAll('.gslot[data-key^="armor_"]').length, main: document.querySelectorAll('.gslot[data-key^="inv"]').length }));
+  check('Créatif : onglet « Inventaire de survie » (armure + 36 cases)', surv.armor === 4 && surv.main === 36, JSON.stringify(surv));
+  // corbeille : un objet tenu y est détruit
+  await G(() => { const inv = window.__lecraft.session.player.inventory; inv.slots[5] = { id: 'diamond', count: 3 }; inv.changed(); });
+  await wait(200);
+  await tapSel('.gslot[data-key="inv5"]');
+  await wait(250);
+  await tapSel('.gslot[data-key="trash"]');
+  await wait(250);
+  const trashed = await G(() => ({ slot: window.__lecraft.session.player.inventory.slots[5]?.id ?? null, carried: window.__lecraft.inventoryUI?.carried ?? null, trash: !!document.querySelector('.gslot[data-key="trash"]') }));
+  check('Créatif : corbeille de l’onglet survie (objet détruit)', trashed.trash && trashed.slot === null && trashed.carried === null, JSON.stringify(trashed));
+  await tapSel('.cr-tab[data-tab="building"]');
+  await wait(250);
   await shot('07-creative');
   await G(() => window.__lecraft.closeInventory());
 

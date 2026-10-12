@@ -682,6 +682,15 @@ tile('iron_door_top', (t) => { t.grain(['#d8d8d8', '#c8c8c8', '#e0e0e0'].map(hex
 tile('iron_door_bottom', (t) => { t.grain(['#d8d8d8', '#c8c8c8', '#e0e0e0'].map(hex), 0.3, 2); t.border(hex('#8a8a8a')); t.rect(3, 4, 10, 1, hex('#8a8a8a')); t.rect(3, 9, 10, 1, hex('#8a8a8a')); });
 B.push({ key: 'iron_door', name: 'Porte en fer', textures: { byMeta: ['iron_door_bottom', 'iron_door_top'] }, hardness: 5, tool: 'pickaxe', minTier: 1, render: 'model', shape: 'door', sound: 'metal', interact: 'door', redstoneOnly: true, needsSupport: true, drops: [{ item: 'iron_door' }], color: '#c8c8c8' });
 shaped('iron_door', 'iron_door', 3, ['II', 'II', 'II'], { I: 'iron_ingot' });
+// porte à carte : porte blindée qui ne s'ouvre qu'avec une carte d'accès en main (ni à la main nue,
+// ni par la redstone) et se referme seule au bout de 5 secondes
+const steel = ['#5c6670', '#66717c', '#525b64'];
+tile('keycard_door_bottom', (t) => { t.grain(steel.map(hex), 0.3, 2); t.border(hex('#2e343a')); t.rect(3, 3, 10, 1, hex('#3e464e')); t.rect(3, 12, 10, 1, hex('#3e464e')); t.rect(11, 6, 3, 4, hex('#1e2226')); t.set(12, 7, hex('#40d060')); t.set(12, 8, hex('#d04040')); });
+tile('keycard_door_top', (t) => { t.grain(steel.map(hex), 0.3, 2); t.border(hex('#2e343a')); t.rect(4, 3, 8, 6, hex('#8ab4d0')); t.rect(4, 3, 8, 1, hex('#2e343a')); t.rect(4, 8, 8, 1, hex('#2e343a')); t.rect(3, 12, 10, 1, hex('#3e464e')); });
+B.push({ key: 'keycard_door', name: 'Porte à carte', textures: { byMeta: ['keycard_door_bottom', 'keycard_door_top'] }, hardness: 5, tool: 'pickaxe', minTier: 1, render: 'model', shape: 'door', sound: 'metal', interact: 'door', keyItem: 'keycard', needsSupport: true, drops: [{ item: 'keycard_door' }], color: '#5c6670' });
+item('keycard', "Carte d'accès", 'card', ['#3a7ad8', '#f0c040'], { tab: 'tools' });
+shapeless('keycard', 'keycard', 1, ['iron_ingot', 'paper', 'redstone']);
+shapeless('keycard_door', 'keycard_door', 1, ['iron_door', 'redstone', 'gold_ingot']);
 tile('iron_trapdoor', (t) => { t.grain(['#d8d8d8', '#c8c8c8', '#e0e0e0'].map(hex), 0.3, 2); t.border(hex('#8a8a8a')); for (const [x, y] of [[3, 3], [9, 3], [3, 9], [9, 9]]) t.rect(x, y, 4, 4, hex('#9a9a9a')); });
 B.push({ key: 'iron_trapdoor', name: 'Trappe en fer', textures: { all: 'iron_trapdoor' }, hardness: 5, tool: 'pickaxe', minTier: 1, render: 'model', shape: 'trapdoor', sound: 'metal', interact: 'door', redstoneOnly: true, color: '#c8c8c8' });
 shaped('iron_trapdoor', 'iron_trapdoor', 1, ['II', 'II'], { I: 'iron_ingot' });

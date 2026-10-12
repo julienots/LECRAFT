@@ -8,18 +8,19 @@ import { BlockRegistry } from '../blocks/BlockRegistry';
 import type { Session } from '../core/Session';
 import { ARMOR_SLOTS, HOTBAR_SIZE, Inventory, canMerge } from '../inventory/Inventory';
 import { ItemRegistry } from '../inventory/ItemRegistry';
-import type { ArmorSlot, ItemDef, ItemStack } from '../inventory/Item';
+import type { ArmorSlot, ItemStack } from '../inventory/Item';
 import type { CraftingRecipe } from '../crafting/Recipe';
 import { CraftingGrid, type FurnaceState } from '../crafting/CraftingSystem';
 import { RecipeRegistry } from '../crafting/RecipeRegistry';
 import type { Screen } from './UIManager';
 import { el } from './dom';
-import { GUI_W, LAYOUT, containerBackground, drawArrow, drawFlame, drawPanel, drawSlot, guiHeight, playerInvY, type ContainerKind } from './ContainerArt';
+import { GUI_W, LAYOUT, containerBackground, drawFigure, drawArrow, drawFlame, drawPanel, drawSlot, guiHeight, playerInvY, type ContainerKind } from './ContainerArt';
 import { pixelText } from './PixelFont';
+import { CREATIVE_TABS, creativeItems, tabIcon, type CreativeTabKey } from './CreativeTabs';
 
 export type InventoryMode = 'hand' | 'table' | 'furnace' | 'chest' | 'ender' | 'enchant' | 'anvil' | 'brewing' | 'dispenser' | 'dropper' | 'hopper';
 
-type Group = 'main' | 'hotbar' | 'armor' | 'container' | 'grid' | 'result' | 'input' | 'fuel';
+type Group = 'main' | 'hotbar' | 'armor' | 'container' | 'grid' | 'result' | 'input' | 'fuel' | 'trash';
 
 interface GuiSlot {
   canTake?(): boolean;
@@ -39,18 +40,11 @@ interface GuiSlot {
 
 const LONG_MS = 380;
 const DOUBLE_MS = 320;
-const TABS: { key: NonNullable<ItemDef['tab']>; name: string; icon: string }[] = [
-  { key: 'building', name: 'Blocs de construction', icon: 'bricks' },
-  { key: 'nature', name: 'Blocs naturels', icon: 'grass_block' },
-  { key: 'functional', name: 'Blocs fonctionnels', icon: 'crafting_table' },
-  { key: 'tools', name: 'Outils et utilitaires', icon: 'iron_pickaxe' },
-  { key: 'combat', name: 'Combat', icon: 'iron_sword' },
-  { key: 'food', name: 'Nourriture et boissons', icon: 'apple' },
-  { key: 'ingredients', name: 'Ingrédients', icon: 'iron_ingot' },
-];
 
 /** Mémoire de l'état du livre de recettes / onglet créatif entre deux ouvertures. */
-const memory = { book: false, craftableOnly: true, tab: 'building' as NonNullable<ItemDef['tab']> };
+const memory = { book: false, craftableOnly: true, ctab: 'building' as CreativeTabKey, query: '' };
+/** Inventaire créatif (fenêtre du jeu original : 195 × 136, onglets de 26 × 32 au-dessus et en dessous). */
+const CR_W = 195, CR_H = 136, CR_TOP = 28;
 
 /**
  * Interfaces de conteneurs fidèles aux jeux de blocs « Java » : objet tenu au curseur,
@@ -89,6 +83,13 @@ export class InventoryUI {
   private disposed = false;
   /** Bloc fonctionnel (table d'enchantement, enclume, alambic, distributeur, entonnoir). */
   private station: Station | null = null;
+  /** Mode créatif : inventaire créatif du jeu original à la place de l'inventaire de survie. */
+  private creative = false;
+  /** Taille de la fenêtre quand elle diffère d'un conteneur standard (inventaire créatif). */
+  private guiW = 0;
+  private guiH = 0;
+  private crList: HTMLElement | null = null;
+  private crThumb: HTMLCanvasElement | null = null;
 
   constructor(private game: Game, private s: Session, private mode: InventoryMode, pos?: { x: number; y: number; z: number }) {
     const pinv = s.player.inventory;
@@ -97,51 +98,20 @@ export class InventoryUI {
     if (mode === 'ender') this.chestInv = s.player.enderChest;
     if (pos) this.station = this.makeStation(mode, pos);
     if (mode === 'furnace' && pos) this.furnace = s.world.getFurnace(pos.x, pos.y, pos.z);
-    if (mode === 'hand') this.grid = new CraftingGrid(2);
+    this.creative = mode === 'hand' && s.player.creative;
+    if (mode === 'hand' && !this.creative) this.grid = new CraftingGrid(2);
     if (mode === 'table') this.grid = new CraftingGrid(3);
     const blockName = pos ? BlockRegistry.get(s.world.getBlock(pos.x, pos.y, pos.z)).name : '';
     const title = this.station?.title ?? (mode === 'ender' ? "Coffre de l'Ender" : mode === 'chest' ? (blockName && !/^Coffre/.test(blockName) ? blockName : 'Coffre') : mode === 'table' ? 'Fabrication' : mode === 'furnace' ? 'Fourneau' : '');
     const h = guiHeight(this.kind);
 
-    this.gui = el('div', { class: 'gui', style: `width:${GUI_W}px;height:${h}px` });
-    const bg = containerBackground(this.kind, title, game.textures, 3, `player_${game.settings.playerSkin ?? 'steve'}`, this.station?.artSlots ?? []);
-    bg.className = 'gui-bg';
-    this.gui.append(bg);
-    this.buildSlots(pinv);
-    for (const sl of this.slots) this.gui.append(this.slotEl(sl));
-    this.station?.decorate(this.gui);
-    if (this.furnace) {
-      const L = LAYOUT.furnace;
-      const fc = this.canvasAt(L.flame[0], L.flame[1], 14, 14);
-      const ac = this.canvasAt(L.arrow[0], L.arrow[1], 24, 17);
-      this.flameCtx = fc.getContext('2d');
-      this.arrowCtx = ac.getContext('2d');
-      this.gui.append(fc, ac);
+    if (this.creative) {
+      this.guiW = CR_W;
+      this.guiH = CR_TOP * 2 + CR_H;
     }
-    if (this.grid) {
-      const [ax, ay] = this.kind === 'inventory' ? LAYOUT.inventory.arrow : LAYOUT.table.arrow;
-      if (!game.textures.packImage(`gui/container/${this.kind === 'inventory' ? 'inventory' : 'crafting_table'}.png`)) {
-        const c = this.canvasAt(ax, ay, 22, 15);
-        drawArrow(c.getContext('2d')!, 0, 0, 0);
-        this.gui.append(c);
-      }
-    }
-    // bouton du livre de recettes / de l'inventaire créatif
-    if (mode === 'hand' || mode === 'table' || mode === 'furnace') {
-      const [bx, by] = mode === 'hand' ? LAYOUT.inventory.book : mode === 'table' ? LAYOUT.table.book : LAYOUT.furnace.book;
-      const btn = this.canvasAt(bx, by, 20, 18);
-      this.drawBookButton(btn.getContext('2d')!);
-      btn.classList.add('gui-btn');
-      btn.addEventListener('pointerup', (e) => {
-        e.stopPropagation();
-        memory.book = !memory.book;
-        this.click();
-        this.buildSide();
-        this.layout();
-      });
-      this.gui.append(btn);
-    }
-
+    this.gui = el('div', { class: 'gui', style: `width:${this.guiW || GUI_W}px;height:${this.guiH || h}px` });
+    if (this.creative) this.buildCreativeScreen();
+    else this.buildContainer(pinv, mode, title);
     this.wrap = el('div', { class: 'gui-wrap' }, this.gui);
     this.cursorEl = el('div', { class: 'gui-cursor' });
     this.tooltip = el('div', { class: 'gui-tooltip' });
@@ -181,6 +151,48 @@ export class InventoryUI {
   }
 
   // ---------- construction ----------
+
+  /** Interface d'un conteneur ordinaire (inventaire de survie, coffre, fourneau, stations…). */
+  private buildContainer(pinv: Inventory, mode: InventoryMode, title: string) {
+    const bg = containerBackground(this.kind, title, this.game.textures, 3, `player_${this.game.settings.playerSkin ?? 'steve'}`, this.station?.artSlots ?? []);
+    bg.className = 'gui-bg';
+    this.gui.append(bg);
+    this.buildSlots(pinv);
+    for (const sl of this.slots) this.gui.append(this.slotEl(sl));
+    this.station?.decorate(this.gui);
+    if (this.furnace) {
+      const L = LAYOUT.furnace;
+      const fc = this.canvasAt(L.flame[0], L.flame[1], 14, 14);
+      const ac = this.canvasAt(L.arrow[0], L.arrow[1], 24, 17);
+      this.flameCtx = fc.getContext('2d');
+      this.arrowCtx = ac.getContext('2d');
+      this.gui.append(fc, ac);
+    }
+    if (this.grid) {
+      const [ax, ay] = this.kind === 'inventory' ? LAYOUT.inventory.arrow : LAYOUT.table.arrow;
+      if (!this.game.textures.packImage(`gui/container/${this.kind === 'inventory' ? 'inventory' : 'crafting_table'}.png`)) {
+        const c = this.canvasAt(ax, ay, 22, 15);
+        drawArrow(c.getContext('2d')!, 0, 0, 0);
+        this.gui.append(c);
+      }
+    }
+    // bouton du livre de recettes / de l'inventaire créatif
+    if (mode === 'hand' || mode === 'table' || mode === 'furnace') {
+      const [bx, by] = mode === 'hand' ? LAYOUT.inventory.book : mode === 'table' ? LAYOUT.table.book : LAYOUT.furnace.book;
+      const btn = this.canvasAt(bx, by, 20, 18);
+      this.drawBookButton(btn.getContext('2d')!);
+      btn.classList.add('gui-btn');
+      btn.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        memory.book = !memory.book;
+        this.click();
+        this.buildSide();
+        this.layout();
+      });
+      this.gui.append(btn);
+    }
+
+  }
   private makeStation(mode: InventoryMode, pos: { x: number; y: number; z: number }): Station | null {
     const host: StationHost = { game: this.game, s: this.s, refresh: () => this.refresh(), click: () => this.click(), canvasAt: (x, y, w, h) => this.canvasAt(x, y, w, h) };
     const w = this.s.world;
@@ -394,6 +406,16 @@ export class InventoryUI {
       kind = 'double';
     } else if (kind === 'tap') this.lastTap = { slot: sl, t: now };
     this.undoLast = null;
+    // corbeille de l'inventaire créatif : Maj + clic (double toucher) vide tout l'inventaire
+    if (sl.key === 'trash' && (kind === 'double' || kind === 'shift')) {
+      const inv = this.s.player.inventory;
+      inv.slots.fill(null);
+      for (const a of ARMOR_SLOTS) inv.armor[a] = null;
+      inv.changed();
+      this.carried = null;
+      this.afterChange();
+      return;
+    }
     if (kind === 'double' || kind === 'shift') this.quickMove(sl);
     else if (sl.take) this.takeResult(sl);
     else if (kind === 'tap') this.leftClick(sl);
@@ -671,8 +693,8 @@ export class InventoryUI {
   /** Mise à l'échelle entière si possible (pixels nets), centrée. */
   private layout() {
     const sideW = this.side ? this.side.offsetWidth / (this.scale || 1) || 0 : 0;
-    const w = GUI_W + (this.side ? (parseFloat(this.side.dataset.w ?? '0') || sideW) + 2 : 0);
-    const h = guiHeight(this.kind);
+    const w = (this.guiW || GUI_W) + (this.side ? (parseFloat(this.side.dataset.w ?? '0') || sideW) + 2 : 0);
+    const h = this.guiH || guiHeight(this.kind);
     const fit = Math.min((window.innerWidth - 16) / w, (window.innerHeight - 12) / h);
     const k = fit >= 2 ? Math.floor(fit * 2) / 2 : Math.max(1, fit);
     this.scale = k;
@@ -688,8 +710,8 @@ export class InventoryUI {
     this.side?.remove();
     this.side = null;
     if (!memory.book || !(this.mode === 'hand' || this.mode === 'table' || this.mode === 'furnace')) return;
-    const creative = this.s.player.creative && this.mode === 'hand';
-    const w = creative ? 176 : 147;
+    if (this.creative) return;
+    const w = 147;
     const h = guiHeight(this.kind);
     const side = el('div', { class: 'gui-side', style: `width:${w}px;height:${h}px` });
     side.dataset.w = String(w);
@@ -701,52 +723,196 @@ export class InventoryUI {
     side.append(bg);
     this.wrap.prepend(side);
     this.side = side;
-    if (creative) this.buildCreative(side, w, h);
-    else this.buildBook(side, w, h);
+    this.buildBook(side, w, h);
   }
 
-  private buildCreative(side: HTMLElement, w: number, h: number) {
-    const tabs = el('div', { class: 'gui-tabs', style: `left:6px;top:5px;width:${w - 12}px` });
-    for (const t of TABS) {
-      const b = el('div', { class: `gui-tab${memory.tab === t.key ? ' on' : ''}`, title: t.name }, el('img', { src: this.game.textures.iconURL(t.icon), alt: t.name }));
-      b.addEventListener('pointerup', (e) => {
+
+  // ---------- inventaire créatif (comme le jeu original) ----------
+  private buildCreativeScreen() {
+    const tm = this.game.textures;
+    const gui = this.gui;
+    gui.replaceChildren();
+    this.slots = [];
+    this.crList = null;
+    this.crThumb = null;
+    const pinv = this.s.player.inventory;
+    const cur = CREATIVE_TABS.find((t) => t.key === memory.ctab) ?? CREATIVE_TABS[0];
+    const Y = CR_TOP;
+    // onglets : non sélectionnés derrière la fenêtre, sélectionné devant
+    const tabEl = (t: (typeof CREATIVE_TABS)[number]) => {
+      const sel = t === cur;
+      const x = t.right ? CR_W - 27 * (7 - t.col) + 1 : 27 * t.col;
+      const y = t.row === 'top' ? Y - 28 : Y + CR_H - 4;
+      const c = this.canvasAt(x, y, 26, 32);
+      const g = c.getContext('2d')!;
+      g.imageSmoothingEnabled = false;
+      const img = tm.packImage(`gui/sprites/container/creative_inventory/tab_${t.row}_${sel ? 'selected' : 'unselected'}_${t.col + 1}.png`);
+      if (img) g.drawImage(img, 0, 0, 26, 32);
+      else drawPanel(g, 0, t.row === 'top' ? 0 : 0, 26, 32);
+      c.classList.add('gui-btn', 'cr-tab');
+      c.dataset.tab = t.key;
+      c.title = tr(t.name);
+      const icon = el('img', { class: 'gui-layer', src: tm.iconURL(tabIcon(t)), alt: '', style: `left:${x + 5}px;top:${y + (t.row === 'top' ? 9 : 7)}px;width:16px;height:16px;image-rendering:pixelated;pointer-events:none` });
+      const pick = (e: Event) => {
         e.stopPropagation();
-        memory.tab = t.key;
+        if (memory.ctab === t.key) return;
+        memory.ctab = t.key;
         this.click();
-        this.buildSide();
-      });
-      tabs.append(b);
+        this.buildCreativeScreen();
+        this.refresh();
+      };
+      c.addEventListener('pointerup', pick);
+      return [c, icon];
+    };
+    for (const t of CREATIVE_TABS) if (t !== cur) gui.append(...tabEl(t));
+    // fond de la fenêtre (texture du pack, sinon panneau dessiné)
+    const bg = this.canvasAt(0, Y, CR_W, CR_H);
+    bg.className = 'gui-bg';
+    bg.style.top = `${Y}px`;
+    bg.style.left = '0px';
+    const ctx = bg.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    const file = cur.key === 'search' ? 'tab_item_search' : cur.key === 'inventory' ? 'tab_inventory' : 'tab_items';
+    const img = tm.packImage(`gui/container/creative_inventory/${file}.png`);
+    if (img) {
+      const k = img.width / 256;
+      ctx.drawImage(img, 0, 0, CR_W * k, CR_H * k, 0, 0, CR_W, CR_H);
+    } else {
+      drawPanel(ctx, 0, 0, CR_W, CR_H);
+      if (cur.key !== 'inventory') for (let r = 0; r < 5; r++) for (let c = 0; c < 9; c++) drawSlot(ctx, 8 + c * 18, 17 + r * 18);
+      for (let c = 0; c < 9; c++) drawSlot(ctx, 8 + c * 18, 111);
+      if (cur.key === 'inventory') drawSlot(ctx, 172, 111);
     }
-    side.append(tabs);
-    const name = tr(TABS.find((t) => t.key === memory.tab)!.name);
-    const label = pixelText(name, { color: '#404040', cls: 'gui-abs' });
-    label.style.left = '8px';
-    label.style.top = '26px';
-    side.append(label);
-    const list = el('div', { class: 'gui-scroll', style: `left:7px;top:38px;width:${9 * 18}px;height:${h - 46}px` });
-    const items = ItemRegistry.all().filter((d) => !d.hidden && (d.tab ?? 'ingredients') === memory.tab);
-    for (const d of items) {
+    // onglet survie : le joueur dans son cadre (comme le jeu original)
+    if (cur.key === 'inventory') {
+      if (!img) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(73, 6, 32, 43);
+      }
+      drawFigure(ctx, 79, 7, tm.skin(`player_${this.game.settings.playerSkin ?? 'steve'}`).image as HTMLCanvasElement, 1.3);
+    }
+    gui.append(bg);
+    gui.append(...tabEl(cur));
+    // barre d'objets (toujours visible) et corbeille
+    for (let c = 0; c < 9; c++) this.slots.push({ x: 9 + c * 18, y: Y + 112, group: 'hotbar', get: () => pinv.slots[c], set: (v) => (pinv.slots[c] = v), key: `inv${c}` });
+    // corbeille : seulement dans l'onglet « Inventaire de survie » (ailleurs, l'ascenseur occupe la place
+    // et on supprime un objet en le reposant sur la grille, comme le jeu original)
+    if (cur.key === 'inventory') this.slots.push({ x: 173, y: Y + 112, group: 'trash', get: () => null, set: () => {}, key: 'trash' });
+    if (!img && cur.key === 'inventory') {
+      const tc = this.canvasAt(173, Y + 112, 16, 16);
+      const g = tc.getContext('2d')!;
+      g.fillStyle = '#b02020';
+      g.fillRect(3, 3, 10, 2);
+      g.fillRect(5, 5, 6, 8);
+      tc.style.pointerEvents = 'none';
+      gui.append(tc);
+    }
+    if (cur.key === 'inventory') {
+      // onglet « Inventaire de survie » : armure et inventaire complet
+      const armorPos: [number, number][] = [[54, 6], [54, 33], [108, 6], [108, 33]];
+      ARMOR_SLOTS.forEach((a, i) => {
+        const [x, y] = armorPos[i];
+        this.slots.push({ x, y: Y + y, group: 'armor', max: 1, get: () => pinv.armor[a], set: (v) => (pinv.armor[a] = v), accept: (st) => ItemRegistry.get(st.id)?.armor?.slot === a, key: `armor_${a}` });
+      });
+      for (let r = 0; r < 3; r++)
+        for (let c = 0; c < 9; c++) {
+          const i = HOTBAR_SIZE + r * 9 + c;
+          this.slots.push({ x: 9 + c * 18, y: Y + 54 + r * 18, group: 'main', get: () => pinv.slots[i], set: (v) => (pinv.slots[i] = v), key: `inv${i}` });
+        }
+    } else {
+      // titre de l'onglet
+      if (cur.key !== 'search') {
+        const label = pixelText(tr(cur.name), { color: '#404040', cls: 'gui-abs' });
+        label.style.left = '8px';
+        label.style.top = `${Y + 6}px`;
+        gui.append(label);
+      } else {
+        const input = el('input', { class: 'cr-search', type: 'text', value: memory.query, placeholder: '', spellcheck: 'false', style: `left:82px;top:${Y + 6}px;width:89px;height:9px` }) as HTMLInputElement;
+        input.addEventListener('input', () => {
+          memory.query = input.value;
+          this.fillCreativeList();
+        });
+        // les touches tapées ne doivent pas commander le jeu (E, Échap…)
+        input.addEventListener('keydown', (e) => e.stopPropagation());
+        input.addEventListener('pointerup', (e) => e.stopPropagation());
+        gui.append(input);
+      }
+      // grille de 9 × 5 cases qui défile, et son ascenseur
+      const list = el('div', { class: 'gui-scroll cr-grid', style: `left:8px;top:${Y + 17}px;width:${9 * 18}px;height:${5 * 18}px` });
+      list.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        if (e.target === list && this.carried) {
+          this.carried = null;
+          this.refresh();
+        }
+      });
+      list.addEventListener('scroll', () => this.placeThumb());
+      gui.append(list);
+      this.crList = list;
+      const track = el('div', { class: 'gui-layer cr-track', style: `left:175px;top:${Y + 18}px;width:12px;height:112px` });
+      const thumb = this.canvasAt(175, Y + 18, 12, 15);
+      thumb.style.pointerEvents = 'none';
+      this.crThumb = thumb;
+      const scrollTo = (clientY: number) => {
+        const r = track.getBoundingClientRect();
+        const f = Math.max(0, Math.min(1, (clientY - r.top - (r.height * 7.5) / 112) / (r.height * (97 / 112))));
+        list.scrollTop = f * Math.max(0, list.scrollHeight - list.clientHeight);
+      };
+      let dragging = false;
+      track.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        dragging = true;
+        track.setPointerCapture(e.pointerId);
+        scrollTo(e.clientY);
+      });
+      track.addEventListener('pointermove', (e) => dragging && scrollTo(e.clientY));
+      track.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        dragging = false;
+      });
+      gui.append(track, thumb);
+      this.fillCreativeList();
+    }
+    for (const sl of this.slots) gui.append(this.slotEl(sl));
+  }
+
+  /** Remplit la grille de l'onglet créatif courant (ou les résultats de la recherche). */
+  private fillCreativeList() {
+    const list = this.crList;
+    if (!list) return;
+    list.replaceChildren();
+    for (const d of creativeItems(memory.ctab, memory.query)) {
       const cell = el('div', { class: 'gslot static', 'data-item': d.key });
       this.stackHTML(cell, { id: d.key, count: 1 });
       this.bindPress(cell, (kind) => {
-        // poser un objet tenu sur la palette le supprime (comme dans l'inventaire créatif)
-        if (this.carried && this.carried.id !== d.key) this.carried = null;
+        const full = (): ItemStack => ({ id: d.key, count: ItemRegistry.maxStack(d.key), ...(ItemRegistry.maxDurability(d.key) > 0 ? { durability: ItemRegistry.maxDurability(d.key) } : {}) });
+        if (kind === 'double' || kind === 'shift') {
+          // Maj + clic : une pile complète directement dans l'inventaire
+          this.s.player.inventory.add(full());
+        } else if (this.carried && this.carried.id !== d.key) this.carried = null; // poser sur la palette : supprime l'objet tenu
         else if (this.carried) this.carried.count = Math.min(ItemRegistry.maxStack(d.key), this.carried.count + 1);
-        else this.carried = { id: d.key, count: kind === 'tap' ? ItemRegistry.maxStack(d.key) : 1, ...(ItemRegistry.maxDurability(d.key) > 0 ? { durability: ItemRegistry.maxDurability(d.key) } : {}) };
+        else this.carried = kind === 'tap' ? full() : { ...full(), count: 1 };
         this.click();
         this.refresh();
       });
       list.append(cell);
     }
-    // suppression : toucher la zone vide de la palette avec un objet tenu
-    list.addEventListener('pointerup', (e) => {
-      e.stopPropagation();
-      if (e.target === list && this.carried) {
-        this.carried = null;
-        this.refresh();
-      }
-    });
-    side.append(list);
+    list.scrollTop = 0;
+    this.placeThumb();
+  }
+
+  private placeThumb() {
+    const list = this.crList, th = this.crThumb;
+    if (!list || !th) return;
+    const max = list.scrollHeight - list.clientHeight;
+    const f = max > 0 ? list.scrollTop / max : 0;
+    th.style.top = `${CR_TOP + 18 + Math.round(f * (112 - 15))}px`;
+    const g = th.getContext('2d')!;
+    g.clearRect(0, 0, 12, 15);
+    g.imageSmoothingEnabled = false;
+    const img = this.game.textures.packImage(`gui/sprites/container/creative_inventory/${max > 0 ? 'scroller' : 'scroller_disabled'}.png`);
+    if (img) g.drawImage(img, 0, 0, 12, 15);
+    else drawPanel(g, 0, 0, 12, 15);
   }
 
   private bookList: HTMLElement | null = null;

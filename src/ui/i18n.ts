@@ -30,7 +30,7 @@ const EN: Record<string, string> = {
   'Infos appareil...': 'Device Info...', 'Infos appareil': 'Device Info', Langue: 'Language',
   Qualité: 'Quality', Basse: 'Low', Moyenne: 'Medium', Haute: 'High', 'Distance de rendu': 'Render Distance', 'FPS max': 'Max FPS', Résolution: 'Resolution',
   Ombres: 'Shadows', NON: 'OFF', OUI: 'ON', Entités: 'Entities', 'Entités + OA': 'Entities + AO', Particules: 'Particles', Toutes: 'All', Réduites: 'Decreased', Minimales: 'Minimal',
-  Eau: 'Water', Animée: 'Animated', Simple: 'Simple', Shaders: 'Shaders', Activés: 'On', Activé: 'On', 'Ultra (ombres)': 'Ultra (shadows)', Nuages: 'Clouds',
+  Eau: 'Water', Animée: 'Animated', Simple: 'Simple', Shaders: 'Shaders', Activés: 'On', Activé: 'On', 'Ultra (ombres)': 'Ultra (shadows)', Nuages: 'Clouds', 'Voir à travers les portails': 'See Through Portals',
   'Qualité automatique': 'Auto Quality', 'Afficher les FPS': 'Show FPS', 'Balancement de la vue': 'View Bobbing',
   'Commandes tactiles': 'Touch Controls', Joystick: 'Joystick', 'Croix (classique)': 'D-pad (classic)', 'Visée tactile': 'Touch Aim', 'Au doigt': 'Tap', 'Au viseur': 'Crosshair',
   Sensibilité: 'Sensitivity', 'Inverser la souris': 'Invert Mouse', 'Taille des boutons': 'Button Size', 'Mode gaucher': 'Left-Handed', 'Saut automatique': 'Auto-Jump',
@@ -55,7 +55,7 @@ const EN: Record<string, string> = {
   Inventaire: 'Inventory', Fabrication: 'Crafting', Coffre: 'Chest', Fourneau: 'Furnace', "Coffre de l'Ender": 'Ender Chest', Enchanter: 'Enchant',
   'Réparer et nommer': 'Repair & Name', Alambic: 'Brewing Stand', Distributeur: 'Dispenser', Dropper: 'Dropper', Entonnoir: 'Hopper', Tonneau: 'Barrel',
   'Blocs de construction': 'Building Blocks', 'Blocs naturels': 'Natural Blocks', 'Blocs fonctionnels': 'Functional Blocks', 'Outils et utilitaires': 'Tools & Utilities',
-  Combat: 'Combat', 'Nourriture et boissons': 'Food & Drinks', Ingrédients: 'Ingredients', 'Aucune recette': 'No recipes', 'Ingrédients manquants': 'Missing ingredients',
+  Combat: 'Combat', 'Blocs colorés': 'Colored Blocks', 'Blocs de redstone': 'Redstone Blocks', Rechercher: 'Search', "Œufs d'apparition": 'Spawn Eggs', 'Inventaire de survie': 'Survival Inventory', 'Nourriture et boissons': 'Food & Drinks', Ingrédients: 'Ingredients', 'Aucune recette': 'No recipes', 'Ingrédients manquants': 'Missing ingredients',
 };
 
 /** Traduit un texte d'interface (sans effet en français ou si la traduction est inconnue). */

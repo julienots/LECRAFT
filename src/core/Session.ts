@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PortalView } from '../render/PortalView';
 import { ChestLids } from '../render/ChestLids';
 import { Machines } from '../world/Machines';
 import { tickBrewing } from '../crafting/Brewing';
@@ -124,6 +125,8 @@ export class Session implements GameContext {
   private iconTex = new Map<string, THREE.Texture>();
   private dropped: DroppedItemModels;
   private shadowMap: ShadowMap | null = null;
+  /** Vue de l'autre dimension à travers les portails. */
+  private portalView: PortalView | null = null;
   /** Dimension de cette partie (un changement de dimension recrée la session). */
   readonly dimension: Dimension;
   private dims: Partial<Record<Dimension, DimState>> = {};
@@ -1143,6 +1146,12 @@ export class Session implements GameContext {
     else if (paper) r.setFog(far * 0.8, far, new THREE.Color(0xe8eef8));
     // brouillard du jeu original : seulement sur la fin de la distance de vue (fin − clamp(fin/10, 4, 64))
     else r.setFog(rain > 0.3 ? far * 0.35 : far - Math.min(64, Math.max(4, far / 10)), far, r.sky.horizon);
+    // portails : la dimension d'arrivée vue à travers (avant le rendu principal)
+    this.portalView ??= new PortalView(r.materials);
+    this.portalView.update(
+      { world: this.world, dimension: this.dimension, portals: this.portals, saves: this.meta.server || this.meta.remote ? null : game.saves, worldId: this.meta.id, daylight: this.dayCycle.daylight },
+      r.gl, cam, dt, (s.portalView ?? s.quality !== 'LOW') && !this.meta.server && !this.meta.remote && !underwater && !inLava,
+    );
     game.hud.setOverlays(underwater, inLava);
     // météo
     const light = this.world.getLight(Math.floor(p.x), Math.floor(p.y + 1.6), Math.floor(p.z));
@@ -1404,6 +1413,7 @@ export class Session implements GameContext {
     this.explosions.dispose();
     this.scene.remove(this.chestLids.group);
     this.chestLids.dispose();
+    this.portalView?.dispose();
     this.falling.clear();
     this.shadowTexture.dispose();
     this.endTex?.sky.dispose();

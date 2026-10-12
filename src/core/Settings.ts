@@ -16,6 +16,8 @@ export interface Settings {
   shaders: 'off' | 'on' | 'ultra';
   resolutionScale: number; // 0.5..1
   clouds: boolean;
+  /** Portails : on voit la dimension d'arrivée à travers (non défini : activé sauf en qualité Basse). */
+  portalView?: boolean;
   sensitivity: number; // 0.2..3
   joystickSize: number; // px
   buttonScale: number; // 0.7..1.4

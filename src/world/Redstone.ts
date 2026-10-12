@@ -12,6 +12,8 @@ const kind = (id: number) => (id > 0 ? SHAPES[BlockRegistry.shape[id] - 1] : und
 
 export function isOpenable(id: number) {
   const k = kind(id);
+  // porte à carte : la redstone ne l'ouvre pas
+  if (k === 'door' && BlockRegistry.get(id).def.keyItem) return false;
   return k === 'door' || k === 'trapdoor' || k === 'fence_gate';
 }
 

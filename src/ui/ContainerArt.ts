@@ -87,8 +87,7 @@ export function drawFlame(ctx: CanvasRenderingContext2D, x: number, y: number, f
 
 /** Personnage (vue de face) dans le cadre noir de l'inventaire. */
 /** Personnage de l'inventaire dessiné à partir de la vraie skin du joueur (vue de face, couches comprises). */
-function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number, skin: CanvasImageSource & { width: number; height: number }) {
-  const k = 2;
+export function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number, skin: CanvasImageSource & { width: number; height: number }, k = 2) {
   const sx = skin.width / 64; // skins HD des packs
   const tall = skin.height >= skin.width; // format 64×64 (sinon 64×32 : membres gauches en miroir)
   ctx.imageSmoothingEnabled = false;

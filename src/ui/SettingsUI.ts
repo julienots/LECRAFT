@@ -73,6 +73,7 @@ function videoScreen(game: Game): Screen {
         mcCycle('Eau', [['animated', 'Animée'], ['simple', 'Simple']], s.waterQuality, (v) => ((s.waterQuality = v as typeof s.waterQuality), apply())),
         mcCycle('Shaders', [['on', 'Activés'], ['ultra', 'Ultra (ombres)'], ['off', 'NON']], s.shaders, (v) => ((s.shaders = v as typeof s.shaders), apply())),
         mcToggle('Nuages', s.clouds, (v) => ((s.clouds = v), apply())),
+        mcToggle('Voir à travers les portails', s.portalView ?? s.quality !== 'LOW', (v) => ((s.portalView = v), apply())),
         mcToggle('Balancement de la vue', s.viewBobbing, (v) => ((s.viewBobbing = v), apply())),
         mcToggle('Afficher les FPS', s.showFps, (v) => ((s.showFps = v), apply())),
         mcToggle('Qualité automatique', s.autoQuality, (v) => ((s.autoQuality = v), apply())),

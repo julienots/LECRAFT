@@ -124,6 +124,33 @@ try {
     return { on, off };
   });
   check('Plaque de pression : le joueur dessus ouvre la porte, en partant elle se referme', plate.on && plate.off, JSON.stringify(plate));
+  // ---------- porte à carte ----------
+  const card = await G(async () => {
+    const s = window.__lecraft.session, a = window.__a, w = s.world, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const x = a.x - 6, z = a.z + 3;
+    window.__place('keycard_door', x, a.y, z);
+    const placed = w.getBlock(x, a.y, z) === I('keycard_door') && w.getBlock(x, a.y + 1, z) === I('keycard_door');
+    window.__use(x, a.y, z);
+    const byHand = (w.getMeta(x, a.y, z) & 4) !== 0;
+    window.__place('lever', x + 1, a.y, z);
+    window.__use(x + 1, a.y, z);
+    const byLever = (w.getMeta(x, a.y, z) & 4) !== 0;
+    w.setBlock(x + 1, a.y, z, 0);
+    // carte d'accès en main
+    p.inventory.clear();
+    p.inventory.add({ id: 'keycard', count: 1 });
+    p.inventory.selected = 0;
+    s.interaction.target = { x, y: a.y, z, nx: 0, ny: 0, nz: 1, block: w.getBlock(x, a.y, z), distance: 2, px: x + 0.5, py: a.y + 0.5, pz: z + 1 };
+    s.interaction.preview = null;
+    s.interaction.use();
+    const byCard = (w.getMeta(x, a.y, z) & 4) !== 0 && (w.getMeta(x, a.y + 1, z) & 4) !== 0;
+    await sleep(5600);
+    const closedAgain = (w.getMeta(x, a.y, z) & 4) === 0;
+    return { placed, byHand, byLever, byCard, closedAgain };
+  });
+  check('Porte à carte : posée, ne s’ouvre ni à la main ni au levier', card.placed && !card.byHand && !card.byLever, JSON.stringify(card));
+  check('Porte à carte : s’ouvre avec la carte d’accès puis se referme seule', card.byCard && card.closedAgain, JSON.stringify(card));
+
   // ---------- visée au doigt (commandes tactiles classiques) ----------
   const aim = await G(() => {
     const s = window.__lecraft.session, p = s.player, a = window.__a;
