@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { updateAnimLUT } from '../render/ChunkMaterial';
 import { PortalView } from '../render/PortalView';
 import { AmbientParticles } from '../render/AmbientParticles';
 import { applyPotion, potionColor } from '../inventory/Potions';
@@ -1220,6 +1221,7 @@ export class Session implements GameContext {
     else r.sky.update(paper ? 0.22 : this.dayCycle.time, cam.position, rain, this.weather.flash, this.elapsed, s.clouds);
     const u = r.materials.uniforms;
     u.uTime.value = this.elapsed;
+    updateAnimLUT(u);
     u.uPortalTile.value = TileRegistry.has('end_portal') ? TileRegistry.index('end_portal') : -1;
     this.syncEndPortalTextures(u);
     u.uResolution.value.set(r.gl.domElement.width, r.gl.domElement.height);

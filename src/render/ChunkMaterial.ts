@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ATLAS_COLS } from './TileRegistry';
+import { ATLAS_COLS, TILE_ANIMS, TileRegistry } from './TileRegistry';
 
 const vert = /* glsl */ `
 attribute vec2 aUv;
@@ -9,7 +9,11 @@ uniform float uTime;
 uniform float uSway;
 uniform float uWaterAnim;
 uniform mat4 uShadowMatrix;
+// par tuile : images, durée d'une image (ticks), fondu entre images
+uniform sampler2D uAnimLUT;
 varying vec2 vUv;
+varying float vTileNext;
+varying float vBlend;
 varying vec3 vWorld;
 varying vec4 vShadow;
 varying float vTile;
@@ -33,7 +37,18 @@ void main() {
     wp.y += sin(uTime * 1.6 + wp.x * 0.9 + wp.z * 0.6) * 0.035 - 0.04;
   }
   float tile = aInfo.x;
-  if (flag(f, 4.0) > 0.5 && (!liquid || uWaterAnim > 0.5)) tile += mod(floor(uTime * 8.0), 16.0);
+  vBlend = 0.0;
+  vTileNext = tile;
+  if (flag(f, 4.0) > 0.5 && (!liquid || uWaterAnim > 0.5)) {
+    vec4 a = texelFetch(uAnimLUT, ivec2(int(mod(tile, ${ATLAS_COLS}.0)), int(floor(tile / ${ATLAS_COLS}.0))), 0);
+    if (a.r > 1.5) {
+      float t = uTime * 20.0 / a.g;
+      float k = mod(floor(t), a.r);
+      vTileNext = tile + mod(k + 1.0, a.r);
+      if (a.b > 0.5) vBlend = fract(t);
+      tile += k;
+    }
+  }
   vTile = tile;
   vFlags = f;
   vUv = aUv / 256.0;
@@ -79,6 +94,8 @@ uniform float uEndTex;
 uniform vec2 uResolution;
 varying vec2 vUv;
 varying float vTile;
+varying float vTileNext;
+varying float vBlend;
 varying vec2 vLight;
 varying vec4 vTint;
 varying float vDist;
@@ -186,6 +203,12 @@ void main() {
   // jusqu'au niveau 4 (1 texel par tuile) comme le jeu original : pas de scintillement au loin
   float lod = clamp(0.5 * log2(max(dot(gx, gx), dot(gy, gy))), 0.0, 4.0);
   vec4 tex = textureLod(uAtlas, uv, lod);
+  // texture animée avec fondu (magma, prismarine, sculk…) : mélange avec l'image suivante
+  if (vBlend > 0.001) {
+    float tn = floor(vTileNext + 0.5);
+    vec2 uv2 = vec2((mod(tn, ${ATLAS_COLS}.0) + f.x) / ${ATLAS_COLS}.0, 1.0 - (floor(tn / ${ATLAS_COLS}.0) + 1.0 - f.y) / ${ATLAS_COLS}.0);
+    tex.rgb = mix(tex.rgb, textureLod(uAtlas, uv2, lod).rgb, vBlend);
+  }
   if (tex.a < 0.1) discard;
   vec3 c = tex.rgb;
   // teinte (herbe, feuillage) : texels marqués (alpha < 1) ; la teinte des sommets est blanche pour
@@ -284,6 +307,7 @@ export interface ChunkUniforms {
   uEndPortal: THREE.IUniform<THREE.Texture | null>;
   uEndTex: THREE.IUniform<number>;
   uResolution: THREE.IUniform<THREE.Vector2>;
+  uAnimLUT: THREE.IUniform<THREE.Texture>;
 }
 
 /** Matériaux partagés par tous les chunks (opaque/cutout et translucide). */
@@ -318,6 +342,7 @@ export function createChunkMaterials(atlas: THREE.Texture) {
     uEndPortal: { value: null },
     uEndTex: { value: 0 },
     uResolution: { value: new THREE.Vector2(1, 1) },
+    uAnimLUT: { value: animLUT() },
   };
   const opaque = new THREE.ShaderMaterial({
     uniforms: { ...uniforms, uAlphaMode: { value: 0 } },
@@ -336,4 +361,35 @@ export function createChunkMaterials(atlas: THREE.Texture) {
   });
   // uniforms partagés : les deux matériaux pointent vers les mêmes objets IUniform
   return { opaque, trans, uniforms };
+}
+
+/**
+ * Table des animations par tuile (64 × 64, une case par tuile de l'atlas) : nombre d'images,
+ * durée d'une image en ticks et fondu, lue par le shader des sommets. Les blocs supplémentaires
+ * enregistrent leurs tuiles après la création du rendu : la table suit le nombre de tuiles.
+ */
+const lutData = new Float32Array(ATLAS_COLS * ATLAS_COLS * 4);
+let lutTiles = -1;
+function animLUT(): THREE.DataTexture {
+  const t = new THREE.DataTexture(lutData, ATLAS_COLS, ATLAS_COLS, THREE.RGBAFormat, THREE.FloatType);
+  t.magFilter = t.minFilter = THREE.NearestFilter;
+  fillAnimLUT(t);
+  return t;
+}
+function fillAnimLUT(t: THREE.DataTexture) {
+  lutTiles = TileRegistry.count;
+  lutData.fill(0);
+  for (const [name, a] of Object.entries(TILE_ANIMS)) {
+    if (!TileRegistry.has(name)) continue;
+    const i = TileRegistry.index(name);
+    lutData[i * 4] = a[0];
+    lutData[i * 4 + 1] = a[1];
+    lutData[i * 4 + 2] = a[2] ? 1 : 0;
+  }
+  t.needsUpdate = true;
+}
+
+/** À appeler à chaque image : met la table à jour si de nouvelles tuiles ont été enregistrées. */
+export function updateAnimLUT(u: ChunkUniforms) {
+  if (lutTiles !== TileRegistry.count) fillAnimLUT(u.uAnimLUT.value as THREE.DataTexture);
 }

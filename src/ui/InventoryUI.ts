@@ -856,7 +856,26 @@ export class InventoryUI {
           this.refresh();
         }
       });
-      list.addEventListener('scroll', () => this.placeThumb());
+      list.addEventListener('scroll', () => {
+        this.placeThumb();
+        // fin du défilement (doigt, ascenseur) : on cale sur une rangée entière, comme le jeu original
+        clearTimeout(snapTimer);
+        snapTimer = window.setTimeout(snapRow, 140);
+      });
+      let snapTimer = 0;
+      const snapRow = () => {
+        const row = Math.round(list.scrollTop / 18) * 18;
+        if (Math.abs(list.scrollTop - row) > 0.5) list.scrollTop = row;
+      };
+      // molette : une rangée par cran
+      list.addEventListener(
+        'wheel',
+        (e) => {
+          e.preventDefault();
+          list.scrollTop = Math.round(list.scrollTop / 18) * 18 + Math.sign(e.deltaY) * 18;
+        },
+        { passive: false },
+      );
       gui.append(list);
       this.crList = list;
       const track = el('div', { class: 'gui-layer cr-track', style: `left:175px;top:${Y + 18}px;width:12px;height:112px` });

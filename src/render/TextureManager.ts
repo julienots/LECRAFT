@@ -9,7 +9,7 @@ import { paintRealisticZombie } from './RealisticZombie';
 import { skinAspect } from './MobModels';
 import { LoadedPack } from './ResourcePack';
 import { buildAtlas, hex } from './TextureGenerator';
-import { ANIMATED_TILES, ATLAS_COLS, TILE_PX, TileRegistry } from './TileRegistry';
+import { ATLAS_COLS, TILE_ANIMS, TILE_PX, TileRegistry } from './TileRegistry';
 
 const DEFAULT_GRASS = hex('#7cbd4a');
 const DEFAULT_FOLIAGE = hex('#5fa83a');
@@ -23,7 +23,7 @@ const DEFAULT_FOLIAGE = hex('#5fa83a');
 const GRAY_TINTED = /^(grass_block_top|short_grass|fern|sugar_cane|tall_grass_bottom|tall_grass_top|large_fern_bottom|large_fern_top|lily_pad|(?!cherry|azalea|flowering_azalea|pale_oak)\w*_leaves)$/;
 /** Tuiles sans équivalent direct dans un pack (dessinées par le jeu). */
 const PACK_SKIP = new Set(['missing', 'altar_top', 'altar_side', 'bed_foot', 'bed_side', 'bed_head']);
-const PACK_RENAME: Record<string, string> = {
+export const PACK_RENAME: Record<string, string> = {
   water: 'water_still', lava: 'lava_still',
   // blocs de la palette élargie : noms des fichiers du pack
   cherry_log_side: 'cherry_log', mangrove_log_side: 'mangrove_log', pale_oak_log_side: 'pale_oak_log', crimson_stem_side: 'crimson_stem', warped_stem_side: 'warped_stem',
@@ -291,8 +291,11 @@ export class TextureManager implements SkinProvider {
         continue;
       }
       const frames = Math.max(1, Math.floor(img.height / img.width));
-      const ours = ANIMATED_TILES[name] ?? 1;
-      const frame = Math.floor(((fs ? Number(fs) : 0) * frames) / ours);
+      // image de la texture pour cette case de l'atlas : ordre du « .mcmeta », sinon répartie dans le temps
+      const anim = TILE_ANIMS[name];
+      const ours = anim?.[0] ?? 1;
+      const slot = fs ? Number(fs) : 0;
+      const frame = anim?.[3] && ours === anim[3].length ? anim[3][slot] % frames : frames === ours ? slot : Math.floor((slot * frames) / ours);
       const data = pack.imageData(img, TILE_PX, frame);
       const d = data.data;
       if (name === 'grass_block_side') {
