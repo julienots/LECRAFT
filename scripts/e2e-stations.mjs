@@ -133,16 +133,21 @@ try {
   await shot('04-brewing');
   check('Alambic : interface, infusion lancée (poudre de blaze), potions étranges', brew.ui && brew.started && brew.bottles[0] === 'awkward' && brew.bottles[1] === 'awkward', JSON.stringify(brew));
   await G(() => window.__lecraft.closeInventory());
-  const drink = await G(() => {
-    const s = window.__lecraft.session, p = s.player;
+  const drink = await G(async () => {
+    const g = window.__lecraft, s = g.session, p = s.player;
     p.inventory.clear();
     p.inventory.slots[0] = { id: 'potion', count: 1, meta: { potion: 'swiftness' } };
     p.inventory.selected = 0;
     s.interaction.target = null; s.interaction.targetMob = null;
+    // bue en 1,6 s en maintenant « utiliser », comme le jeu original
+    g.input.useHeld = true;
     s.interaction.use();
-    return { speed: p.effects.level('speed'), hand: p.inventory.slots[0]?.id };
+    const early = p.effects.level('speed');
+    for (let i = 0; i < 60 && s.interaction.consuming; i++) await new Promise((r) => setTimeout(r, 100));
+    g.input.useHeld = false;
+    return { early, speed: p.effects.level('speed'), hand: p.inventory.slots[0]?.id };
   });
-  check('Potion de rapidité bue : effet + fiole vide', drink.speed === 1 && drink.hand === 'glass_bottle', JSON.stringify(drink));
+  check('Potion de rapidité bue en 1,6 s : effet + fiole vide', drink.early === 0 && drink.speed === 1 && drink.hand === 'glass_bottle', JSON.stringify(drink));
   const splash = await G(async () => {
     const s = window.__lecraft.session, p = s.player, { x, y, z } = window.__a;
     const m = s.entities.spawnMob('pig', x + 0.5, y, z - 2.5, { persistent: true });

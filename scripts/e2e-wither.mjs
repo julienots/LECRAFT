@@ -183,10 +183,17 @@ try {
     sp.removed = true;
     const z = s.entities.spawnMob('zombie', s.player.x + 3, s.player.y, s.player.z, { persistent: true });
     s.combat.damageMob(z, 999, { kind: 'player', fromPlayer: true });
-    for (let i = 0; i < 60 && z.deathTimer < 0.5; i++) await new Promise((res) => setTimeout(res, 50));
-    await new Promise((res) => requestAnimationFrame(res));
-    r.midAngle = z.model.group.rotation.z;
-    r.midPresent = !z.removed;
+    // à mi-chute (relevé d'un coup : une image lente peut durer plus de 0,5 s avec le rendu logiciel)
+    r.midAngle = 0;
+    r.midPresent = false;
+    for (let i = 0; i < 300 && !z.removed; i++) {
+      await new Promise((res) => setTimeout(res, 10));
+      if (z.deathTimer > 0.3 && !z.removed && z.model.group.rotation.z > 0.8) {
+        r.midAngle = z.model.group.rotation.z;
+        r.midPresent = true;
+        break;
+      }
+    }
     for (let i = 0; i < 80 && !z.removed; i++) await new Promise((res) => setTimeout(res, 50));
     r.gone = z.removed;
     return r;
@@ -234,11 +241,14 @@ try {
     s.entities.spawnItem('diamond', 1, x + 0.5, y + 2, z - 4.5);
     const d = s.entities.entities[s.entities.entities.length - 1];
     d.pickupDelay = 99;
-    await sleep(500);
-    const dark = d.object3d.children[0].material.color.r;
+    const col = () => d.object3d?.children[0]?.material.color.r ?? 1;
+    // on attend que la couleur suive la lumière (une image peut durer 0,5 s avec le rendu logiciel)
+    for (let i = 0; i < 30 && col() >= 0.99; i++) await sleep(100);
+    await sleep(300);
+    const dark = col();
     s.runCommand('/time set day');
-    await sleep(500);
-    const light = d.object3d.children[0].material.color.r;
+    for (let i = 0; i < 30 && col() <= dark + 0.01; i++) await sleep(100);
+    const light = col();
     d.removed = true;
     return { merged, notPicked, flew, got, dark, light };
   });

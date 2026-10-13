@@ -273,6 +273,44 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **Textures animées, consommation, bouclier, élytres, pistons et ambiances (v2.29)**
+  - **Textures animées comme le jeu original** :
+    - nombre d'images, vitesse, ordre et fondu repris des fichiers `.mcmeta` de la 1.21 ;
+    - flammes du feu et du feu des âmes (32 images), feux de camp, magma (avec fondu) ;
+    - lanterne aquatique, prismarine, varech et herbes marines, lanternes ;
+    - sculk, tiges carmin et biscornues, blocs de commande, fourneaux allumés.
+  - **Inventaire créatif** : la grille défile rangée par rangée (une rangée par cran de
+    molette) : les objets restent dans les cases.
+  - **Manger et boire** :
+    - 1,6 s en maintenant « utiliser » (0,8 s pour le varech séché) ;
+    - bouchées, miettes et objet porté à la bouche ;
+    - potions et lait bus de même ; le lait retire tous les effets ;
+    - on avance à 20 % de la vitesse pendant l'utilisation d'un objet.
+  - **Bouclier** :
+    - levé en maintenant « utiliser », ou accroupi avec un bouclier dans la barre ;
+    - protège après 0,25 s des coups, projectiles et explosions venus de face ;
+    - s'use ; une hache le désactive 5 s ;
+    - modèle 3D du jeu original.
+  - **Élytres** :
+    - vol plané en sautant pendant une chute (formule du jeu Java) ;
+    - usure, choc contre un mur ;
+    - fusées d'artifice pour accélérer.
+  - **Poses d'utilisation** :
+    - vue à la première personne : manger et boire, arc (textures de tension), trident,
+      arbalète, bouclier levé ;
+    - vue extérieure : bras de l'arc, du bouclier et du trident.
+  - **Pistons et pistons collants** :
+    - poussent jusqu'à 12 blocs ; les blocs fragiles se cassent ;
+    - le piston collant ramène le bloc ;
+    - le slime et le miel entraînent leurs voisins ;
+    - joueur et créatures poussés ;
+    - six orientations.
+  - **Ambiances** : boucle sous l'eau, une boucle par biome du Nether, humeur des grottes
+    (son étrange dans le noir complet).
+  - **Pas encore fait** :
+    - animation de glissement des pistons (les blocs se déplacent d'un coup) ;
+    - motifs de bannière sur le bouclier.
+
 - **Portails à vue directe, porte à carte, inventaire créatif, effets et créatures (v2.28)**
   - **Voir l'autre dimension à travers le portail** :
     - le portail affiche en direct la dimension de destination (Nether ↔ Surface, Pâte à
@@ -329,11 +367,8 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     - le **renard**, le **dauphin** et le **lapin** reprennent les modèles de l'édition Java, qui
       correspondent aux textures du pack ;
     - le **phantom** est dessiné à la bonne hauteur.
-  - **Pas encore fait** :
-    - sons d'ambiance des grottes et des biomes du Nether ;
-    - animations de manger, de boire et de bander l'arc ;
-    - parade au bouclier et vol en élytres (les objets existent, sans ces actions) ;
-    - pistons qui poussent les blocs.
+  - Les manques listés dans cette version (ambiances des grottes et du Nether, manger, boire et
+    bander l'arc, bouclier, élytres, pistons) sont faits en v2.29.
 
 - **Portails, rails, animations et relations entre créatures (v2.27)**
   - **Portails comme le jeu original** :
