@@ -41,7 +41,7 @@ export class HUD implements HudApi {
   private compassArrow: HTMLElement;
   private compassText: HTMLElement;
   private compassTarget: { x: number; z: number; until: number; name: string; autoHide?: boolean } | null = null;
-  private last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1 };
+  private last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1, hv: '', abs: -1 };
   private hotbarDirty = true;
   private nameTimer = 0;
   private lastSelected = -1;
@@ -160,7 +160,7 @@ export class HUD implements HudApi {
   refreshTheme() {
     this.icons = buildHudSprites(this.textures);
     this.applySprites();
-    this.last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1 };
+    this.last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1, hv: '', abs: -1 };
     this.hotbarDirty = true;
   }
 
@@ -254,6 +254,22 @@ export class HUD implements HudApi {
   }
 
   /** Rangée d'icônes 9x9 (2 points par icône) : pleine / moitié / vide. */
+  private renderHearts(hp: number, max: number, variant: string, absorption: number) {
+    const ic = this.icons;
+    let html = '';
+    for (let i = 0; i < Math.ceil(max / 2); i++) {
+      const v = hp - i * 2;
+      const kind = v >= 2 ? 'full' : v === 1 ? 'half' : 'empty';
+      const url = kind === 'empty' ? ic.heart_empty : ic[`${variant}_${kind}`] ?? ic[`heart_${kind}`];
+      html += `<i style="background-image:url(${url})"></i>`;
+    }
+    for (let i = 0; i < Math.ceil(absorption / 2); i++) {
+      const kind = absorption - i * 2 >= 2 ? 'full' : 'half';
+      html += `<i style="background-image:url(${ic[`heart_absorbing_${kind}`] ?? ic[`heart_${kind}`]})"></i>`;
+    }
+    this.hearts.innerHTML = html;
+  }
+
   private renderIcons(container: HTMLElement, value: number, max: number, prefix: string, hideEmpty = false) {
     const n = Math.ceil(max / 2);
     let html = '';
@@ -312,10 +328,15 @@ export class HUD implements HudApi {
     this.coordsEl.classList.toggle('hidden', !showC);
     if (showC) this.coordsEl.textContent = `Position : ${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)}`;
     const hp = Math.ceil(p.health);
-    if (hp !== L.h || p.maxHealth !== L.maxH) {
+    // cœurs verts (poison), noirs (Wither) et dorés (absorption), comme le jeu original
+    const variant = p.effects.level('wither') ? 'heart_withered' : p.effects.level('poison') || p.effects.level('fatal_poison') ? 'heart_poisoned' : 'heart';
+    const abs = Math.ceil(p.absorption);
+    if (hp !== L.h || p.maxHealth !== L.maxH || variant !== L.hv || abs !== L.abs) {
       L.h = hp;
       L.maxH = p.maxHealth;
-      this.renderIcons(this.hearts, hp, p.maxHealth, 'heart');
+      L.hv = variant;
+      L.abs = abs;
+      this.renderHearts(hp, p.maxHealth, variant, abs);
     }
     const creative = p.creative;
     this.hearts.style.visibility = this.food.style.visibility = this.xpBg.style.visibility = this.armor.style.visibility = creative ? 'hidden' : '';

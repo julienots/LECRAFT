@@ -2,6 +2,7 @@ import type { InputState } from '../input/InputState';
 import type { Settings } from '../core/Settings';
 import type { World } from '../world/World';
 import { BlockRegistry } from '../blocks/BlockRegistry';
+import { enchLevel } from '../inventory/Enchantments';
 import type { Player } from './Player';
 import { PLAYER_HEIGHT, PLAYER_SNEAK_HEIGHT } from './PlayerPhysics';
 
@@ -77,12 +78,23 @@ export class PlayerController {
     p.sneaking = i.sneak && !b.flying && !p.swimming && !p.crawling;
     p.sprinting = i.sprint && my > 0.3 && !p.sneaking && !p.crawling && (p.hunger > 6 || p.creative);
     let speed = b.flying ? FLY * (p.sprinting ? 1.8 : 1) : p.sneaking || p.crawling ? SNEAK : p.sprinting ? SPRINT : WALK;
+    // Furtivité (jambières) : on avance plus vite accroupi (30 % → +15 % par niveau)
+    const swift = enchLevel(p.inventory.armor.legs, 'swift_sneak');
+    if (swift && (p.sneaking || p.crawling)) speed *= (0.3 + 0.15 * swift) / 0.3;
     if (b.inWater || b.inLava) speed = b.inLava ? 1.5 : p.swimming ? (i.sprint ? SWIM_FAST : SWIM * 1.5) : SWIM * (p.sprinting ? 1.3 : 1);
+    // Agilité aquatique (bottes) : la lenteur dans l'eau disparaît par tiers
+    const ds = Math.min(3, enchLevel(p.inventory.armor.feet, 'depth_strider'));
+    if (b.inWater && ds && !p.swimming) speed += ((p.sprinting ? SPRINT : WALK) - speed) * (ds / 3);
+    // Grâce du dauphin : nage bien plus rapide
+    if (b.inWater && p.effects.level('dolphins_grace')) speed *= 2.2;
     if (p.slowTimer > 0) speed *= 0.55;
     if (!b.flying) speed *= p.effects.speedMul();
     // friction du bloc sous les pieds
     const below = world.getBlock(Math.floor(b.x), Math.floor(b.y - 0.05), Math.floor(b.z));
-    if (below > 0 && BlockRegistry.blocks[below].def.friction) speed *= 1 - BlockRegistry.blocks[below].def.friction! * 0.5;
+    // Agilité des âmes (bottes) : plus de lenteur sur le sable et la terre des âmes, et un bonus
+    const soul = below > 0 && /^soul_(sand|soil)$/.test(BlockRegistry.blocks[below].key) ? enchLevel(p.inventory.armor.feet, 'soul_speed') : 0;
+    if (soul) speed *= 1.3 + 0.105 * soul;
+    else if (below > 0 && BlockRegistry.blocks[below].def.friction) speed *= 1 - BlockRegistry.blocks[below].def.friction! * 0.5;
     // direction monde (yaw = rotation autour de Y, 0 = regarde vers -Z)
     const sin = Math.sin(p.yaw), cos = Math.cos(p.yaw);
     const fx = -sin, fz = -cos, rx = cos, rz = -sin;

@@ -417,6 +417,8 @@ const EGG_COLORS: Record<string, [string, string]> = {
   zombified_piglin: ['#ea9393', '#4c7129'], ghast: ['#f9f9f9', '#bcbcbc'], magma_cube: ['#340000', '#fcfc00'], blaze: ['#f6b201', '#fff87e'], enderman: ['#161616', '#000000'],
   wolf: ['#d7d3d3', '#ceaf96'], squid: ['#223b4d', '#708899'], glow_squid: ['#095656', '#85f1bc'], bat: ['#4c3e30', '#0f0f0f'], husk: ['#797061', '#e6cc94'],
   drowned: ['#8ff1d7', '#799c65'], stray: ['#617677', '#dde4e4'], witch: ['#340000', '#51a03e'], villager: ['#563c33', '#bd8b72'], wither_skeleton: ['#141414', '#474d4d'],
+  warden: ['#0f4649', '#39d6e0'], allay: ['#00daff', '#00adff'], sniffer: ['#871e09', '#22a9a1'], breeze: ['#af94df', '#9166df'], ravager: ['#757470', '#5b5049'],
+  vex: ['#7a90a4', '#e8edf1'], creaking: ['#5f5f5f', '#fc7812'], happy_ghast: ['#f9f9f9', '#7ab0d8'],
 };
 for (const d of MOB_DEFS) {
   if (d.category === 'boss' || d.key === 'end_crystal' || d.key.includes(':')) continue;

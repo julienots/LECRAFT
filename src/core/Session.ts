@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { PortalView } from '../render/PortalView';
+import { AmbientParticles } from '../render/AmbientParticles';
+import { applyPotion, potionColor } from '../inventory/Potions';
+import { onDeathEffects, onHurtEffects } from '../entities/EffectOutcomes';
+import { EFFECT_COLORS } from '../entities/Effects';
 import { ChestLids } from '../render/ChestLids';
 import { Machines } from '../world/Machines';
 import { tickBrewing } from '../crafting/Brewing';
@@ -56,6 +60,7 @@ import { clamp } from '../util/math';
 import type { Boss } from '../entities/Boss';
 import { Scoreboard, type ScoreboardSnapshot } from '../scripting/Scoreboard';
 import { Mob } from '../entities/Mob';
+import { enchLevel } from '../inventory/Enchantments';
 import { ScriptHost } from '../scripting/ScriptHost';
 import { DroppedItemModels } from '../render/DroppedItems';
 import { ShadowMap } from '../render/ShadowMap';
@@ -127,6 +132,91 @@ export class Session implements GameContext {
   private shadowMap: ShadowMap | null = null;
   /** Vue de l'autre dimension à travers les portails. */
   private portalView: PortalView | null = null;
+  /** Nuages d'effet des potions persistantes (rayon 3 blocs qui diminue pendant 30 s). */
+  private clouds: { x: number; y: number; z: number; potion: string; t: number; tick: number; color: [number, number, number] }[] = [];
+  addEffectCloud(x: number, y: number, z: number, potion: string) {
+    const c = potionColor({ id: 'potion', count: 1, meta: { potion } });
+    const n = parseInt(c.slice(1), 16);
+    this.clouds.push({ x, y, z, potion, t: 0, tick: 0, color: [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255] });
+  }
+  private updateClouds(dt: number) {
+    for (const c of this.clouds) {
+      c.t += dt;
+      c.tick -= dt;
+      const r = 3 * (1 - c.t / 30);
+      // particules colorées sur toute la surface du nuage
+      for (let i = 0, n = Math.ceil(r * r * 2); i < n; i++) {
+        const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r;
+        this.particles.effectSwirl(c.x + Math.cos(a) * d, c.y + 0.1, c.z + Math.sin(a) * d, c.color[0], c.color[1], c.color[2]);
+      }
+      if (c.tick > 0) continue;
+      c.tick = 1;
+      // chaque seconde : effet au quart de sa durée sur ceux qui sont dans le nuage
+      const p = this.player;
+      if (Math.hypot(p.x - c.x, p.z - c.z) < r && Math.abs(p.y - c.y) < 2) applyPotion(p.effects, p.effectTarget, c.potion, 0.25);
+      for (const m of this.entities.mobs)
+        if (!m.dead && Math.hypot(m.x - c.x, m.z - c.z) < r && Math.abs(m.y - c.y) < 2)
+          applyPotion(m.effects, { heal: (h) => (m.health = Math.min(m.maxHealth, m.health + h)), hurt: (h) => this.entities.combat.damageMob(m, h, { kind: 'environment' }), hp: () => m.health, body: m.body }, c.potion, 0.25);
+    }
+    this.clouds = this.clouds.filter((c) => c.t < 30);
+  }
+  /** Semelles givrantes : glace temporaire (clé → instant de fonte). */
+  private frost = new Map<string, number>();
+  private frostTick = 0;
+  private updateFrostWalker(dt: number) {
+    this.frostTick -= dt;
+    if (this.frostTick > 0) return;
+    this.frostTick = 0.1;
+    const w = this.world, p = this.player;
+    const iceKey = BlockRegistry.has('frosted_ice') ? 'frosted_ice' : 'ice';
+    const ice = BlockRegistry.byName(iceKey).id;
+    const L = enchLevel(p.inventory.armor.feet, 'frost_walker');
+    if (L && p.body.onGround && !p.body.inWater) {
+      // l'eau de source sous les pieds gèle dans un rayon de 2 + niveau (comme le jeu original)
+      const r = Math.min(16, 2 + L), y = Math.floor(p.y) - 1;
+      for (let dz = -r; dz <= r; dz++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (dx * dx + dz * dz > r * r) continue;
+          const x = Math.floor(p.x) + dx, z = Math.floor(p.z) + dz;
+          if (w.getBlock(x, y, z) !== B.WATER || w.getMeta(x, y, z) !== 0 || w.getBlock(x, y + 1, z) !== B.AIR) continue;
+          w.setBlock(x, y, z, ice);
+          this.frost.set(`${x},${y},${z}`, this.elapsed + 6 + Math.random() * 10);
+        }
+    }
+    for (const [k, t] of this.frost) {
+      if (this.elapsed < t) continue;
+      const [x, y, z] = k.split(',').map(Number);
+      // fond, sauf si le joueur se tient encore dessus avec les bottes (elle tient le temps du passage)
+      if (L && Math.floor(p.x) === x && Math.floor(p.z) === z && Math.floor(p.y) - 1 === y) continue;
+      if (w.getBlock(x, y, z) === ice) w.setBlock(x, y, z, B.WATER);
+      this.frost.delete(k);
+    }
+  }
+  /** Fil de la canne à pêche (de la main au bouchon). */
+  private fishLine: THREE.Line | null = null;
+  private updateFishLine(cam: THREE.PerspectiveCamera) {
+    const f = this.interaction.fishing;
+    if (!f || f.bobber.removed) {
+      if (this.fishLine) this.fishLine.visible = false;
+      return;
+    }
+    if (!this.fishLine) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
+      this.fishLine = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x101010 }));
+      this.fishLine.frustumCulled = false;
+      this.scene.add(this.fishLine);
+    }
+    // bout de la canne : devant et à droite de la caméra (vue à la 1re personne)
+    const hand = new THREE.Vector3(0.32, -0.12, -0.7).applyQuaternion(cam.quaternion).add(cam.position);
+    const a = this.fishLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+    a.setXYZ(0, hand.x, hand.y, hand.z);
+    a.setXYZ(1, f.bobber.x, f.bobber.y + 0.1, f.bobber.z);
+    a.needsUpdate = true;
+    this.fishLine.visible = true;
+  }
+  /** Particules d'ambiance des blocs. */
+  private ambientFx: AmbientParticles | null = null;
   /** Dimension de cette partie (un changement de dimension recrée la session). */
   readonly dimension: Dimension;
   private dims: Partial<Record<Dimension, DimState>> = {};
@@ -278,10 +368,25 @@ export class Session implements GameContext {
     this.fovCurrent = game.settings.fov;
     // événements joueur
     this.player.onDamage = (_dmg, src) => {
+      if (this.player.effects.map.size) onHurtEffects(this, this.player.effects, this.player.x, this.player.y, this.player.z, this.entities);
       this.game.hud.flashDamage();
       if (src === 'fall') this.audio.play('hurt');
     };
     this.player.onDeath = () => this.onDeath();
+    // Épines : l'attaquant est blessé
+    this.player.onThorns = (attacker, dmg) => {
+      const m = attacker as unknown as Mob;
+      if (!m || (m as { kind?: string }).kind !== 'mob' || m.dead) return;
+      this.entities.combat.damageMob(m, dmg, { kind: 'player', fromPlayer: true });
+      this.particles.burst('crit', m.x, m.y + m.body.height * 0.6, m.z, 6);
+    };
+    // totem d'immortalité : gerbe verte et jaune, son et message (comme le jeu original)
+    this.player.onTotem = () => {
+      const p = this.player;
+      this.particles.burst('totem', p.x, p.y + 1, p.z, 60);
+      this.audio.play('levelup', { pitch: 0.6 });
+      this.game.hud.toast("Totem d'immortalité utilisé !", 'achievement');
+    };
     this.player.onLevelUp = (lvl) => {
       this.audio.play('levelup');
       this.hud.toast(`Niveau ${lvl} atteint !${lvl % 5 === 0 ? ' +1 cœur' : ''}`, 'achievement');
@@ -1089,8 +1194,14 @@ export class Session implements GameContext {
     // inclinaison quand on est blessé (comme le jeu original : sin(f⁴·π) × 14°, f = temps restant)
     const hf = !p.dead && p.invulnerable > 0 ? Math.min(1, p.invulnerable / 0.5) : 0;
     cam.rotation.set(p.pitch, p.yaw, p.dead ? 0.6 : Math.sin(hf ** 4 * Math.PI) * 0.244);
+    // Nausée : la vue tangue et ondule (comme le jeu original)
+    const nausea = p.effects.level('nausea');
+    if (nausea && !p.dead) {
+      cam.rotation.z += Math.sin(this.elapsed * 1.7) * 0.14;
+      cam.rotation.x += Math.sin(this.elapsed * 1.1) * 0.05;
+    }
     if (this.perspective && !p.dead) this.placeThirdPersonCamera(cam);
-    const targetFov = s.fov + (p.sprinting ? 8 : 0) - (this.interaction.bowCharge > 0 ? this.interaction.bowCharge * 10 : 0);
+    const targetFov = s.fov + (nausea ? Math.sin(this.elapsed * 2.3) * 10 : 0) + (p.sprinting ? 8 : 0) - (this.interaction.bowCharge > 0 ? this.interaction.bowCharge * 10 : 0);
     this.fovCurrent += (targetFov - this.fovCurrent) * Math.min(1, dt * 8);
     if (Math.abs(cam.fov - this.fovCurrent) > 0.05) {
       cam.fov = this.fovCurrent;
@@ -1114,6 +1225,8 @@ export class Session implements GameContext {
     u.uResolution.value.set(r.gl.domElement.width, r.gl.domElement.height);
     u.uDaylight.value = nether ? 0 : paper ? 1 : Math.max(0.3, this.dayCycle.daylight * (1 - rain * 0.3) + this.weather.flash * 0.5);
     u.uAmbient.value = this.dimension === 'end' ? 0.7 : nether ? 0.3 : paper ? 0.28 : 0.035;
+    // Vision nocturne : tout est éclairé
+    if (p.effects.level('night_vision')) u.uAmbient.value = Math.max(u.uAmbient.value, 0.8);
     u.uSkyColor.value.copy(r.sky.skyLightColor);
     u.uSway.value = this.profile.foliageAnimation ? 1 : 0;
     u.uWaterAnim.value = s.waterQuality === 'animated' ? 1 : 0;
@@ -1152,6 +1265,13 @@ export class Session implements GameContext {
       { world: this.world, dimension: this.dimension, portals: this.portals, saves: this.meta.server || this.meta.remote ? null : game.saves, worldId: this.meta.id, daylight: this.dayCycle.daylight },
       r.gl, cam, dt, (s.portalView ?? s.quality !== 'LOW') && !this.meta.server && !this.meta.remote && !underwater && !inLava,
     );
+    // Cécité : brouillard noir à quelques blocs ; Obscurité : la vue se resserre par pulsations
+    if (p.effects.level('blindness')) r.setFog(0.5, 5, new THREE.Color(0, 0, 0));
+    else if (p.effects.level('darkness')) {
+      const k = 0.5 + 0.5 * Math.sin(this.elapsed * 1.6);
+      r.setFog(2, 10 + 10 * k, new THREE.Color(0, 0, 0));
+      u.uAmbient.value = 0;
+    } else if (underwater && p.effects.level('conduit_power')) r.setFog(1, 56, new THREE.Color(0.12, 0.25, 0.55));
     game.hud.setOverlays(underwater, inLava);
     // météo
     const light = this.world.getLight(Math.floor(p.x), Math.floor(p.y + 1.6), Math.floor(p.z));
@@ -1163,6 +1283,22 @@ export class Session implements GameContext {
     if (!snowing && wet.length) for (let i = 0, n = Math.round(rain * 40 * dt + Math.random()); i < n; i++) {
       const c = wet[Math.floor(Math.random() * wet.length)];
       this.particles.burst('rain', c.x + Math.random(), c.y + 0.02, c.z + Math.random(), 1);
+    }
+    if (this.clouds.length) this.updateClouds(dt);
+    this.updateFrostWalker(dt);
+    this.updateFishLine(cam);
+    // particules d'ambiance des blocs (torches, feux de camp, lave, gouttes, portails…)
+    if (s.particles !== 'off') {
+      this.ambientFx ??= new AmbientParticles();
+      this.ambientFx.update(this.world, this.particles, p.x, p.y + 1, p.z, s.particles === 'high' ? 110 : 35, this.dimension, this.dimension === 'nether' ? this.world.biomeAt(Math.floor(p.x), Math.floor(p.z)).key : '');
+    }
+    // bulles qui s'échappent sous l'eau, tourbillons des effets du joueur (vue extérieure)
+    if (underwater && Math.random() < dt * 1.5) this.particles.burst('bubble', cam.position.x, cam.position.y - 0.1, cam.position.z, 1);
+    if (this.perspective && p.effects.map.size && Math.random() < dt * 8) {
+      const list = [...p.effects.map.values()].filter((e) => e.showParticles);
+      const e = list[Math.floor(Math.random() * list.length)];
+      const c = e ? EFFECT_COLORS[e.id] : undefined;
+      if (c !== undefined) this.particles.effectSwirl(p.x, p.y + Math.random() * 1.8, p.z, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
     }
     // surbrillance & objet en main
     const tg = this.interaction.target;
@@ -1212,6 +1348,7 @@ export class Session implements GameContext {
   }
 
   private onDeath() {
+    onDeathEffects(this, this.player.effects, this.player.x, this.player.y, this.player.z, this.entities, null);
     const p = this.player;
     if (this.server?.onPlayerDeath()) return;
     // serveur de survie : les objets vont dans une tombe
@@ -1223,11 +1360,12 @@ export class Session implements GameContext {
     if (!graved && (p.difficulty === 'normal' || p.difficulty === 'hard') && !this.gamerules.keepInventory) {
       for (let i = 0; i < p.inventory.size; i++) {
         const s = p.inventory.slots[i];
-        if (s) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability, s.meta);
+        // Malédiction de disparition : l'objet disparaît au lieu d'être lâché
+        if (s && !enchLevel(s, 'vanishing_curse')) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability, s.meta);
       }
       for (const k of ['head', 'chest', 'legs', 'feet'] as const) {
         const s = p.inventory.armor[k];
-        if (s) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability, s.meta);
+        if (s && !enchLevel(s, 'vanishing_curse')) this.entities.spawnItem(s.id, s.count, p.x, p.y + 1, p.z, s.durability, s.meta);
       }
       p.inventory.clear();
       const lost = Math.floor(p.level / 2);
@@ -1414,6 +1552,11 @@ export class Session implements GameContext {
     this.scene.remove(this.chestLids.group);
     this.chestLids.dispose();
     this.portalView?.dispose();
+    if (this.fishLine) {
+      this.scene.remove(this.fishLine);
+      this.fishLine.geometry.dispose();
+      (this.fishLine.material as THREE.Material).dispose();
+    }
     this.falling.clear();
     this.shadowTexture.dispose();
     this.endTex?.sky.dispose();

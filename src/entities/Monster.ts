@@ -1,6 +1,7 @@
 import type { GameContext } from '../core/GameContext';
 import type { MobDef } from '../data/mobs';
 import { Mob, type EntitySpawner } from './Mob';
+import { newMonsterUpdate } from './NewMobs';
 
 /** Durée de la mèche du creeper (1,5 s comme le jeu de référence). */
 const CREEPER_FUSE = 1.5;
@@ -27,6 +28,7 @@ export class Monster extends Mob {
   }
 
   protected customUpdate(ctx: GameContext, dt: number) {
+    newMonsterUpdate(this, ctx, dt);
     if (this.distToPlayer > 40) this.farTime += dt;
     else this.farTime = 0;
     if (this.def.key === 'creeper' && !this.dead) this.creeperUpdate(ctx, dt);

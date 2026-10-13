@@ -903,6 +903,8 @@ const GEO_MOBS: Record<string, string> = {
   dolphin: 'geometry.dolphin', guardian: 'geometry.guardian.v1.8', elder_guardian: 'geometry.guardian.v1.8', axolotl: 'geometry.axolotl', tadpole: 'geometry.tadpole',
   iron_golem: 'geometry.irongolem', zombie_villager: 'geometry.zombie.villager.v1.8', pillager: 'geometry.pillager', vindicator: 'geometry.vindicator.v1.8',
   evoker: 'geometry.evoker.v1.8', bat: 'geometry.bat_v2', shulker: 'geometry.shulker.v1.8', bogged: 'geometry.skeleton.bogged', parched: 'geometry.parched', snow_golem: 'geometry.snowgolem.v1.8',
+  warden: 'geometry.warden', allay: 'geometry.allay', sniffer: 'geometry.sniffer', breeze: 'geometry.breeze', ravager: 'geometry.ravager', vex: 'geometry.vex.v1.8',
+  creaking: 'geometry.creaking', happy_ghast: 'geometry.happy_ghast',
 };
 const GEO_GLOW: Record<string, string> = { phantom: 'phantom_eyes' };
 /** Os d'équipement ou d'états particuliers masqués (selle, sacoches, coffres, pose enroulée…). */

@@ -12,7 +12,7 @@ import { FACING_DIR } from '../blocks/Shapes';
 import type { ItemStack } from '../inventory/Item';
 import { canMerge } from '../inventory/Inventory';
 import { ItemRegistry } from '../inventory/ItemRegistry';
-import { potionColor, potionOf } from '../inventory/Potions';
+import { isBrewBottle, potionColor, potionOf } from '../inventory/Potions';
 import { RecipeRegistry } from '../crafting/RecipeRegistry';
 import { PROJECTILE_DEFS } from '../entities/Projectile';
 import type { ItemEntity } from '../entities/ItemEntity';
@@ -48,7 +48,7 @@ function slotsOf(s: Session, x: number, y: number, z: number, from: 'top' | 'sid
     return {
       get: () => [...b.bottles, b.ingredient, b.fuelItem],
       set: (i, v) => (i < 3 ? (b.bottles[i] = v) : i === 3 ? (b.ingredient = v) : (b.fuelItem = v)),
-      accept: (i, st) => (i === 4 ? st.id === 'blaze_powder' : i === 3 ? st.id !== 'potion' && st.id !== 'splash_potion' : st.id === 'potion' || st.id === 'splash_potion'),
+      accept: (i, st) => (i === 4 ? st.id === 'blaze_powder' : i === 3 ? !isBrewBottle(st) : isBrewBottle(st)),
       take: b.time > 0 ? [] : [0, 1, 2],
       put: from === 'top' ? [3] : [4, 0, 1, 2],
     };
@@ -153,9 +153,9 @@ export class Machines {
         s.audio.play('bow', { x: cx, y: cy, z: cz, pitch: 1.3 });
         return;
       }
-      if (st.id === 'splash_potion') {
+      if (st.id === 'splash_potion' || st.id === 'lingering_potion') {
         const pot = potionOf(st)!;
-        s.entities.spawnProjectile('custom', cx, cy, cz, dx * 10, 3, dz * 10, 0, false, { id: `splash_potion${potionColor(st)}`, color: potionColor(st), size: 0.3, gravity: 20, damage: 0, splash: pot });
+        s.entities.spawnProjectile('custom', cx, cy, cz, dx * 10, 3, dz * 10, 0, false, { id: `splash_potion${potionColor(st)}`, color: potionColor(st), size: 0.3, gravity: 20, damage: 0, splash: pot, lingering: st.id === 'lingering_potion' });
         take();
         s.audio.play('paper_whoosh', { x: cx, y: cy, z: cz });
         return;

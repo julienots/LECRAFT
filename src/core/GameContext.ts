@@ -30,7 +30,13 @@ export interface CombatApi {
 export interface ParticleFx {
   blockBreak(x: number, y: number, z: number, block: number): void;
   blockHit(x: number, y: number, z: number, block: number, nx: number, ny: number, nz: number): void;
-  burst(kind: 'smoke' | 'fire' | 'lava' | 'water' | 'damage' | 'explosion' | 'magic' | 'hearts' | 'dust' | 'ice' | 'crystal' | 'poof' | 'crit' | 'rain', x: number, y: number, z: number, count?: number): void;
+  burst(
+    kind: 'smoke' | 'fire' | 'lava' | 'water' | 'damage' | 'explosion' | 'magic' | 'hearts' | 'dust' | 'ice' | 'crystal' | 'poof' | 'crit' | 'rain'
+      | 'small_smoke' | 'campfire_smoke' | 'flame' | 'soul_flame' | 'bubble' | 'drip_water' | 'drip_lava' | 'portal' | 'enchanted_hit' | 'sweep' | 'end_rod' | 'totem' | 'happy' | 'angry' | 'ash' | 'white_ash' | 'crimson_spore' | 'warped_spore' | 'soul' | 'sonic',
+    x: number, y: number, z: number, count?: number,
+  ): void;
+  /** Tourbillon d'effet de statut. */
+  effectSwirl?(x: number, y: number, z: number, r: number, g: number, b: number): void;
 }
 /** Sons (implémentés par AudioManager). */
 export interface SoundFx {

@@ -7,6 +7,7 @@ import { Boss } from '../entities/Boss';
 import { AIState } from '../ai/StateMachine';
 import { hooks, type DamageEvent } from '../scripting/Hooks';
 import { onMobHurtByMob } from '../entities/MobRelations';
+import { onDeathEffects, onHurtEffects } from '../entities/EffectOutcomes';
 
 /**
  * Application des dégâts aux créatures : faiblesses, coups critiques, invincibilité temporaire,
@@ -104,6 +105,7 @@ export class DamageSystem {
     // frappée par une autre créature : vengeance ou fuite (relations du jeu original)
     const by = src.attacker as Mob | null | undefined;
     if (!src.fromPlayer && src.kind !== 'player' && by && (by as { kind?: string }).kind === 'mob' && 'def' in by) onMobHurtByMob(m, by);
+    if (m.effects.map.size && dmg > 0) onHurtEffects(ctx, m.effects, m.x, m.y, m.z, this.spawner);
     if (m instanceof Boss) m.onHit(ctx);
     hooks.afterHurt?.(m, dmg, ev);
     if (m.health <= 0) this.kill(m, src);
@@ -125,6 +127,7 @@ export class DamageSystem {
     m.health = 0;
     hooks.died?.(m, this.eventOf(src));
     m.ai.fsm.set(AIState.DEAD);
+    onDeathEffects(ctx, m.effects, m.x, m.y, m.z, this.spawner, m);
     if (ctx.audio.mobSound) ctx.audio.mobSound(m.def.key, 'death', m.def.sounds.death, { x: m.x, y: m.y, z: m.z });
     else ctx.audio.play(m.def.sounds.death, { x: m.x, y: m.y, z: m.z });
     ctx.particles.burst('smoke', m.x, m.y + m.body.height / 2, m.z, 12);

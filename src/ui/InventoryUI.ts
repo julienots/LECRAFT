@@ -1,7 +1,7 @@
 import type { Game } from '../core/Game';
 import { language, t as tr } from './i18n';
 import { hasGlint, iconKey, stackName } from '../inventory/StackInfo';
-import { customName, enchantLines, isEnchanted } from '../inventory/Enchantments';
+import { customName, enchLevel, enchantLines, isEnchanted } from '../inventory/Enchantments';
 import { potionLine, potionOf } from '../inventory/Potions';
 import { AnvilStation, BrewingStation, DispenserStation, EnchantStation, type Station, type StationHost } from './Stations';
 import { BlockRegistry } from '../blocks/BlockRegistry';
@@ -416,6 +416,7 @@ export class InventoryUI {
       this.afterChange();
       return;
     }
+    if ((kind === 'double' || kind === 'shift') && this.bound(sl)) return;
     if (kind === 'double' || kind === 'shift') this.quickMove(sl);
     else if (sl.take) this.takeResult(sl);
     else if (kind === 'tap') this.leftClick(sl);
@@ -425,8 +426,15 @@ export class InventoryUI {
   }
   private undoLast: (() => void) | null = null;
 
+  /** Malédiction du lien éternel : l'armure portée ne s'enlève plus (sauf en créatif). */
+  private bound(sl: GuiSlot) {
+    const st = sl.get();
+    return sl.group === 'armor' && !this.s.player.creative && !!st && enchLevel(st, 'binding_curse') > 0;
+  }
+
   private leftClick(sl: GuiSlot) {
     const cur = sl.get();
+    if (this.bound(sl)) return;
     const before = { slot: cur ? { ...cur } : null, carried: this.carried ? { ...this.carried } : null };
     this.undoLast = () => {
       sl.set(before.slot);
@@ -460,6 +468,7 @@ export class InventoryUI {
 
   private rightClick(sl: GuiSlot) {
     const cur = sl.get();
+    if (this.bound(sl)) return;
     if (!this.carried) {
       if (!cur) return;
       const half = Math.ceil(cur.count / 2);
@@ -665,7 +674,8 @@ export class InventoryUI {
     if (!def) return;
     const named = !!customName(st);
     const lines: [string, string][] = [[stackName(st), named ? '#55ffff' : def.rare || isEnchanted(st) ? '#ffff55' : '#ffffff']];
-    for (const t of enchantLines(st)) lines.push([t, '#aaaaaa']);
+    // malédictions en rouge, comme le jeu original
+    for (const t of enchantLines(st)) lines.push([t, /^Malédiction|Curse/.test(t) ? '#ff5555' : '#aaaaaa']);
     const pl = potionOf(st) ? potionLine(st) : null;
     if (pl) lines.push([pl, '#5555ff']);
     // boîte de shulker remplie : aperçu du contenu

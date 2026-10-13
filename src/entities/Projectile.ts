@@ -3,6 +3,7 @@ import { applyPotion } from '../inventory/Potions';
 import type { GameContext } from '../core/GameContext';
 import { raycastBlocks } from '../util/Raycast';
 import { Entity } from './Entity';
+import { BlockRegistry } from '../blocks/BlockRegistry';
 
 export type ProjectileKind = 'arrow' | 'ice' | 'crystal' | 'boulder' | 'player_arrow' | 'frost_bolt' | 'custom';
 
@@ -31,6 +32,8 @@ export interface ProjectileDef {
   dropChance?: number;
   /** Potion jetable : potion appliquée autour du point d'impact (4 blocs). */
   splash?: string;
+  /** Potion persistante : laisse un nuage d'effet (session.addEffectCloud). */
+  lingering?: boolean;
 }
 
 /** Projectiles connus (add-ons et équivalents des projectiles du jeu de référence). */
@@ -85,6 +88,19 @@ export class Projectile extends Entity {
   flame = false;
   /** Lanceur (API de script : composant projectile.owner). */
   owner: import('../scripting/Hooks').Actor | null = null;
+  /** Objet rendu quand on le ramasse (trident) au lieu d'une flèche. */
+  pickupStack: import('../inventory/Item').ItemStack | null = null;
+  /** Trident : Loyauté (revient vers le lanceur), rebond après avoir touché une créature. */
+  loyalty = 0;
+  returning = false;
+  bounced = false;
+  private stuckAt = 0;
+  /** Flèche d'arbalète : Perforation (créatures traversées) ; créatures déjà touchées. */
+  piercing = 0;
+  readonly hitIds = new Set<number>();
+  /** Bouchon de canne à pêche : flotte sur l'eau. */
+  bobber = false;
+  inWater = false;
   constructor(readonly type: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, public damage: number, public fromPlayer: boolean, readonly def?: ProjectileDef) {
     super(0.15, 0.3);
     if (def?.life) this.life = def.life;
@@ -116,6 +132,48 @@ export class Projectile extends Entity {
 
   update(ctx: GameContext, dt: number) {
     this.age += dt;
+    // trident avec Loyauté : revient vers le joueur (traverse les blocs), comme le jeu original
+    if (this.loyalty > 0 && !this.returning && (this.stuck || this.bounced) && this.age - this.stuckAt > 0.5) {
+      this.returning = true;
+      this.stuck = false;
+    }
+    if (this.returning) {
+      const p = ctx.player;
+      const tx = p.x - this.x, ty = p.y + 1.2 - this.y, tz = p.z - this.z, d = Math.hypot(tx, ty, tz) || 1;
+      if (d < 1.4 || p.dead) {
+        this.removed = true;
+        if (this.pickupStack && !p.dead && p.inventory.add({ ...this.pickupStack }) !== 0)
+          (ctx as unknown as { entities?: { spawnItem(id: string, n: number, x: number, y: number, z: number, dur?: number, meta?: Record<string, unknown>): void } }).entities?.spawnItem(this.pickupStack.id, 1, p.x, p.y + 0.5, p.z, this.pickupStack.durability, this.pickupStack.meta);
+        ctx.audio.play('pop', { x: p.x, y: p.y, z: p.z, pitch: 0.8 });
+        return;
+      }
+      const sp = 8 + 4 * this.loyalty;
+      this.body.vx = (tx / d) * sp;
+      this.body.vy = (ty / d) * sp;
+      this.body.vz = (tz / d) * sp;
+      this.body.x += this.body.vx * dt;
+      this.body.y += this.body.vy * dt;
+      this.body.z += this.body.vz * dt;
+      this.life = this.age + 30;
+      return;
+    }
+    // bouchon : flotte à la surface de l'eau
+    if (this.bobber && !this.stuck) {
+      const w = ctx.world;
+      const b = w.getBlock(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z));
+      this.inWater = b > 0 && BlockRegistry.liquid[b] === 1;
+      if (this.inWater) {
+        const surface = Math.floor(this.y) + 0.9;
+        this.body.vy += ((surface - this.y) * 6 - this.body.vy) * Math.min(1, dt * 4);
+        this.body.vx *= Math.pow(0.05, dt);
+        this.body.vz *= Math.pow(0.05, dt);
+        this.body.x += this.body.vx * dt;
+        this.body.y += this.body.vy * dt;
+        this.body.z += this.body.vz * dt;
+        this.life = this.age + 60;
+        return;
+      }
+    }
     if (this.age > this.life) {
       this.removed = true;
       const d = this.def;
@@ -132,7 +190,7 @@ export class Projectile extends Entity {
     if (this.stuck) {
       if (this.pickable && !ctx.player.dead) {
         const p = ctx.player;
-        if (Math.abs(p.x - this.x) < 1.3 && Math.abs(p.z - this.z) < 1.3 && this.y > p.y - 0.8 && this.y < p.y + 2.2 && p.inventory.add({ id: 'arrow', count: 1 }) === 0) {
+        if (Math.abs(p.x - this.x) < 1.3 && Math.abs(p.z - this.z) < 1.3 && this.y > p.y - 0.8 && this.y < p.y + 2.2 && p.inventory.add(this.pickupStack ? { ...this.pickupStack } : { id: 'arrow', count: 1 }) === 0) {
           this.removed = true;
           ctx.audio.play('pop', { x: this.x, y: this.y, z: this.z, volume: 0.5, pitch: 1.4 });
         }
@@ -176,6 +234,15 @@ export class Projectile extends Entity {
   /** Effets d'impact d'un projectile défini (explosion, souffle, téléportation…). */
   customImpact(ctx: GameContext) {
     const d = this.def!;
+    // trident ou bouchon planté : reste là (ramassage, retour avec Loyauté)
+    if (this.pickupStack || this.bobber) {
+      this.stuck = true;
+      this.stuckAt = this.age;
+      this.life = this.age + 60;
+      this.body.vx = this.body.vy = this.body.vz = 0;
+      if (this.pickupStack) ctx.audio.play('stone_hit', { x: this.x, y: this.y, z: this.z, volume: 0.6, pitch: 1.3 });
+      return;
+    }
     if (d.dropItem) {
       this.age = this.life + 1; // l'œil retombe à l'endroit de l'impact
       this.update(ctx, 0);
@@ -187,6 +254,12 @@ export class Projectile extends Entity {
       return;
     }
     this.removed = true;
+    if (d.splash && d.lingering) {
+      // potion persistante : nuage d'effet de 3 blocs qui rétrécit pendant 30 s (comme le jeu original)
+      (ctx as unknown as { addEffectCloud?: (x: number, y: number, z: number, p: string) => void }).addEffectCloud?.(this.x, this.y, this.z, d.splash);
+      ctx.audio.play('glass_break', { x: this.x, y: this.y, z: this.z });
+      return;
+    }
     if (d.splash) {
       // potion jetable : effet sur tout ce qui est à moins de 4 blocs (plus faible au bord)
       const ents = (ctx as unknown as { entities?: { mobs: import('./Mob').Mob[] } }).entities;

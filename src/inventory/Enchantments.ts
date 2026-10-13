@@ -9,7 +9,7 @@ import { itemName, language } from '../ui/i18n';
 import type { ItemStack } from './Item';
 import { ItemRegistry } from './ItemRegistry';
 
-export type EnchantTarget = 'sword' | 'tool' | 'armor' | 'helmet' | 'boots' | 'bow' | 'durable';
+export type EnchantTarget = 'sword' | 'tool' | 'armor' | 'helmet' | 'boots' | 'leggings' | 'bow' | 'crossbow' | 'trident' | 'fishing' | 'mace' | 'durable' | 'wearable' | 'vanishable';
 
 export interface EnchantDef {
   id: string;
@@ -47,6 +47,33 @@ export const ENCHANTS: EnchantDef[] = [
   { id: 'punch', name: 'Frappe', max: 2, target: 'bow', weight: 2 },
   { id: 'flame', name: 'Flamme', max: 1, target: 'bow', weight: 2 },
   { id: 'infinity', name: 'Infinité', max: 1, target: 'bow', weight: 1 },
+  // armure
+  { id: 'thorns', name: 'Épines', max: 3, target: 'armor', weight: 1 },
+  { id: 'depth_strider', name: 'Agilité aquatique', max: 3, target: 'boots', weight: 2, group: 'boots_water' },
+  { id: 'frost_walker', name: 'Semelles givrantes', max: 2, target: 'boots', weight: 2, group: 'boots_water', treasure: true },
+  { id: 'soul_speed', name: 'Agilité des âmes', max: 3, target: 'boots', weight: 1, treasure: true },
+  { id: 'swift_sneak', name: 'Furtivité', max: 3, target: 'leggings', weight: 1, treasure: true },
+  // épée
+  { id: 'sweeping_edge', name: 'Affilage', max: 3, target: 'sword', weight: 2 },
+  // trident
+  { id: 'loyalty', name: 'Loyauté', max: 3, target: 'trident', weight: 5, group: 'trident_mode' },
+  { id: 'impaling', name: 'Empalement', max: 5, target: 'trident', weight: 2 },
+  { id: 'riptide', name: 'Impulsion', max: 3, target: 'trident', weight: 2, group: 'trident_mode' },
+  { id: 'channeling', name: 'Canalisation', max: 1, target: 'trident', weight: 1, group: 'trident_mode' },
+  // arbalète
+  { id: 'multishot', name: 'Tir multiple', max: 1, target: 'crossbow', weight: 2, group: 'crossbow_shot' },
+  { id: 'piercing', name: 'Perforation', max: 4, target: 'crossbow', weight: 10, group: 'crossbow_shot' },
+  { id: 'quick_charge', name: 'Charge rapide', max: 3, target: 'crossbow', weight: 5 },
+  // canne à pêche
+  { id: 'luck_of_the_sea', name: 'Chance de la mer', max: 3, target: 'fishing', weight: 2 },
+  { id: 'lure', name: 'Appât', max: 3, target: 'fishing', weight: 2 },
+  // masse
+  { id: 'density', name: 'Densité', max: 5, target: 'mace', weight: 5, group: 'mace_dmg' },
+  { id: 'breach', name: 'Brèche', max: 4, target: 'mace', weight: 2, group: 'mace_dmg' },
+  { id: 'wind_burst', name: 'Explosion de vent', max: 3, target: 'mace', weight: 2, treasure: true },
+  // malédictions (trésors)
+  { id: 'binding_curse', name: 'Malédiction du lien éternel', max: 1, target: 'wearable', weight: 1, treasure: true },
+  { id: 'vanishing_curse', name: 'Malédiction de disparition', max: 1, target: 'vanishable', weight: 1, treasure: true },
 ];
 export const ENCHANT_BY_ID = new Map(ENCHANTS.map((e) => [e.id, e]));
 
@@ -93,7 +120,7 @@ export function canEnchant(itemId: string, e: EnchantDef): boolean {
   const tool = def.tool?.type;
   switch (e.target) {
     case 'sword':
-      return tool === 'sword' || tool === 'axe';
+      return (tool === 'sword' || tool === 'axe') && itemId !== 'mace' && itemId !== 'bow' && itemId !== 'crossbow';
     case 'tool':
       return tool === 'pickaxe' || tool === 'axe' || tool === 'shovel' || tool === 'hoe';
     case 'armor':
@@ -102,10 +129,24 @@ export function canEnchant(itemId: string, e: EnchantDef): boolean {
       return def.armor?.slot === 'head';
     case 'boots':
       return def.armor?.slot === 'feet';
+    case 'leggings':
+      return def.armor?.slot === 'legs';
     case 'bow':
-      return itemId === 'bow' || itemId === 'crossbow';
+      return itemId === 'bow';
+    case 'crossbow':
+      return itemId === 'crossbow';
+    case 'trident':
+      return itemId === 'trident';
+    case 'fishing':
+      return itemId === 'fishing_rod';
+    case 'mace':
+      return itemId === 'mace';
     case 'durable':
       return ItemRegistry.maxDurability(itemId) > 0;
+    case 'wearable':
+      return !!def.armor || itemId === 'carved_pumpkin';
+    case 'vanishable':
+      return ItemRegistry.maxDurability(itemId) > 0 || !!def.armor || itemId === 'compass';
   }
 }
 
@@ -221,4 +262,24 @@ export function protectionFactor(armor: (ItemStack | null)[], kind: 'any' | 'fir
     if (kind === 'fall') epf += 3 * enchLevel(a, 'feather_falling');
   }
   return Math.min(20, epf) * 0.04;
+}
+
+/**
+ * Livre enchanté au hasard (butin des coffres, pêche, bibliothécaire) : un enchantement tiré
+ * parmi tous (trésors compris si `treasure`), niveau au hasard jusqu'au maximum.
+ */
+export function randomEnchantedBook(treasure = true, rand: () => number = Math.random): ItemStack {
+  const pool = ENCHANTS.filter((e) => treasure || !e.treasure);
+  const e = pool[Math.floor(rand() * pool.length)];
+  const lvl = 1 + Math.floor(rand() * e.max);
+  return { id: 'enchanted_book', count: 1, meta: { ench: { [e.id]: lvl } } };
+}
+
+/** Enchante un objet comme une table au niveau `level` (butin de pêche : arc, canne). */
+export function enchantRandomly(st: ItemStack, level: number, rand: () => number = Math.random): ItemStack {
+  const offers = enchantOffers(st.id, 15, Math.floor(rand() * 1e9));
+  const e = offers.length ? offers[Math.min(offers.length - 1, Math.floor((level / 30) * offers.length))].ench : {};
+  const out = { ...st };
+  setEnchants(out, e);
+  return out;
 }

@@ -5,6 +5,7 @@ import type { EntitySpawner, Mob } from './Mob';
 import { AIState } from '../ai/StateMachine';
 import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { raycastBlocks } from '../util/Raycast';
+import { ENCHANT_BY_ID, randomEnchantedBook } from '../inventory/Enchantments';
 
 /**
  * Enderman : neutre, se met en colère quand le joueur le regarde dans les yeux, se téléporte
@@ -211,7 +212,7 @@ export class Wolf extends Animal {
 }
 
 /** Échanges d'un villageois : [ce que le joueur donne (n), ce qu'il reçoit (n)]. */
-export type Trade = { give: [string, number]; get: [string, number] };
+export type Trade = { give: [string, number]; get: [string, number]; give2?: [string, number]; meta?: Record<string, unknown> };
 export const PROFESSIONS: Record<string, { name: string; trades: Trade[] }> = {
   farmer: { name: 'Fermier', trades: [{ give: ['wheat', 20], get: ['emerald', 1] }, { give: ['carrot', 22], get: ['emerald', 1] }, { give: ['potato', 26], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['bread', 6] }, { give: ['emerald', 1], get: ['apple', 4] }, { give: ['pumpkin', 6], get: ['emerald', 1] }] },
   librarian: { name: 'Bibliothécaire', trades: [{ give: ['paper', 24], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['bookshelf', 1] }, { give: ['book', 4], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['lantern', 1] }, { give: ['emerald', 5], get: ['compass', 1] }] },
@@ -220,10 +221,39 @@ export const PROFESSIONS: Record<string, { name: string; trades: Trade[] }> = {
   cleric: { name: 'Prêtre', trades: [{ give: ['rotten_flesh', 32], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['redstone', 2] }, { give: ['gold_ingot', 3], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['lapis_lazuli', 1] }, { give: ['emerald', 5], get: ['ender_pearl', 1] }] },
   butcher: { name: 'Boucher', trades: [{ give: ['chicken', 14], get: ['emerald', 1] }, { give: ['porkchop', 7], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['cooked_porkchop', 5] }, { give: ['coal', 15], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['cooked_chicken', 8] }] },
   fletcher: { name: 'Archer', trades: [{ give: ['stick', 32], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['arrow', 16] }, { give: ['flint', 26], get: ['emerald', 1] }, { give: ['emerald', 2], get: ['bow', 1] }, { give: ['string', 14], get: ['emerald', 1] }] },
+  cartographer: { name: 'Cartographe', trades: [{ give: ['paper', 24], get: ['emerald', 1] }, { give: ['emerald', 7], get: ['map', 1] }, { give: ['glass_pane', 11], get: ['emerald', 1] }, { give: ['compass', 1], get: ['emerald', 1] }, { give: ['emerald', 5], get: ['item_frame', 1] }] },
+  fisherman: { name: 'Pêcheur', trades: [{ give: ['string', 20], get: ['emerald', 1] }, { give: ['coal', 10], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['cooked_cod', 6] }, { give: ['cod', 15], get: ['emerald', 1] }, { give: ['emerald', 3], get: ['campfire', 1] }, { give: ['salmon', 13], get: ['emerald', 1] }] },
+  mason: { name: 'Maçon', trades: [{ give: ['clay_ball', 10], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['bricks', 10] }, { give: ['stone', 20], get: ['emerald', 1] }, { give: ['emerald', 1], get: ['chiseled_stone_bricks', 4] }, { give: ['emerald', 1], get: ['polished_andesite', 4] }, { give: ['quartz', 12], get: ['emerald', 1] }] },
+  shepherd: { name: 'Berger', trades: [{ give: ['white_wool', 18], get: ['emerald', 1] }, { give: ['emerald', 2], get: ['shears', 1] }, { give: ['emerald', 1], get: ['red_wool', 1] }, { give: ['emerald', 3], get: ['white_bed', 1] }, { give: ['emerald', 1], get: ['blue_carpet', 4] }] },
+  leatherworker: { name: 'Maroquinier', trades: [{ give: ['leather', 6], get: ['emerald', 1] }, { give: ['emerald', 3], get: ['leather_chestplate', 1] }, { give: ['emerald', 5], get: ['leather_helmet', 1] }, { give: ['flint', 26], get: ['emerald', 1] }, { give: ['emerald', 6], get: ['saddle', 1] }] },
+  weaponsmith: { name: 'Forgeron d’armes', trades: [{ give: ['coal', 15], get: ['emerald', 1] }, { give: ['emerald', 3], get: ['iron_axe', 1] }, { give: ['iron_ingot', 4], get: ['emerald', 1] }, { give: ['emerald', 7], get: ['iron_sword', 1] }, { give: ['diamond', 1], get: ['emerald', 1] }, { give: ['emerald', 17], get: ['diamond_sword', 1] }] },
 };
 
 /** Villageois : erre dans le village, regarde le joueur, propose des échanges selon sa profession. */
 export class Villager extends Animal {
+  /**
+   * Échanges du villageois. Le bibliothécaire vend en plus un livre enchanté qui lui est propre
+   * (comme le jeu original : émeraudes selon le niveau, plus un livre).
+   */
+  trades(): Trade[] {
+    const list = [...PROFESSIONS[this.profession].trades];
+    if (this.profession === 'librarian') {
+      let book = this.dynProps.get('__book') as string | undefined;
+      if (!book) {
+        const st = randomEnchantedBook(true);
+        const [id, lvl] = Object.entries(st.meta!.ench as Record<string, number>)[0];
+        const treasure = ENCHANT_BY_ID.get(id)?.treasure ?? false;
+        const price = Math.min(64, (2 + 3 * lvl + Math.floor(Math.random() * (5 + lvl * 10))) * (treasure ? 2 : 1));
+        book = JSON.stringify({ id, lvl, price });
+        this.dynProps.set('__book', book);
+        this.persistent = true;
+      }
+      const b = JSON.parse(book) as { id: string; lvl: number; price: number };
+      list.push({ give: ['emerald', b.price], give2: ['book', 1], get: ['enchanted_book', 1], meta: { ench: { [b.id]: b.lvl } } });
+    }
+    return list;
+  }
+
   get profession(): string {
     let p = this.dynProps.get('__profession') as string | undefined;
     if (!p || !PROFESSIONS[p]) {

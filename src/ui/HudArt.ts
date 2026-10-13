@@ -164,6 +164,17 @@ export function buildHudSprites(tex: TextureManager): HudSprites {
     m('xp_fill', 'experience_bar_progress', 182, 5);
     // les cœurs « pleins » modernes s'affichent par-dessus le conteneur
     const cont = tex.packImage('gui/sprites/hud/heart/container.png');
+    // cœurs empoisonnés (verts), desséchés (Wither, noirs) et d'absorption (dorés)
+    if (cont)
+      for (const v of ['poisoned', 'withered', 'absorbing'] as const)
+        for (const h of ['full', 'half'] as const) {
+          const img = tex.packImage(`gui/sprites/hud/heart/${v}_${h}.png`);
+          if (!img) continue;
+          const { c, ctx } = cv(9, 9);
+          ctx.drawImage(cont, 0, 0, 9, 9);
+          ctx.drawImage(img, 0, 0, 9, 9);
+          s[`heart_${v}_${h}`] = c.toDataURL();
+        }
     if (cont) {
       for (const k of ['heart_full', 'heart_half'] as const) {
         const full = tex.packImage(`gui/sprites/hud/heart/${k === 'heart_full' ? 'full' : 'half'}.png`)!;

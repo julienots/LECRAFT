@@ -81,7 +81,36 @@ export class Player {
   constructor(public gameMode: GameMode, public difficulty: Difficulty) {}
 
   get maxHealth() {
-    return 20 + 2 * Math.min(5, Math.floor(this.level / 5));
+    // Bonus de vie : +2 cœurs par niveau
+    return 20 + 2 * Math.min(5, Math.floor(this.level / 5)) + 4 * this.effects.level('health_boost');
+  }
+  /** Points de vie d'absorption (cœurs dorés), consommés avant la santé. */
+  absorption = 0;
+  /** Épines : l'attaquant au corps à corps est blessé (branché par la session). */
+  onThorns: (attacker: Actor, dmg: number) => void = () => {};
+  /** Totem d'immortalité utilisé (effets visuels et sonores, branchés par la session). */
+  onTotem: () => void = () => {};
+
+  /**
+   * Totem d'immortalité : tenu en main (ou dans la barre d'objets, le jeu n'ayant pas de seconde
+   * main), il évite la mort comme le jeu original — 1 PV, Régénération II, Absorption II, Résistance
+   * au feu — et se consomme. Retourne vrai si la mort est évitée.
+   */
+  private tryTotem(): boolean {
+    const inv = this.inventory;
+    const i = inv.selectedStack?.id === 'totem_of_undying' ? inv.selected : inv.slots.slice(0, 9).findIndex((st) => st?.id === 'totem_of_undying');
+    if (i < 0) return false;
+    const st = inv.slots[i]!;
+    st.count--;
+    if (st.count <= 0) inv.slots[i] = null;
+    inv.changed();
+    this.health = 1;
+    this.effects.clear();
+    this.effects.add('regeneration', 900, 1, true, this.effectTarget);
+    this.effects.add('absorption', 100, 1, true, this.effectTarget);
+    this.effects.add('fire_resistance', 800, 0, true, this.effectTarget);
+    this.onTotem();
+    return true;
   }
   get eyeHeight() {
     return this.swimming || this.crawling ? 0.4 : this.sneaking ? SNEAK_EYE_HEIGHT : EYE_HEIGHT;
@@ -125,7 +154,10 @@ export class Player {
     dmg *= this.effects.damageMul(source === 'lava' || source === 'fire');
     dmg = Math.max(0, Math.round(dmg * 2) / 2);
     if (dmg <= 0) return 0;
-    this.health = Math.max(0, this.health - dmg);
+    // les cœurs d'absorption encaissent d'abord
+    const soak = Math.min(this.absorption, dmg);
+    this.absorption -= soak;
+    this.health = Math.max(0, this.health - (dmg - soak));
     this.invulnerable = 0.5;
     this.hurtFlash = 0.35;
     this.addExhaustion(0.1);
@@ -134,12 +166,25 @@ export class Player {
       this.body.vz += knockZ;
       this.body.vy = Math.max(this.body.vy, 5);
     }
+    // Épines : 15 % de chance par niveau et par pièce de renvoyer 1 à 4 dégâts à l'attaquant
+    if (attacker && source === 'mob') {
+      let thorns = 0;
+      for (const k of ARMOR_SLOTS) {
+        const l = enchLevel(this.inventory.armor[k], 'thorns');
+        if (l && Math.random() < 0.15 * l) thorns += 1 + Math.floor(Math.random() * 4);
+      }
+      if (thorns) {
+        this.inventory.damageArmor(2);
+        this.onThorns(attacker, thorns);
+      }
+    }
     if (attacker) {
       this.lastAttacker = attacker;
       this.lastAttackedAt = performance.now();
     }
     this.onDamage(dmg, source);
     hooks.afterHurt?.(this, dmg, { cause: damageCause(source), attacker, projectile });
+    if (this.health <= 0 && source !== 'void' && this.tryTotem()) return dmg;
     if (this.health <= 0) {
       this.dead = true;
       this.deathCause = source;
@@ -157,6 +202,7 @@ export class Player {
       this.health = Math.max(0, this.health - n);
       this.hurtFlash = 0.25;
       this.onDamage(n, 'contact');
+      if (this.health <= 0 && this.tryTotem()) return;
       if (this.health <= 0) {
         this.dead = true;
         this.deathCause = 'contact';
@@ -170,6 +216,7 @@ export class Player {
       this.saturation = Math.min(this.hunger, this.saturation + sat);
     },
     exhaust: (n: number) => this.addExhaustion(n),
+    absorb: (n: number) => (this.absorption = Math.max(this.absorption, n)),
   };
 
   heal(n: number) {
@@ -268,7 +315,11 @@ export class Player {
       }
     }
     // air
-    if (this.body.headInWater && !this.effects.level('water_breathing')) {
+    // fin de l'absorption ou du bonus de vie
+    if (this.absorption > 0 && !this.effects.level('absorption')) this.absorption = 0;
+    if (this.health > this.maxHealth) this.health = this.maxHealth;
+    // Apnée (potion) ou Force de conduit : pas de noyade
+    if (this.body.headInWater && !this.effects.level('water_breathing') && !this.effects.level('conduit_power')) {
       // Apnée (casque) : l'air baisse moins vite
       this.air -= (dt * 20) / (1 + enchLevel(this.inventory.armor.head, 'respiration'));
       if (this.air <= -20) {

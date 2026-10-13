@@ -21,6 +21,8 @@ import { Projectile, type ProjectileKind, type ProjectileDef } from './Projectil
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { makeStack } from '../inventory/Inventory';
 import { onMobHurtByMob } from './MobRelations';
+import { Allay, Sniffer } from './NewMobs';
+import { enchLevel } from '../inventory/Enchantments';
 import { DamageSystem } from '../combat/DamageSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 import { BOSS } from '../world/StructureGenerator';
@@ -133,6 +135,8 @@ export class EntityManager implements EntitySpawner {
     else if (key === 'enderman') m = new Enderman(def, index, x, y, z, this);
     else if (key === 'wolf') m = new Wolf(def, index, x, y, z, this);
     else if (key === 'villager') m = new Villager(def, index, x, y, z, this);
+    else if (key === 'allay') m = new Allay(def, index, x, y, z, this);
+    else if (key === 'sniffer') m = new Sniffer(def, index, x, y, z, this);
     else m = new Animal(def, index, x, y, z, this);
     m.yaw = Math.random() * Math.PI * 2;
     if (opts.baby) m.setBaby(true);
@@ -328,8 +332,10 @@ export class EntityManager implements EntitySpawner {
       }
       return;
     }
+    // bouchon de pêche et trident qui revient : ne touchent personne ; flèche perforante : une fois par créature
+    if (pr.bobber || pr.returning || pr.bounced) return;
     for (const e of this.entities) {
-      if (e.kind !== 'mob' || (e as Mob).dead) continue;
+      if (e.kind !== 'mob' || (e as Mob).dead || pr.hitIds.has(e.id)) continue;
       const [a, b, c, d, f, g] = e.aabb();
       if (pr.x > a - 0.1 && pr.x < d + 0.1 && pr.y > b && pr.y < f && pr.z > c - 0.1 && pr.z < g + 0.1) {
         const v = Math.hypot(pr.body.vx, pr.body.vz) || 1;
@@ -338,9 +344,29 @@ export class EntityManager implements EntitySpawner {
         const kbk = 4 + pr.punch * 6;
         // projectile d'une créature (golem de neige, lama, squelette contre une autre créature) : pas un tir du joueur
         const byMob = !!pr.owner && (pr.owner as { kind?: string }).kind === 'mob';
-        if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: !byMob, knockX: (pr.body.vx / v) * kbk, knockZ: (pr.body.vz / v) * kbk, itemId: byMob ? undefined : pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
+        // Empalement (trident lancé) : bonus contre les créatures aquatiques
+        const impale = pr.pickupStack?.id === 'trident' && ((e as Mob).has('aquatic') || e.body.inWater) ? 2.5 * enchLevel(pr.pickupStack, 'impaling') : 0;
+        if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage + impale, { kind: 'projectile', fromPlayer: !byMob, knockX: (pr.body.vx / v) * kbk, knockZ: (pr.body.vz / v) * kbk, itemId: byMob ? undefined : pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
         else if (byMob) onMobHurtByMob(e as Mob, pr.owner as unknown as Mob);
         if (pr.type === 'frost_bolt') (e as Mob).slowTimer = 3;
+        // trident : rebondit sur la créature ; Canalisation : la foudre la frappe pendant un orage
+        if (pr.pickupStack?.id === 'trident') {
+          pr.hitIds.add(e.id);
+          pr.bounced = true;
+          pr.body.vx *= -0.08;
+          pr.body.vz *= -0.08;
+          pr.body.vy = 3;
+          const sc = ctx as unknown as { weather?: { state: string }; lightning?: (x: number, y: number, z: number) => void };
+          if (enchLevel(pr.pickupStack, 'channeling') && sc.weather?.state === 'storm' && ctx.world.getLight(Math.floor(e.x), Math.floor(e.y + 1), Math.floor(e.z)).sky >= 15) sc.lightning?.(e.x, e.y, e.z);
+          ctx.audio.play('hit', { x: e.x, y: e.y, z: e.z, pitch: 0.8 });
+          return;
+        }
+        // Perforation : la flèche continue sa course
+        if (pr.piercing > 0) {
+          pr.piercing--;
+          pr.hitIds.add(e.id);
+          continue;
+        }
         if (pr.def) {
           const m = e as Mob;
           if (pr.def.effect) m.effects.add(pr.def.effect.id, pr.def.effect.duration, pr.def.effect.amplifier);

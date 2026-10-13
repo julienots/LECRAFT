@@ -2,6 +2,8 @@ import type { ItemStack } from '../inventory/Item';
 import { isRailKey } from '../world/Rails';
 import { setOpen, updatePowerAround } from '../world/Redstone';
 import { applyPotion, makePotion, potionColor, potionOf } from '../inventory/Potions';
+import { fishingLoot } from '../inventory/Loot';
+import type { Projectile } from '../entities/Projectile';
 import { enchLevel, enchantsOf } from '../inventory/Enchantments';
 import { ArmorStand } from '../entities/ArmorStand';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
@@ -186,8 +188,28 @@ export class PlayerInteraction {
       this.useRepeat = 0.28;
       this.use(true);
     }
+    // pêche : touche, poisson à remonter, bouchon trop loin
+    if (this.fishing) this.updateFishing(dt, held?.id);
     // arc : maintenir utiliser charge, relâcher tire
-    if (held?.id === 'bow') {
+    if (held?.id === 'trident') {
+      // trident : maintenir pour armer, relâcher pour lancer (ou s'élancer avec Impulsion)
+      if (this.input.useHeld) this.bowCharge = Math.min(1, this.bowCharge + dt * 1.6);
+      else if (this.bowCharge > 0) {
+        if (this.bowCharge >= 0.5) this.releaseTrident();
+        this.bowCharge = 0;
+      }
+    } else if (held?.id === 'crossbow') {
+      // arbalète : maintenir pour charger (Charge rapide : 0,25 s de moins par niveau)
+      if (!held.meta?.charged && this.input.useHeld) {
+        const t = Math.max(0.2, 1.25 - 0.25 * enchLevel(held, 'quick_charge'));
+        this.crossCharge += dt;
+        this.bowCharge = Math.min(1, this.crossCharge / t);
+        if (this.crossCharge >= t) this.loadCrossbow();
+      } else {
+        this.crossCharge = 0;
+        this.bowCharge = 0;
+      }
+    } else if (held?.id === 'bow') {
       if (this.input.useHeld) {
         if (this.bowCharge === 0) hooks.startUse?.({ ...held });
         this.bowCharge = Math.min(1, this.bowCharge + dt);
@@ -571,10 +593,19 @@ export class PlayerInteraction {
       ctx.stats.inc('potionsDrunk');
       return;
     }
-    if (!repeat && held.id === 'splash_potion') {
+    if (!repeat && held.id === 'crossbow' && held.meta?.charged) {
+      this.fireCrossbow();
+      return;
+    }
+    if (!repeat && held.id === 'fishing_rod') {
+      if (this.fishing) this.reel();
+      else this.cast();
+      return;
+    }
+    if (!repeat && (held.id === 'splash_potion' || held.id === 'lingering_potion')) {
       const pot = potionOf(held)!;
       const [ox, oy, oz, dx, dy, dz] = this.eye();
-      const pd = { id: `splash_potion${potionColor(held)}`, color: potionColor(held), size: 0.3, gravity: 20, damage: 0, splash: pot };
+      const pd = { id: `splash_potion${potionColor(held)}`, color: potionColor(held), size: 0.3, gravity: 20, damage: 0, splash: pot, lingering: held.id === 'lingering_potion' };
       const pr = this.entities.spawnProjectile('custom', ox + dx * 0.6, oy + dy * 0.6, oz + dz * 0.6, dx * 14, dy * 14 + 3, dz * 14, 0, true, pd);
       pr.owner = p;
       ctx.audio.play('paper_whoosh', { x: ox, y: oy, z: oz });
@@ -856,7 +887,8 @@ export class PlayerInteraction {
           }
         }
         if (!ok) return false;
-        ctx.particles.burst('magic', t.x + 0.5, t.y + 1, t.z + 0.5, 10);
+        // étincelles vertes de la poudre d'os (comme le jeu original)
+        ctx.particles.burst('happy', t.x + 0.5, t.y + 0.6, t.z + 0.5, 12);
         if (!p.creative) inv.takeFromSlot(inv.selected, 1);
         return true;
       }
@@ -984,6 +1016,163 @@ export class PlayerInteraction {
     arrow.punch = enchLevel(bow, 'punch');
     arrow.flame = enchLevel(bow, 'flame') > 0;
     ctx.audio.play('bow');
+    if (!p.creative) p.inventory.damageSelected(1);
+  }
+
+  private crossCharge = 0;
+  /** Pêche en cours : bouchon, attente avant la touche, fenêtre pour remonter le poisson. */
+  fishing: { bobber: Projectile; wait: number; bite: number } | null = null;
+
+  /** Trident lancé (Loyauté : il revient) ou Impulsion (le joueur s'élance dans l'eau ou sous la pluie). */
+  private releaseTrident() {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const inv = p.inventory;
+    const st = inv.selectedStack;
+    if (!st || st.id !== 'trident') return;
+    const [ox, oy, oz, dx, dy, dz] = this.eye();
+    const rip = enchLevel(st, 'riptide');
+    if (rip) {
+      const wet = p.body.inWater || (ctx.raining() && ctx.world.getLight(Math.floor(p.x), Math.floor(p.y + 1), Math.floor(p.z)).sky >= 15);
+      if (!wet) return;
+      const sp = 8 + 6 * rip;
+      p.body.vx = dx * sp;
+      p.body.vy = dy * sp + 2;
+      p.body.vz = dz * sp;
+      p.body.fallDistance = 0;
+      ctx.audio.play('splash', { x: p.x, y: p.y, z: p.z, pitch: 0.7 });
+      ctx.particles.burst('bubble', p.x, p.y + 1, p.z, 16);
+      if (!p.creative) inv.damageSelected(1);
+      return;
+    }
+    const def = { id: 'trident', color: '#3aa098', size: 0.3, gravity: 9, damage: 8, stick: true, life: 120 };
+    const pr = this.entities.spawnProjectile('custom', ox + dx * 0.6, oy + dy * 0.6, oz + dz * 0.6, dx * 25, dy * 25, dz * 25, 8, true, def);
+    pr.owner = p;
+    pr.pickupStack = { ...st, durability: st.durability !== undefined ? st.durability - 1 : undefined };
+    pr.loyalty = enchLevel(st, 'loyalty');
+    pr.pickable = !p.creative;
+    ctx.audio.play('bow', { pitch: 0.6 });
+    this.entities.combat.swing = 1;
+    if (!p.creative) inv.slots[inv.selected] = null;
+    inv.changed();
+  }
+
+  /** Arbalète chargée : une flèche (ou une fusée) prélevée et gardée dans l'arbalète. */
+  private loadCrossbow() {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const st = p.inventory.selectedStack;
+    if (!st) return;
+    if (!p.creative && !p.inventory.remove('arrow', 1)) {
+      ctx.hud.toast('Pas de flèches', 'warn');
+      this.crossCharge = -9999;
+      return;
+    }
+    st.meta = { ...(st.meta ?? {}), charged: true };
+    p.inventory.changed();
+    ctx.audio.play('click', { pitch: 0.8 });
+    this.crossCharge = 0;
+    this.bowCharge = 0;
+  }
+
+  /** Tir de l'arbalète : flèche puissante ; Tir multiple : 3 flèches ; Perforation : traverse. */
+  private fireCrossbow() {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const st = p.inventory.selectedStack!;
+    const [ox, oy, oz, dx, dy, dz] = this.eye();
+    const multi = enchLevel(st, 'multishot') > 0;
+    const pierce = enchLevel(st, 'piercing');
+    for (const a of multi ? [-0.17, 0, 0.17] : [0]) {
+      // flèches latérales : tournées de ±10° autour de la verticale
+      const c = Math.cos(a), sn = Math.sin(a);
+      const vx = dx * c - dz * sn, vz = dx * sn + dz * c;
+      const sp = 38;
+      const arrow = this.entities.spawnProjectile('player_arrow', ox + vx * 0.5, oy + dy * 0.5 - 0.1, oz + vz * 0.5, vx * sp, dy * sp, vz * sp, 9, true);
+      arrow.pickable = !p.creative && a === 0;
+      arrow.piercing = pierce;
+    }
+    st.meta = { ...(st.meta ?? {}) };
+    delete st.meta.charged;
+    if (!Object.keys(st.meta).length) st.meta = undefined;
+    ctx.audio.play('bow', { pitch: 1.3 });
+    if (!p.creative) p.inventory.damageSelected(multi ? 3 : 1);
+    p.inventory.changed();
+  }
+
+  /** Lance le bouchon (canne à pêche). */
+  private cast() {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const [ox, oy, oz, dx, dy, dz] = this.eye();
+    const def = { id: 'fishing_bobber', color: '#e04040', size: 0.16, gravity: 14, damage: 0, life: 600 };
+    const pr = this.entities.spawnProjectile('custom', ox + dx * 0.5, oy + dy * 0.5, oz + dz * 0.5, dx * 12, dy * 12 + 3, dz * 12, 0, true, def);
+    pr.bobber = true;
+    pr.owner = p;
+    const st = p.inventory.selectedStack;
+    this.fishing = { bobber: pr, wait: this.biteDelay(st), bite: 0 };
+    ctx.audio.play('paper_whoosh', { x: ox, y: oy, z: oz });
+    this.entities.combat.swing = 1;
+  }
+
+  /** Attente avant la touche : 5 à 30 s, Appât la réduit de 5 s par niveau (comme le jeu original). */
+  private biteDelay(st: ItemStack | null) {
+    return Math.max(1, 5 + Math.random() * 25 - 5 * enchLevel(st, 'lure'));
+  }
+
+  private updateFishing(dt: number, heldId: string | undefined) {
+    const f = this.fishing!;
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const b = f.bobber;
+    // canne rangée, bouchon perdu ou trop loin : la ligne casse
+    if (heldId !== 'fishing_rod' || b.removed || Math.hypot(b.x - p.x, b.y - p.y, b.z - p.z) > 32) {
+      b.removed = true;
+      this.fishing = null;
+      return;
+    }
+    if (!b.inWater) return;
+    if (f.bite > 0) {
+      f.bite -= dt;
+      if (f.bite <= 0) f.wait = this.biteDelay(p.inventory.selectedStack); // poisson parti
+      return;
+    }
+    f.wait -= dt;
+    // sillage qui approche juste avant la touche
+    if (f.wait < 2 && Math.random() < dt * 12) ctx.particles.burst('water', b.x + (Math.random() - 0.5) * f.wait, b.y, b.z + (Math.random() - 0.5) * f.wait, 1);
+    if (f.wait <= 0) {
+      // touche : le bouchon plonge, éclaboussures et son ; il faut remonter dans la seconde
+      f.bite = 1;
+      b.body.vy = -4;
+      ctx.particles.burst('water', b.x, b.y, b.z, 14);
+      ctx.particles.burst('bubble', b.x, b.y - 0.2, b.z, 6);
+      ctx.audio.play('splash', { x: b.x, y: b.y, z: b.z });
+      ctx.haptic('light');
+    }
+  }
+
+  /** Remonte la ligne : butin si un poisson a mordu (poisson, déchet ou trésor). */
+  private reel() {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const f = this.fishing!;
+    this.fishing = null;
+    const b = f.bobber;
+    b.removed = true;
+    this.entities.combat.swing = 1;
+    const st = p.inventory.selectedStack;
+    if (f.bite <= 0) {
+      if (!p.creative) p.inventory.damageSelected(b.stuck ? 2 : 1);
+      return;
+    }
+    const loot = fishingLoot(enchLevel(st, 'luck_of_the_sea') + p.effects.level('luck') - p.effects.level('unluck'));
+    if (loot && ItemRegistry.has(loot.id)) {
+      // l'objet arrive entre le bouchon et le joueur, qui le ramasse
+      this.entities.spawnItem(loot.id, loot.count, (b.x + p.x) / 2, Math.max(b.y, p.y) + 0.5, (b.z + p.z) / 2, loot.durability, loot.meta);
+      p.addXp(1 + Math.floor(Math.random() * 6));
+      ctx.stats.inc('fishCaught');
+      ctx.audio.play('splash', { x: b.x, y: b.y, z: b.z, pitch: 1.2 });
+    }
     if (!p.creative) p.inventory.damageSelected(1);
   }
 

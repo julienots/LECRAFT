@@ -9,6 +9,7 @@ import { AIState, type StateHandlers } from '../ai/StateMachine';
 import { MobModel } from '../render/MobModels';
 import { Entity } from './Entity';
 import { scanRelations } from './MobRelations';
+import { EFFECT_COLORS } from './Effects';
 import type { ProjectileKind } from './Projectile';
 
 /** Services fournis par l'EntityManager aux entités. */
@@ -223,6 +224,12 @@ export class Mob extends Entity {
       );
       if (this.dead) return;
     }
+    // tourbillons des effets de statut (couleur de l'effet)
+    if (this.effects.map.size && Math.random() < dt * 6 && ctx.particles.effectSwirl) {
+      const list = [...this.effects.map.values()].filter((e) => e.showParticles);
+      const c = list.length ? EFFECT_COLORS[list[Math.floor(Math.random() * list.length)].id] : undefined;
+      if (c !== undefined) ctx.particles.effectSwirl(this.x, this.y + Math.random() * this.body.height, this.z, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
+    }
     this.ai.update(ctx, dt);
     this.customUpdate(ctx, dt);
     // relations avec les autres créatures (chasse, fuite, protection des petits)
@@ -402,6 +409,8 @@ export class Mob extends Entity {
     const sky = (l.sky / 15) * ctx.dayCycle.daylight, blk = l.block / 15;
     const br = Math.max(ctx.dimension === 'nether' ? 0.45 : 0.12, Math.pow(Math.max(sky, blk), 1.3));
     if (this.hurtTimer > 0 || this.dead) this.model.setTint(1, 0.35, 0.35);
+    // Surbrillance : la créature reste vivement éclairée, même dans le noir
+    else if (this.effects.level('glowing')) this.model.setTint(1.25, 1.25, 1.25);
     else this.model.setTint(br, br, br * (this.loveTimer > 0 ? 0.9 : 1));
     this.model.setShadowSize(this.body.halfWidth * 2, ctx.settings.shadows !== 'off');
     void alpha;
