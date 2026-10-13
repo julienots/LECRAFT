@@ -82,7 +82,7 @@ for (const [biome, field, mobs] of [
   ['swamp', 'hostiles', ['bogged']],
   ['mangrove_swamp', 'hostiles', ['bogged']],
   ['desert', 'hostiles', ['parched', 'camel_husk']],
-  ['dense_forest', 'hostiles', ['evoker']],
+  ['dense_forest', 'hostiles', ['evoker', 'creaking']],
   ['plains', 'animals', ['mule', 'wandering_trader', 'cat']],
   ['plains', 'hostiles', ['skeleton_horse']],
   ['savanna', 'animals', ['mule', 'wandering_trader']],

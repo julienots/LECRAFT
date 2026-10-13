@@ -59,6 +59,9 @@ const eyes = (eyeRow: number, left: number, right: number, white = '#ffffff', pu
 };
 
 export const SKINS: Record<string, SkinSpec> = {
+  // créatures récentes : teinte unie nuancée (le pack fournit les vraies textures)
+  warden: plainSkin('#0f3b44', 128), allay: plainSkin('#5ad8f5', 32), sniffer: plainSkin('#8a3a20', 192), breeze: plainSkin('#b8a0e8', 32),
+  ravager: plainSkin('#6e6a62', 128), vex: plainSkin('#a8b8c8', 32), creaking: plainSkin('#4a443e', 64), happy_ghast: plainSkin('#f4f4f4', 64),
   pig: {
     w: 64,
     h: 32,
@@ -621,3 +624,20 @@ Object.assign(SKINS, {
   pufferfish: fishSkin(6, 6, 6, ['#e0c030', '#d0b020', '#f0d040'], '#f8e870'),
   tadpole: fishSkin(2, 2, 5, ['#4a3a2a', '#3a2a1a', '#5a4a3a'], '#6a5a4a'),
 });
+
+/** Texture carrée d'une seule teinte, en damier léger de 2 px. */
+function plainSkin(color: string, size: number): SkinSpec {
+  const n = parseInt(color.slice(1), 16);
+  return {
+    w: size,
+    h: size,
+    paint(ctx) {
+      for (let y = 0; y < size; y += 2)
+        for (let x = 0; x < size; x += 2) {
+          const k = 0.85 + ((x * 7 + y * 13) % 5) * 0.06;
+          ctx.fillStyle = `rgb(${(((n >> 16) & 255) * k) | 0},${(((n >> 8) & 255) * k) | 0},${((n & 255) * k) | 0})`;
+          ctx.fillRect(x, y, 2, 2);
+        }
+    },
+  };
+}

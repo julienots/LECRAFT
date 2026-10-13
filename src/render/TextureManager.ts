@@ -204,9 +204,6 @@ const GLOW_FROM: Record<string, [string, 'red' | 'purple']> = {
 
 export const SKIN_FALLBACK: Record<string, string> = {};
 /** Couleur et largeur de texture des créatures récentes, sans pack. */
-const PLAIN_SKINS: Record<string, [string, number]> = {
-  warden: ['#0f3b44', 128], allay: ['#5ad8f5', 32], sniffer: ['#8a3a20', 192], breeze: ['#b8a0e8', 32], ravager: ['#6e6a62', 128], vex: ['#a8b8c8', 32], creaking: ['#4a443e', 64], happy_ghast: ['#f4f4f4', 64],
-};
 for (const n of PLAYER_SKINS) SKIN_FALLBACK[`player_${n}`] = 'player';
 /** Textures d'objets aux noms différents dans le jeu vanilla. */
 const ITEM_PATHS: Record<string, string[]> = {
@@ -415,22 +412,6 @@ export class TextureManager implements SkinProvider {
     if (eyes) return this.eyesFrom(this.skinCanvas(eyes[0]), eyes[1]);
     const painted = paintSkin(SKIN_FALLBACK[key] ?? key);
     if (painted) return painted;
-    // créatures récentes sans texture de pack : teinte unie (texture à la taille du modèle)
-    const plain = PLAIN_SKINS[key];
-    if (plain) {
-      const c = document.createElement('canvas');
-      c.width = plain[1];
-      c.height = Math.round(plain[1] * (skinAspect(key) ?? 1));
-      const ctx = c.getContext('2d')!;
-      for (let y = 0; y < c.height; y += 2)
-        for (let x = 0; x < c.width; x += 2) {
-          const k = 0.85 + ((x * 7 + y * 13) % 5) * 0.06;
-          const n = parseInt(plain[0].slice(1), 16);
-          ctx.fillStyle = `rgb(${((n >> 16) & 255) * k | 0},${((n >> 8) & 255) * k | 0},${(n & 255) * k | 0})`;
-          ctx.fillRect(x, y, 2, 2);
-        }
-      return c;
-    }
     const c = document.createElement('canvas');
     c.width = 64;
     c.height = 32;

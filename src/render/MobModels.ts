@@ -315,10 +315,46 @@ Object.assign(VANILLA, {
   panda: reuse('pig', 'panda'),
   hoglin: reuse('pig', 'hoglin'),
   armadillo: reuse('pig', 'armadillo'),
-  rabbit: reuse('pig', 'rabbit'),
+  // lapin : modèle Java (RabbitModel, texture 64×32)
+  rabbit: {
+    skin: 'rabbit', texW: 64, texH: 32,
+    parts: [
+      P([26, 24], [-1, 5.5, -3.7, 2, 1, 7], [3, 17.5, 3.7], { anim: 'legBL' }),
+      P([8, 24], [-1, 5.5, -3.7, 2, 1, 7], [-3, 17.5, 3.7], { anim: 'legBR' }),
+      P([30, 15], [-1, 0, 0, 2, 4, 5], [3, 17.5, 3.7], { rot: [-0.349, 0, 0] }),
+      P([16, 15], [-1, 0, 0, 2, 4, 5], [-3, 17.5, 3.7], { rot: [-0.349, 0, 0] }),
+      P([0, 0], [-3, -2, -10, 6, 5, 10], [0, 19, 8], { rot: [-0.349, 0, 0] }),
+      P([8, 15], [-1, 0, -1, 2, 7, 2], [3, 17, -1], { rot: [-0.1745, 0, 0], anim: 'legFL' }),
+      P([0, 15], [-1, 0, -1, 2, 7, 2], [-3, 17, -1], { rot: [-0.1745, 0, 0], anim: 'legFR' }),
+      P([32, 0], [-2.5, -4, -5, 5, 4, 5], [0, 16, -1], {
+        anim: 'head',
+        children: [
+          P([52, 0], [-2.5, -9, -1, 2, 5, 1], [0, 0, 0], { rot: [0, -0.2618, 0] }),
+          P([58, 0], [0.5, -9, -1, 2, 5, 1], [0, 0, 0], { rot: [0, 0.2618, 0] }),
+          P([32, 9], [-0.5, -2.5, -5.5, 1, 1, 1], [0, 0, 0]),
+        ],
+      }),
+      P([52, 6], [-1.5, -1.5, 0, 3, 3, 2], [0, 20, 7], { rot: [-0.349, 0, 0] }),
+    ],
+  },
   frog: reuse('pig', 'frog'),
   turtle: reuse('pig', 'turtle'),
-  fox: reuse('wolf', 'fox'),
+  // renard : modèle Java (FoxModel, texture 48×32) ; la queue est fille du corps couché (π/2)
+  fox: {
+    skin: 'fox', texW: 48, texH: 32,
+    parts: [
+      P([1, 5], [-3, -2, -5, 8, 6, 6], [-1, 16.5, -3], {
+        anim: 'head',
+        children: [P([8, 1], [-3, -4, -4, 2, 2, 1], [0, 0, 0]), P([15, 1], [3, -4, -4, 2, 2, 1], [0, 0, 0]), P([6, 18], [-1, 2.01, -8, 4, 2, 3], [0, 0, 0])],
+      }),
+      P([24, 15], [-3, 3.999, -3.5, 6, 11, 6], [0, 16, -6], { rot: [HALF_PI, 0, 0] }),
+      P([30, 0], [2, 0, -1, 4, 9, 5], [-4, 17, 9], { rot: [HALF_PI - 0.0524, 0, 0], anim: 'tail' }),
+      P([13, 24], [2, 0.5, -1, 2, 6, 2], [-5, 17.5, 7], { anim: 'legBR', inflate: 0.001 }),
+      P([4, 24], [2, 0.5, -1, 2, 6, 2], [-1, 17.5, 7], { anim: 'legBL', inflate: 0.001 }),
+      P([13, 24], [2, 0.5, -1, 2, 6, 2], [-5, 17.5, 0], { anim: 'legFR', inflate: 0.001 }),
+      P([4, 24], [2, 0.5, -1, 2, 6, 2], [-1, 17.5, 0], { anim: 'legFL', inflate: 0.001 }),
+    ],
+  },
   ocelot: reuse('wolf', 'ocelot'),
   parrot: reuse('chicken', 'parrot'),
   bee: reuse('bat', 'bee'),
@@ -329,7 +365,22 @@ Object.assign(VANILLA, {
   cod: fishModel('cod', 8, 3, 2),
   salmon: fishModel('salmon', 11, 4, 3),
   tropical_fish: fishModel('tropical_fish', 6, 5, 2),
-  dolphin: fishModel('dolphin', 12, 5, 6),
+  // dauphin : modèle Java (DolphinModel, texture 64×64) ; nageoires tournées Z puis X comme en Java
+  dolphin: {
+    skin: 'dolphin', texW: 64, texH: 64,
+    parts: [
+      P([22, 0], [-4, -7, 0, 8, 7, 13], [0, 22, -5], {
+        anim: 'body',
+        children: [
+          P([51, 0], [-0.5, 0, 8, 1, 4, 5], [0, 0, 0], { rot: [Math.PI / 3, 0, 0] }),
+          P([0, 0], [0, 0, 0, 0, 0, 0], [2, -2, 4], { rot: [0, 0, (Math.PI * 2) / 3], children: [P([48, 20], [-0.5, -4, 0, 1, 4, 7], [0, 0, 0], { rot: [Math.PI / 3, 0, 0], mirror: true })] }),
+          P([0, 0], [0, 0, 0, 0, 0, 0], [-2, -2, 4], { rot: [0, 0, (-Math.PI * 2) / 3], children: [P([48, 20], [-0.5, -4, 0, 1, 4, 7], [0, 0, 0], { rot: [Math.PI / 3, 0, 0] })] }),
+          P([0, 19], [-2, -2.5, 0, 4, 5, 11], [0, -2.5, 11], { rot: [-0.1047, 0, 0], anim: 'dolphinTail', children: [P([19, 20], [-5, -0.5, 0, 10, 1, 6], [0, 0, 9])] }),
+          P([0, 0], [-4, -3, -3, 8, 7, 6], [0, -4, -3], { children: [P([0, 13], [-1, 2, -7, 2, 2, 4], [0, 0, 0])] }),
+        ],
+      }),
+    ],
+  },
   guardian: fishModel('guardian', 12, 12, 12),
   axolotl: fishModel('axolotl', 9, 4, 5),
   iron_golem: humanoid('iron_golem', 64, 64, 4),
@@ -741,6 +792,7 @@ export class MobModel {
     }
     this.rot('tail', (b, o) => (o.rotation.z = b.z + Math.sin(t * 3) * 0.1 * (1 + amp)));
     this.rot('fishTail', (b, o) => (o.rotation.y = b.y + Math.sin(t * 8) * 0.45));
+    this.rot('dolphinTail', (b, o) => (o.rotation.x = b.x + Math.sin(t * 6) * 0.25));
     this.rot('tentacle', (b, o) => (o.rotation.x = b.x + 0.15 + Math.sin(t * 2.2 + o.position.x * 3 + o.position.z * 5) * 0.25));
     for (let r = 0; r < 3; r++) this.rot(`spin${r}`, (b, o) => (o.rotation.y = b.y + t * (r === 1 ? -1.4 : 1.1 + r * 0.3)));
     this.rot('squash', (_b, o) => {
@@ -897,10 +949,10 @@ const GEO_MOBS: Record<string, string> = {
   horse: 'geometry.horse.v3', donkey: 'geometry.horse.v3', mule: 'geometry.horse.v3', skeleton_horse: 'geometry.horse.v3', zombie_horse: 'geometry.horse.v3',
   llama: 'geometry.llama.v1.8', trader_llama: 'geometry.llama.v1.8', camel: 'geometry.camel', camel_husk: 'geometry.camel_husk', goat: 'geometry.goat',
   panda: 'geometry.panda', hoglin: 'geometry.hoglin', zoglin: 'geometry.hoglin', armadillo: 'geometry.armadillo',
-  rabbit: 'geometry.rabbit.v2', frog: 'geometry.frog', turtle: 'geometry.turtle', fox: 'geometry.fox', ocelot: 'geometry.ocelot.v1.8', cat: 'geometry.cat',
+  frog: 'geometry.frog', turtle: 'geometry.turtle', ocelot: 'geometry.ocelot.v1.8', cat: 'geometry.cat',
   parrot: 'geometry.parrot', bee: 'geometry.bee', phantom: 'geometry.phantom', silverfish: 'geometry.silverfish', endermite: 'geometry.endermite',
   strider: 'geometry.strider', cod: 'geometry.cod', salmon: 'geometry.salmon', pufferfish: 'geometry.pufferfish.large.v1.8', tropical_fish: 'geometry.tropicalfish_a',
-  dolphin: 'geometry.dolphin', guardian: 'geometry.guardian.v1.8', elder_guardian: 'geometry.guardian.v1.8', axolotl: 'geometry.axolotl', tadpole: 'geometry.tadpole',
+  guardian: 'geometry.guardian.v1.8', elder_guardian: 'geometry.guardian.v1.8', axolotl: 'geometry.axolotl', tadpole: 'geometry.tadpole',
   iron_golem: 'geometry.irongolem', zombie_villager: 'geometry.zombie.villager.v1.8', pillager: 'geometry.pillager', vindicator: 'geometry.vindicator.v1.8',
   evoker: 'geometry.evoker.v1.8', bat: 'geometry.bat_v2', shulker: 'geometry.shulker.v1.8', bogged: 'geometry.skeleton.bogged', parched: 'geometry.parched', snow_golem: 'geometry.snowgolem.v1.8',
   warden: 'geometry.warden', allay: 'geometry.allay', sniffer: 'geometry.sniffer', breeze: 'geometry.breeze', ravager: 'geometry.ravager', vex: 'geometry.vex.v1.8',
@@ -913,17 +965,26 @@ const GEO_HIDE: Record<string, string[]> = {
   horse: [...HORSE_GEAR, 'muleearl', 'muleearr'], skeleton_horse: [...HORSE_GEAR, 'muleearl', 'muleearr'], zombie_horse: [...HORSE_GEAR, 'muleearl', 'muleearr'],
   donkey: [...HORSE_GEAR, 'earl', 'earr'], mule: [...HORSE_GEAR, 'earl', 'earr'],
   llama: ['chest1', 'chest2'], trader_llama: ['chest1', 'chest2'], camel: ['saddle', 'bridle', 'reins'], camel_husk: ['saddle', 'bridle', 'reins'],
-  armadillo: ['body_rolled_up'], frog: ['croaking_body', 'tongue'], fox: ['head_sleeping', 'held_item'],
+  armadillo: ['body_rolled_up'], frog: ['croaking_body', 'tongue'],
   evoker: ['rightarm', 'leftarm'], vindicator: ['arms'],
 };
 /** Corps couchés par l'animation d'installation des quadrupèdes de l'édition Bedrock (rotation X de 90°). */
-const GEO_BODY_90 = new Set(['llama', 'trader_llama', 'ocelot', 'cat', 'fox']);
+/** Décalage vertical (px) de l'animation de pose de base. */
+const GEO_DROP: Record<string, number> = { phantom: 20 };
+const GEO_BODY_90: Record<string, string[]> = { llama: ['body'], trader_llama: ['body'], ocelot: ['body'], cat: ['body'] };
 for (const [k, id] of Object.entries(GEO_MOBS)) {
   const g0 = VANILLA_GEO[id];
-  // seuls les cubes du corps tournent (os intermédiaire) : les pattes et la tête restent en place
-  const g = g0 && GEO_BODY_90.has(k)
-    ? { ...g0, bones: g0.bones.flatMap((b) => (b.name === 'body' ? [{ ...b, cubes: [] }, { name: 'body_turned', parent: 'body', pivot: b.pivot, rotation: [90, 0, 0], cubes: b.cubes }] : [b])) }
+  // seuls les cubes de ces os tournent (os intermédiaire) : les pattes et la tête restent en place
+  const turn = GEO_BODY_90[k];
+  let g = g0 && turn
+    ? { ...g0, bones: g0.bones.flatMap((b) => (turn.includes(b.name) ? [{ ...b, cubes: [] }, { name: `${b.name}_turned`, parent: b.name, pivot: b.pivot, rotation: [90, 0, 0], cubes: b.cubes }] : [b])) }
     : g0;
+  // pose de base qui descend tout le modèle (phantom : corps à -20 px)
+  const dy = GEO_DROP[k];
+  if (g && dy) {
+    const sh = (v?: number[]) => (v ? [v[0], v[1] - dy, v[2]] : v);
+    g = { ...g, bones: g.bones.map((b) => ({ ...b, pivot: sh(b.pivot), cubes: (b.cubes ?? []).map((c: { origin: number[]; pivot?: number[] }) => ({ ...c, origin: sh(c.origin), pivot: sh(c.pivot) })) })) };
+  }
   if (!g) continue;
   const hide = new Set(GEO_HIDE[k] ?? []);
   const byName = new Map(g.bones.map((b) => [b.name, b]));

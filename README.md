@@ -273,6 +273,68 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **Portails à vue directe, porte à carte, inventaire créatif, effets et créatures (v2.28)**
+  - **Voir l'autre dimension à travers le portail** :
+    - le portail affiche en direct la dimension de destination (Nether ↔ Surface, Pâte à
+      papier), vue depuis le portail d'arrivée et avec sa propre lumière et son ciel ;
+    - option « Voir à travers les portails » dans les réglages (désactivable sur les
+      appareils lents).
+  - **Porte à carte** :
+    - elle ne s'ouvre qu'avec une **carte d'accès** en main ;
+    - elle se referme seule au bout de 5 s ;
+    - la redstone ne l'ouvre pas.
+  - **Inventaire créatif comme le jeu original** :
+    - 12 onglets : construction, blocs colorés, nature, fonctionnels, redstone, recherche,
+      outils, combat, nourriture, ingrédients, œufs d'apparition, inventaire de survie ;
+    - fenêtre, onglets et barre de défilement dessinés avec les textures du pack ;
+    - champ de recherche ;
+    - corbeille seulement dans l'onglet inventaire.
+  - **Particules du jeu original** : les textures `particle/*.png` du pack, animées image par
+    image (fumée, flammes, bulles, gouttes, portail, glyphes d'enchantement, notes, coups
+    critiques, balayage, spores, cendres, onde sonique…).
+  - **Particules d'ambiance des blocs** :
+    - torches, bougies, feux de camp, fourneaux allumés et lave ;
+    - gouttes sous les plafonds mouillés ;
+    - portail du Nether et table d'enchantement ;
+    - cendres et spores selon le biome du Nether.
+  - **Effets** :
+    - effets ajoutés : Bonus de vie, Absorption, Grâce du dauphin, Puissance de conduit,
+      Vision nocturne, Cécité, Obscurité, Nausée, Chargé de vent, Tissage, Suintement,
+      Infestation ;
+    - cœurs empoisonnés, desséchés et dorés dans la barre de vie ;
+    - totem d'immortalité.
+  - **24 potions**, dont Maître tortue, Chance et les 4 potions de 1.21. Les potions
+    persistantes laissent un nuage.
+  - **42 enchantements**, livres enchantés dans les coffres, chez le bibliothécaire et à la
+    pêche, dont :
+    - Densité, Brèche et Charge de vent (masse) ;
+    - Empalement, Loyauté, Canalisation et Impulsion (trident) ;
+    - Perforation, Charge rapide et Tir multiple (arbalète) ;
+    - Chance de la mer et Appât (pêche) ;
+    - Agilité aquatique, Semelles givrantes, Vitesse des âmes, Furtivité rapide, Épines ;
+    - malédictions du lien éternel et de disparition.
+  - **Armes et outils** :
+    - **pêche** à la canne, avec poissons, trésors et déchets ;
+    - **trident** lancé, qui revient avec Loyauté ;
+    - **arbalète** chargée puis tirée ;
+    - **coup écrasant de la masse**.
+  - **Nouvelles créatures** :
+    - **Warden** : obscurité et rayon sonique ;
+    - **Allay** : rapporte les objets identiques à celui qu'on lui donne ;
+    - **Renifleur** : déterre des graines anciennes ;
+    - **Brise**, **Ravageur** et **Vex** (invoqués par l'évocateur) ;
+    - **Grinceur** : se fige quand on le regarde ;
+    - **Ghast heureux**.
+  - **Modèles corrigés** :
+    - le **renard**, le **dauphin** et le **lapin** reprennent les modèles de l'édition Java, qui
+      correspondent aux textures du pack ;
+    - le **phantom** est dessiné à la bonne hauteur.
+  - **Pas encore fait** :
+    - sons d'ambiance des grottes et des biomes du Nether ;
+    - animations de manger, de boire et de bander l'arc ;
+    - parade au bouclier et vol en élytres (les objets existent, sans ces actions) ;
+    - pistons qui poussent les blocs.
+
 - **Portails, rails, animations et relations entre créatures (v2.27)**
   - **Portails comme le jeu original** :
     - portail du Nether : plan fin et translucide, orienté selon le cadre, avec le
