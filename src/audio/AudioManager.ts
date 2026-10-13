@@ -1,7 +1,7 @@
 import type { SoundFx } from '../core/GameContext';
 import { groupPackSounds, packFilesFor, packMobFiles } from './PackSounds';
 import type { Settings } from '../core/Settings';
-import { buildAmbience, buildSounds, SynthContext } from './Synth';
+import { AMBIENCE, buildAmbience, buildSounds, SynthContext } from './Synth';
 import { mapSound } from './SoundMap';
 
 import { composePiece, MusicLibrary, type MusicMood, type MusicNote, type TrackInfo } from './Music';
@@ -240,7 +240,7 @@ export class AudioManager implements SoundFx {
   /** Volume cible de chaque boucle d'ambiance (0..1). */
   setAmbience(levels: Record<string, number>, dt: number) {
     if (!this.ctx || !this.ready) return;
-    for (const name of ['wind', 'rain', 'cave', 'crickets', 'birds']) {
+    for (const name of AMBIENCE) {
       const target = levels[name] ?? 0;
       let node = this.ambNodes.get(name);
       if (!node && target > 0.01) {

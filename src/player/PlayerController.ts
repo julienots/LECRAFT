@@ -2,9 +2,10 @@ import type { InputState } from '../input/InputState';
 import type { Settings } from '../core/Settings';
 import type { World } from '../world/World';
 import { BlockRegistry } from '../blocks/BlockRegistry';
-import { enchLevel } from '../inventory/Enchantments';
+import { enchLevel, unbreakingSaves } from '../inventory/Enchantments';
 import type { Player } from './Player';
 import { PLAYER_HEIGHT, PLAYER_SNEAK_HEIGHT } from './PlayerPhysics';
+import { GLIDE_TICK, canGlideWith, glideTick, rocketTick, rocketTicks, wallDamage } from './Elytra';
 
 const WALK = 4.3;
 const SPRINT = 5.8;
@@ -24,6 +25,12 @@ export class PlayerController {
   stepDistance = 0;
   onStep: (blockBelow: number) => void = () => {};
   onJump: () => void = () => {};
+  /** Vol plané en élytres (corps à l'horizontale, 0,6 bloc de haut). */
+  gliding = false;
+  /** Ticks de vol plané (usure des élytres) et ticks de poussée de fusée restants. */
+  private glideTicks = 0;
+  private rocketLeft = 0;
+  private tickAcc = 0;
 
   constructor(private player: Player, private input: InputState, private settings: Settings) {}
 
@@ -37,11 +44,81 @@ export class PlayerController {
     if (p.pitch < -lim) p.pitch = -lim;
   }
 
+  private stopGliding() {
+    this.gliding = false;
+    this.rocketLeft = 0;
+  }
+
+  /**
+   * Fusée d'artifice utilisée en vol plané : poussée vers le regard (~1 s pour une durée de vol 1).
+   * Retourne vrai si l'objet a été consommé (la session l'appelle avant les autres usages).
+   */
+  useFirework(itemId: string): boolean {
+    if (!this.gliding || itemId !== 'firework_rocket') return false;
+    const p = this.player, inv = p.inventory;
+    this.rocketLeft = rocketTicks(1);
+    if (!p.creative) {
+      const st = inv.selectedStack;
+      if (st && st.id === itemId) {
+        st.count--;
+        if (st.count <= 0) inv.slots[inv.selected] = null;
+        inv.changed();
+      }
+    }
+    return true;
+  }
+
+  /** Physique du vol plané : formules Java par tick (blocs/tick), le déplacement reste par image. */
+  private glide(world: World, dt: number) {
+    const p = this.player, b = p.body;
+    b.gravity = 0;
+    p.sneaking = p.sprinting = p.swimming = p.crawling = false;
+    // hitbox couchée (0,6 bloc), comme la nage
+    b.height = 0.6;
+    this.tickAcc += dt;
+    const v = { x: b.vx / 20, y: b.vy / 20, z: b.vz / 20 };
+    let ticked = false;
+    while (this.tickAcc >= GLIDE_TICK) {
+      this.tickAcc -= GLIDE_TICK;
+      ticked = true;
+      if (this.rocketLeft > 0) {
+        this.rocketLeft--;
+        rocketTick(v, p.yaw, p.pitch);
+      }
+      // Chute lente : gravité réduite en descente
+      glideTick(v, p.yaw, p.pitch, v.y <= 0 && p.effects.level('slow_falling') ? 0.01 : 0.08);
+      // usure : 1 point toutes les 20 ticks, jamais en dessous de 1 (élytres cassées)
+      if (++this.glideTicks % 20 === 0 && !p.creative) {
+        const st = p.inventory.armor.chest;
+        if (st && st.durability !== undefined && st.durability > 1 && !unbreakingSaves(st, true)) {
+          st.durability--;
+          p.inventory.changed();
+        }
+      }
+    }
+    if (ticked) {
+      b.vx = v.x * 20;
+      b.vy = v.y * 20;
+      b.vz = v.z * 20;
+    }
+    // la distance de chute ne compte qu'en piqué (Java : remise à 1 si vy > -0,5 bloc/tick)
+    if (b.vy > -10) b.fallDistance = 1;
+    const before = Math.hypot(b.vx, b.vz) / 20;
+    b.step(world, dt);
+    // choc contre un mur : dégâts selon la vitesse horizontale perdue
+    if (b.collidedH) {
+      const dmg = wallDamage(before, Math.hypot(b.vx, b.vz) / 20);
+      if (dmg > 0) p.damage(dmg, 'fall');
+    }
+    if (b.onGround || b.inWater || b.inLava) this.stopGliding();
+  }
+
   update(world: World, dt: number) {
     const p = this.player;
     const b = p.body;
     const i = this.input;
     if (p.dead) {
+      if (this.gliding) this.stopGliding();
       b.vx *= 0.8;
       b.vz *= 0.8;
       b.step(world, dt);
@@ -59,6 +136,16 @@ export class PlayerController {
     }
     this.jumpWasDown = i.jump;
     b.noClip = false;
+    // élytres : saut en l'air pendant la chute → vol plané ; on s'arrête au sol, dans un liquide ou sans élytres
+    const elytra = p.inventory.armor.chest;
+    if (this.gliding && (b.onGround || b.inWater || b.inLava || b.flying || !canGlideWith(elytra))) this.stopGliding();
+    else if (!this.gliding && jumpPressed && !b.onGround && !b.inWater && !b.inLava && !b.flying && !b.onLadder && b.vy < 0 && canGlideWith(elytra) && !p.effects.level('levitation')) {
+      this.gliding = true;
+      this.glideTicks = 0;
+      this.tickAcc = 0;
+    }
+    p.gliding = this.gliding;
+    if (this.gliding) return this.glide(world, dt);
     b.gravity = b.flying ? 0 : 28;
 
     let mag = Math.hypot(i.moveX, i.moveY);
@@ -89,6 +176,11 @@ export class PlayerController {
     if (b.inWater && p.effects.level('dolphins_grace')) speed *= 2.2;
     if (p.slowTimer > 0) speed *= 0.55;
     if (!b.flying) speed *= p.effects.speedMul();
+    // objet en cours d'utilisation (manger, boire, arc, bouclier) : 20 % de la vitesse, sans sprint
+    if (p.usingItem && !b.flying && !b.inWater) {
+      speed *= 0.2;
+      p.sprinting = false;
+    }
     // friction du bloc sous les pieds
     const below = world.getBlock(Math.floor(b.x), Math.floor(b.y - 0.05), Math.floor(b.z));
     // Agilité des âmes (bottes) : plus de lenteur sur le sable et la terre des âmes, et un bonus

@@ -6,6 +6,13 @@ import { cachedCube } from './MobModels';
 import { extrudeIcon } from './ItemExtrude';
 
 const D = Math.PI / 180;
+
+/** Objet en cours d'utilisation : type de pose et ticks écoulés (durée totale pour manger / boire). */
+export interface HeldUse {
+  kind: 'eat' | 'drink' | 'bow' | 'spear' | 'crossbow' | 'block';
+  ticks: number;
+  duration: number;
+}
 const AXIS_X = new THREE.Vector3(1, 0, 0), AXIS_Y = new THREE.Vector3(0, 1, 0), AXIS_Z = new THREE.Vector3(0, 0, 1);
 
 /** Pose « première personne, main droite » des modèles du jeu original (degrés, pixels, échelle). */
@@ -18,6 +25,9 @@ interface Display {
 const BLOCK_DISPLAY: Display = { rot: [0, 45, 0], t: [0, 0, 0], s: 0.4 };
 /** Objet et outil (item/generated.json, item/handheld.json) : épée en diagonale, face visible. */
 const ITEM_DISPLAY: Display = { rot: [0, -90, 25], t: [1.13, 3.2, 1.13], s: 0.68 };
+/** Bouclier (item/shield.json) et bouclier levé (shield_blocking.json). */
+const SHIELD_DISPLAY: Display = { rot: [0, 180, 5], t: [-10, 2, -10], s: 1.25 };
+const SHIELD_BLOCKING: Display = { rot: [0, 180, -5], t: [-15, 5, -11], s: 1.25 };
 /** Position du bras droit dans la vue (applyItemArmTransform du jeu original). */
 const ARM_POS: [number, number, number] = [0.56, -0.52, -0.72];
 
@@ -87,10 +97,51 @@ export class HeldItem {
     return arm;
   }
 
+  /**
+   * Bouclier 3D du jeu original (ShieldModel : plaque 12 × 22 × 1 et poignée, texture
+   * entity/shield_base_nopattern.png du pack), centré comme un modèle d'entité d'objet.
+   */
+  private makeShield(blocking: boolean): THREE.Object3D | null {
+    const img = this.tm.packImage('entity/shield_base_nopattern.png');
+    if (!img) return null;
+    // copie dans un canvas : une ImageBitmap n'est pas retournée (flipY) par le rendu
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    c.getContext('2d')!.drawImage(img, 0, 0);
+    const tex = new THREE.CanvasTexture(c);
+    tex.magFilter = tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    tex.colorSpace = THREE.NoColorSpace;
+    const m = new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.3 });
+    this.mats.push(m as unknown as THREE.MeshBasicMaterial);
+    const g = new THREE.Group();
+    const inner = new THREE.Group();
+    // rendu d'entité d'objet : décalé d'un demi-bloc, axes Y et Z retournés (déjà fait par cachedCube)
+    inner.position.set(-0.5, -0.5, -0.5);
+    for (const part of [
+      { uv: [0, 0] as [number, number], box: [-6, -11, -2, 12, 22, 1] as [number, number, number, number, number, number], pivot: [0, 0, 0] as [number, number, number] },
+      { uv: [26, 0] as [number, number], box: [-1, -3, -1, 2, 6, 6] as [number, number, number, number, number, number], pivot: [0, 0, 0] as [number, number, number] },
+    ]) {
+      const geo = cachedCube(part, 64, 64).clone();
+      geo.computeVertexNormals();
+      inner.add(new THREE.Mesh(geo, m));
+    }
+    g.add(inner);
+    g.userData.display = blocking ? SHIELD_BLOCKING : SHIELD_DISPLAY;
+    return g;
+  }
+
   /** Modèle de l'objet : cube pour un bloc plein, modèle extrudé (1 px) à partir de l'icône sinon. */
-  private makeItem(id: string): THREE.Mesh | null {
+  /** `id` peut porter une variante de texture : « bow@bow_pulling_1 ». */
+  private makeItem(full: string): THREE.Object3D | null {
+    const [id, texture] = full.split('@');
     const def = ItemRegistry.get(id);
     if (!id || !def) return null;
+    if (id === 'shield') {
+      const shield = this.makeShield(texture === 'blocking');
+      if (shield) return shield;
+    }
     if ('block' in def.icon) {
       const b = BlockRegistry.byName(def.icon.block);
       if (!this.tm.flatIcon(b)) {
@@ -104,7 +155,7 @@ export class HeldItem {
         return mesh;
       }
     }
-    const canvas = this.tm.heldCanvas(id);
+    const canvas = this.tm.heldCanvas(id, texture);
     const tex = new THREE.CanvasTexture(canvas);
     tex.magFilter = tex.minFilter = THREE.NearestFilter;
     tex.generateMipmaps = false;
@@ -128,7 +179,7 @@ export class HeldItem {
       g.userData.empty = true;
       return g;
     }
-    const d = item.userData.block ? BLOCK_DISPLAY : ITEM_DISPLAY;
+    const d: Display = item.userData.display ?? (item.userData.block ? BLOCK_DISPLAY : ITEM_DISPLAY);
     const pose = new THREE.Group();
     pose.position.set(d.t[0] / 16, d.t[1] / 16, d.t[2] / 16);
     pose.rotation.set(d.rot[0] * D, d.rot[1] * D, d.rot[2] * D, 'XYZ');
@@ -151,8 +202,8 @@ export class HeldItem {
     this.pose.add(o);
   }
 
-  /** `swing` : 1 au début du coup, décroît jusqu'à 0. */
-  update(aspect: number, swing: number, bob: number, moving: number, light: number, sneak: boolean) {
+  /** `swing` : 1 au début du coup, décroît jusqu'à 0 ; `use` : objet en cours d'utilisation (ticks écoulés). */
+  update(aspect: number, swing: number, bob: number, moving: number, light: number, sneak: boolean, use: HeldUse | null = null) {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     const bx = Math.sin(bob) * 0.025 * moving, by = Math.abs(Math.cos(bob)) * 0.02 * moving;
@@ -172,6 +223,54 @@ export class HeldItem {
       M.multiply(this.tmpM.makeRotationX(200 * D));
       M.multiply(this.tmpM.makeRotationY(-135 * D));
       M.multiply(this.tmpM.makeTranslation(5.6, 0, 0));
+      this.holder.matrixAutoUpdate = false;
+      this.holder.matrix.copy(M);
+      this.holder.matrixWorldNeedsUpdate = true;
+    } else if (use) {
+      // poses d'utilisation du jeu original (ItemInHandRenderer, main droite)
+      const M = this.mat.identity();
+      const t = use.ticks;
+      if (use.kind === 'eat' || use.kind === 'drink') {
+        // applyEatTransform : l'objet monte à la bouche et sautille, puis applyItemArmTransform
+        const left = use.duration - t;
+        const f1 = left / use.duration;
+        if (f1 < 0.8) M.multiply(this.tmpM.makeTranslation(0, Math.abs(Math.cos((left / 4) * Math.PI) * 0.1), 0));
+        const f3 = 1 - Math.pow(f1, 27);
+        M.multiply(this.tmpM.makeTranslation(f3 * 0.6, f3 * -0.5, 0));
+        M.multiply(this.tmpM.makeRotationY(f3 * 90 * D));
+        M.multiply(this.tmpM.makeRotationX(f3 * 10 * D));
+        M.multiply(this.tmpM.makeRotationZ(f3 * 30 * D));
+        M.multiply(this.tmpM.makeTranslation(ARM_POS[0], ARM_POS[1], ARM_POS[2]));
+      } else if (use.kind === 'block') {
+        // bouclier levé : seulement la position du bras (la pose vient de shield_blocking.json)
+        M.multiply(this.tmpM.makeTranslation(ARM_POS[0] + bx, ARM_POS[1] + by, ARM_POS[2]));
+      } else {
+        M.multiply(this.tmpM.makeTranslation(ARM_POS[0] + bx, ARM_POS[1] + by, ARM_POS[2]));
+        if (use.kind === 'bow') {
+          M.multiply(this.tmpM.makeTranslation(-0.2785682, 0.18344387, 0.15731531));
+          M.multiply(this.tmpM.makeRotationX(-13.935 * D));
+          M.multiply(this.tmpM.makeRotationY(35.3 * D));
+          M.multiply(this.tmpM.makeRotationZ(-9.785 * D));
+        } else if (use.kind === 'spear') {
+          M.multiply(this.tmpM.makeTranslation(-0.5, 0.7, 0.1));
+          M.multiply(this.tmpM.makeRotationX(-55 * D));
+          M.multiply(this.tmpM.makeRotationY(35.3 * D));
+          M.multiply(this.tmpM.makeRotationZ(-9.785 * D));
+        } else {
+          M.multiply(this.tmpM.makeTranslation(-0.4785682, -0.094387, 0.05731531));
+          M.multiply(this.tmpM.makeRotationX(-11.935 * D));
+          M.multiply(this.tmpM.makeRotationY(65.3 * D));
+          M.multiply(this.tmpM.makeRotationZ(-9.785 * D));
+        }
+        // tension : l'objet tremble puis recule et s'allonge
+        let f = use.kind === 'spear' ? t / 10 : use.kind === 'crossbow' ? t / use.duration : t / 20;
+        if (use.kind === 'bow') f = (f * f + f * 2) / 3;
+        f = Math.min(1, f);
+        if (f > 0.1) M.multiply(this.tmpM.makeTranslation(0, Math.sin((t - 0.1) * 1.3) * (f - 0.1) * 0.004, 0));
+        M.multiply(this.tmpM.makeTranslation(0, 0, f * (use.kind === 'spear' ? 0.2 : 0.04)));
+        M.multiply(this.tmpM.makeScale(1, 1, 1 + f * 0.2));
+        M.multiply(this.tmpM.makeRotationY(-45 * D));
+      }
       this.holder.matrixAutoUpdate = false;
       this.holder.matrix.copy(M);
       this.holder.matrixWorldNeedsUpdate = true;

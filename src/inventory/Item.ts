@@ -33,6 +33,8 @@ export interface ItemDef {
   attackCooldown?: number;
   food?: { hunger: number; saturation: number; effect?: 'regen' };
   armor?: { slot: ArmorSlot; defense: number; durability: number; material: string };
+  /** Usure d'un objet qui n'est ni un outil ni une armure (bouclier). */
+  durability?: number;
   use?: ItemUse;
   /** Pour use='plant' : bloc culture posé sur terre labourée. */
   plants?: string;

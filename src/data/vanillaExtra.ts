@@ -377,7 +377,7 @@ item('nether_star', 'Étoile du Nether', 'gem', ['#e8e8f0', '#ffffff']);
 item('dragon_breath', 'Souffle de dragon', 'lump', ['#c040ff', '#f0a0ff']);
 item('clock', 'Montre', 'compass', ['#f0c030', '#8a6a1a']);
 item('trident', 'Trident', 'stick', ['#3aa098', '#8ae0d8'], { maxStack: 1, damage: 9, tab: 'combat' });
-item('shield', 'Bouclier', 'leather', ['#8a6236', '#a0a0a0'], { maxStack: 1, tab: 'combat' });
+item('shield', 'Bouclier', 'leather', ['#8a6236', '#a0a0a0'], { maxStack: 1, tab: 'combat', durability: 336 });
 // arbalète : se charge en maintenant « utiliser », tire au toucher suivant (Tir multiple, Perforation, Charge rapide)
 item('crossbow', 'Arbalète', 'bow', ['#5a3e22', '#a0a0a0'], { maxStack: 1, tab: 'combat', tool: { type: 'sword', tier: 0, speed: 1, durability: 465, material: 'wood' } });
 shaped('crossbow', 'crossbow', 1, ['SIS', 'THT', ' S '], { S: 'stick', I: 'iron_ingot', T: 'string', H: 'tripwire_hook' });

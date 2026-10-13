@@ -29,6 +29,9 @@ import { Wolf, Villager } from '../entities/Creatures';
 /** Face moteur (0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z) d'une normale. */
 const faceOf = (t: RayHit) => (t.nx > 0 ? 0 : t.nx < 0 ? 1 : t.ny > 0 ? 2 : t.ny < 0 ? 3 : t.nz > 0 ? 4 : 5);
 
+/** Se mangent même rassasié, comme le jeu original. */
+const ALWAYS_EDIBLE = new Set(['golden_apple', 'enchanted_golden_apple', 'chorus_fruit', 'suspicious_stew', 'honey_bottle']);
+
 export interface PlacementPreview {
   x: number;
   y: number;
@@ -92,8 +95,14 @@ export class PlayerInteraction {
   private useRepeat = 0;
   /** Indicateur d'interaction pour le HUD. */
   hint: '' | 'mine' | 'attack' | 'open' | 'place' | 'eat' | 'feed' = '';
-  eatTimer = 0;
   bowCharge = 0;
+  /**
+   * Objet en cours de consommation, comme le jeu original : 1,6 s (0,8 s pour le varech séché)
+   * en maintenant « utiliser » ; au toucher, la consommation continue seule jusqu'au bout.
+   */
+  consuming: { kind: 'eat' | 'drink'; id: string; slot: number; t: number; dur: number; touch: boolean; next: number } | null = null;
+  /** Bouclier levé depuis (s) : il ne protège qu'après 0,25 s, comme le jeu original. */
+  private raise = 0;
 
   constructor(private ctx: GameContext, private input: InputState, private entities: EntityManager, private host: InteractionHost) {}
 
@@ -188,6 +197,13 @@ export class PlayerInteraction {
       this.useRepeat = 0.28;
       this.use(true);
     }
+    this.updateConsume(dt);
+    // bouclier : levé en maintenant « utiliser » (bouclier en main) ou accroupi avec un bouclier dans
+    // la barre (la seconde main de l'édition mobile) ; il protège après 0,25 s
+    const shield = held?.id === 'shield' ? this.input.useHeld : p.sneaking && inv.slots.slice(0, 9).some((st) => st?.id === 'shield');
+    this.raise = shield && p.shieldCooldown <= 0 && !this.consuming ? this.raise + dt : 0;
+    p.blocking = this.raise >= 0.25;
+    p.usingItem = !!this.consuming || this.raise > 0 || this.bowCharge > 0;
     // pêche : touche, poisson à remonter, bouchon trop loin
     if (this.fishing) this.updateFishing(dt, held?.id);
     // arc : maintenir utiliser charge, relâcher tire
@@ -582,6 +598,66 @@ export class PlayerInteraction {
       }
     }
     if (!repeat && held.id === 'potion') {
+      this.startConsume('drink', held.id);
+      return;
+    }
+    if (!repeat && def?.food && (p.hunger < 20 || p.creative || ALWAYS_EDIBLE.has(held.id))) {
+      this.startConsume('eat', held.id);
+      return;
+    }
+    this.useMore(repeat);
+  }
+
+  private startConsume(kind: 'eat' | 'drink', id: string) {
+    if (this.consuming) return;
+    this.consuming = { kind, id, slot: this.ctx.player.inventory.selected, t: 0, dur: id === 'dried_kelp' ? 0.8 : 1.6, touch: this.input.mode === 'touch', next: 0.35 };
+  }
+
+  /** Consommation en cours : bruit de mastication ou de gorgée et miettes, puis l'effet à la fin. */
+  private updateConsume(dt: number) {
+    const c = this.consuming;
+    if (!c) return;
+    const p = this.ctx.player;
+    const inv = p.inventory;
+    const st = inv.slots[inv.selected];
+    const holding = c.touch || this.input.useHeld || this.input.attack;
+    if (p.dead || !st || st.id !== c.id || inv.selected !== c.slot || !holding) {
+      this.consuming = null;
+      return;
+    }
+    c.t += dt;
+    if (c.t >= c.next) {
+      // toutes les 4 ticks (0,2 s) à partir du premier quart, comme le jeu original
+      c.next += 0.2;
+      const [ox, oy, oz, dx, , dz] = this.eye();
+      if (c.kind === 'eat') {
+        this.ctx.audio.play('munch', { volume: 0.5 + 0.5 * Math.random(), pitch: 0.8 + Math.random() * 0.4 });
+        this.ctx.particles.burst('dust', ox + dx * 0.4, oy - 0.15, oz + dz * 0.4, 3);
+      } else this.ctx.audio.play('drink', { volume: 0.5, pitch: 0.9 + Math.random() * 0.2 });
+    }
+    if (c.t >= c.dur) {
+      this.consuming = null;
+      this.finishConsume(st);
+    }
+  }
+
+  /** Fin de la consommation : effets de la nourriture, de la potion ou du lait. */
+  private finishConsume(held: ItemStack) {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const inv = p.inventory;
+    if (ItemRegistry.get(held.id)?.use === 'milk') {
+      // le lait retire tous les effets, comme le jeu original
+      p.effects.clear();
+      p.poisonTimer = 0;
+      p.regenEffect = 0;
+      if (!p.creative) {
+        inv.slots[inv.selected] = { id: 'bucket', count: 1 };
+        inv.changed();
+      }
+      return;
+    }
+    if (held.id === 'potion') {
       const pot = potionOf(held)!;
       applyPotion(p.effects, p.effectTarget, pot);
       if (!p.creative) {
@@ -593,6 +669,22 @@ export class PlayerInteraction {
       ctx.stats.inc('potionsDrunk');
       return;
     }
+    if (p.eat(held.id)) {
+      const eaten = { ...held };
+      if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+      hooks.consumed?.(eaten);
+      ctx.audio.play('burp', { volume: 0.5, pitch: 0.9 + Math.random() * 0.1 });
+      ctx.stats.inc('eaten');
+    }
+  }
+
+  /** Suite de use() : objets d'action immédiate (arbalète, canne, potions jetables…). */
+  private useMore(repeat: boolean) {
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const inv = p.inventory;
+    const held = inv.selectedStack;
+    if (!held) return;
     if (!repeat && held.id === 'crossbow' && held.meta?.charged) {
       this.fireCrossbow();
       return;
@@ -612,17 +704,6 @@ export class PlayerInteraction {
       this.entities.combat.swing = 1;
       if (!p.creative) inv.takeFromSlot(inv.selected, 1);
       return;
-    }
-    // 6) manger
-    if (!repeat && def.food) {
-      if (p.eat(held.id)) {
-        const eaten = { ...held };
-        if (!p.creative) inv.takeFromSlot(inv.selected, 1);
-        hooks.consumed?.(eaten);
-        ctx.audio.play('eat');
-        ctx.particles.burst('dust', p.x, p.y + 1.4, p.z, 4);
-        ctx.stats.inc('eaten');
-      }
     }
   }
 
@@ -851,13 +932,8 @@ export class PlayerInteraction {
         return true;
       }
       case 'milk':
-        p.poisonTimer = 0;
-        p.regenEffect = 0;
-        ctx.audio.play('eat');
-        if (!p.creative) {
-          inv.slots[inv.selected] = { id: 'bucket', count: 1 };
-          inv.changed();
-        }
+        // bu en 1,6 s (voir updateConsume)
+        this.startConsume('drink', itemId);
         return true;
       case 'bone_meal': {
         if (!t) return false;

@@ -85,7 +85,7 @@ const MOB_DIRS: Record<string, [string, string, string, string]> = {
 
 /** Sons courants : nom du son synthétisé → fichiers du pack (le premier trouvé). */
 const COMMON: Record<string, string[]> = {
-  pop: ['random/pop'], eat: ['random/eat'], burp: ['random/burp'], levelup: ['random/levelup'], xp: ['random/orb'],
+  pop: ['random/pop'], eat: ['random/eat'], munch: ['random/eat'], cave_mood: ['ambient/cave/cave1', 'ambient/cave/cave2', 'ambient/cave/cave3', 'ambient/cave/cave4', 'ambient/cave/cave5'], drink: ['random/drink'], burp: ['random/burp'], shield_block: ['item/shield/block'], shield_break: ['item/shield/break'], levelup: ['random/levelup'], xp: ['random/orb'],
   explode: ['random/explode'], fuse: ['random/fuse'], bow: ['random/bow'], click: ['random/click'],
   door_open: ['random/door_open', 'block/wooden_door/open'], door_close: ['random/door_close', 'block/wooden_door/close'],
   chest_open: ['random/chestopen', 'block/chest/open'], chest_close: ['random/chestclosed', 'block/chest/close'],

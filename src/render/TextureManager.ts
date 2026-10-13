@@ -778,8 +778,9 @@ export class TextureManager implements SkinProvider {
   }
 
   /** Image tenue en main : texture « _in_hand » du pack (lances) sinon l'icône. */
-  heldCanvas(itemId: string): HTMLCanvasElement {
-    const img = this.view?.get(`item/${itemId}_in_hand.png`);
+  heldCanvas(itemId: string, texture?: string): HTMLCanvasElement {
+    // variante d'état (arc ou arbalète en tension) : texture du pack si présente
+    const img = (texture && this.view?.get(`item/${texture}.png`)) || this.view?.get(`item/${itemId}_in_hand.png`);
     if (!img) return this.iconCanvas(itemId);
     const c = document.createElement('canvas');
     c.width = c.height = 32;

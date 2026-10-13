@@ -85,12 +85,49 @@ export class Player {
     return 20 + 2 * Math.min(5, Math.floor(this.level / 5)) + 4 * this.effects.level('health_boost');
   }
   private lastMaxHealth = 20;
+  /** Vol plané en élytres (tenu à jour par le contrôleur). */
+  gliding = false;
+  /** Bouclier levé : les coups et projectiles venus de face sont bloqués. */
+  blocking = false;
+  /** Bouclier désactivé par un coup de hache (secondes). */
+  shieldCooldown = 0;
+  /** Objet en cours d'utilisation (manger, boire, arc, bouclier…) : le joueur ralentit, comme le jeu original. */
+  usingItem = false;
+  /** Coup bloqué par le bouclier (son, recul de l'attaquant ; branché par la session). */
+  onShieldBlock: (attacker: Actor | null, broken: boolean) => void = () => {};
   /** Points de vie d'absorption (cœurs dorés), consommés avant la santé. */
   absorption = 0;
   /** Épines : l'attaquant au corps à corps est blessé (branché par la session). */
   onThorns: (attacker: Actor, dmg: number) => void = () => {};
   /** Totem d'immortalité utilisé (effets visuels et sonores, branchés par la session). */
   onTotem: () => void = () => {};
+
+  /** La source du coup est devant le joueur (position de l'attaquant, sinon sens du recul). */
+  private facesSource(src: { x: number; z: number } | null, knockX: number, knockZ: number): boolean {
+    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    if (src) return (src.x - this.x) * fx + (src.z - this.z) * fz > 0;
+    // sans position : le recul pousse vers l'arrière quand le coup vient de face
+    return knockX * fx + knockZ * fz < 0;
+  }
+
+  /** Coup bloqué : usure du bouclier (1 + dégâts, à partir de 3), une hache le désactive 5 s. */
+  private blockWithShield(amount: number, attacker: Actor | null) {
+    const inv = this.inventory;
+    let i = inv.selectedStack?.id === 'shield' ? inv.selected : inv.slots.slice(0, 9).findIndex((st) => st?.id === 'shield');
+    if (i < 0) i = inv.selected;
+    const st = inv.slots[i];
+    if (st?.id === 'shield' && amount >= 3 && st.durability !== undefined) {
+      st.durability -= 1 + Math.floor(amount);
+      if (st.durability <= 0) inv.slots[i] = null;
+      inv.changed();
+    }
+    const axe = !!attacker && 'def' in attacker && /^(vindicator|piglin_brute)$/.test((attacker as { def: { key: string } }).def.key);
+    if (axe) {
+      this.shieldCooldown = 5;
+      this.blocking = false;
+    }
+    this.onShieldBlock(attacker, axe);
+  }
 
   /**
    * Totem d'immortalité : tenu en main (ou dans la barre d'objets, le jeu n'ayant pas de seconde
@@ -114,7 +151,7 @@ export class Player {
     return true;
   }
   get eyeHeight() {
-    return this.swimming || this.crawling ? 0.4 : this.sneaking ? SNEAK_EYE_HEIGHT : EYE_HEIGHT;
+    return this.swimming || this.crawling || this.gliding ? 0.4 : this.sneaking ? SNEAK_EYE_HEIGHT : EYE_HEIGHT;
   }
   get creative() {
     return this.gameMode === 'creative';
@@ -141,6 +178,11 @@ export class Player {
     if (source === 'mob' || source === 'projectile' || source === 'boss') {
       dmg *= DIFFICULTY_DAMAGE[this.difficulty];
       if (this.difficulty === 'peaceful') return 0;
+    }
+    // bouclier levé : bloque tout ce qui vient de face (coups, projectiles, explosions)
+    if (this.blocking && (source === 'mob' || source === 'projectile' || source === 'boss' || source === 'explosion') && this.facesSource(projectile ?? attacker, knockX, knockZ)) {
+      this.blockWithShield(amount, attacker);
+      return 0;
     }
     if (source === 'mob' || source === 'projectile' || source === 'boss' || source === 'contact') {
       const def = this.inventory.defense();
@@ -238,7 +280,7 @@ export class Player {
   eat(itemId: string): boolean {
     const food = ItemRegistry.get(itemId)?.food;
     if (!food) return false;
-    if (this.hunger >= 20 && !this.creative && itemId !== 'golden_apple') return false;
+    if (this.hunger >= 20 && !this.creative && !/^(golden_apple|enchanted_golden_apple|chorus_fruit|suspicious_stew|honey_bottle)$/.test(itemId)) return false;
     this.hunger = Math.min(20, this.hunger + food.hunger);
     if (food.effect === 'regen') this.regenEffect = 5;
     this.saturation = Math.min(this.hunger, this.saturation + food.saturation);
@@ -316,6 +358,7 @@ export class Player {
       }
     }
     // air
+    if (this.shieldCooldown > 0) this.shieldCooldown = Math.max(0, this.shieldCooldown - dt);
     // fin de l'absorption ou du bonus de vie
     if (this.absorption > 0 && !this.effects.level('absorption')) this.absorption = 0;
     // le maximum baisse (fin du Bonus de vie) : la santé en trop est perdue

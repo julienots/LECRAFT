@@ -26,6 +26,8 @@ export class PlayerAvatar {
     this.model.parts.get('armR')?.[0]?.add(this.item);
   }
 
+  private armRest: [number, number] | null = null;
+
   get group() {
     return this.model.group;
   }
@@ -33,6 +35,8 @@ export class PlayerAvatar {
   update(o: {
     x: number; y: number; z: number; yaw: number; pitch: number; phase: number; speed: number; swing: number;
     sneaking: boolean; held: string; light: number; hurt: boolean; visible: boolean; prone?: boolean;
+    /** Pose des bras pendant l'utilisation d'un objet (HumanoidModel.ArmPose du jeu original). */
+    use?: 'bow' | 'block' | 'spear' | null;
   }) {
     const g = this.model.group;
     g.visible = o.visible;
@@ -41,6 +45,31 @@ export class PlayerAvatar {
     g.rotation.y = o.yaw + Math.PI;
     this.model.animate(o.phase / 2.2, Math.min(1, o.speed / 4.3), 0, o.swing, 0, o.pitch);
     this.model.crouch(o.sneaking && !o.prone);
+    const R = this.model.parts.get('armR')?.[0], L = this.model.parts.get('armL')?.[0];
+    // angles de repos (l'animation de marche ne touche pas à la rotation Y des bras)
+    if (R && L) {
+      this.armRest ??= [R.rotation.y, L.rotation.y];
+      R.rotation.y = this.armRest[0];
+      L.rotation.y = this.armRest[1];
+    }
+    if (R && L && o.use) {
+      const head = -o.pitch;
+      if (o.use === 'bow') {
+        // arc bandé (et arbalète) : les deux bras tendus vers le regard
+        R.rotation.x = -Math.PI / 2 + head;
+        L.rotation.x = -Math.PI / 2 + head;
+        R.rotation.y = 0.1;
+        L.rotation.y = -0.5;
+      } else if (o.use === 'block') {
+        // bouclier levé devant le torse
+        R.rotation.x = R.rotation.x * 0.5 - 0.9425;
+        R.rotation.y = Math.PI / 6;
+      } else {
+        // trident armé au-dessus de l'épaule
+        R.rotation.x = R.rotation.x * 0.5 - Math.PI;
+        R.rotation.y = 0;
+      }
+    }
     // nage / rampe : corps à l'horizontale
     g.rotation.order = 'YXZ';
     g.rotation.x = o.prone ? Math.PI / 2 : 0;

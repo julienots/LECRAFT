@@ -66,7 +66,7 @@ export class MultiplayerHost {
 
   private stateOf(): PlayerState {
     const p = this.s.player;
-    const f = (p.sneaking ? 1 : 0) | (p.swimming || p.crawling ? 2 : 0) | (this.swingFlag || this.s.entities.combat.swing > 0.5 ? 4 : 0) | (p.dead ? 8 : 0) | (p.creative ? 16 : 0);
+    const f = (p.sneaking ? 1 : 0) | (p.swimming || p.crawling || p.gliding ? 2 : 0) | (this.swingFlag || this.s.entities.combat.swing > 0.5 ? 4 : 0) | (p.dead ? 8 : 0) | (p.creative ? 16 : 0);
     this.swingFlag = false;
     return { id: this.link.myId, name: p.name, skin: this.s.game.settings.playerSkin ?? 'steve', x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, f, held: p.inventory.selectedStack?.id ?? '', hp: p.health };
   }

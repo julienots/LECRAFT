@@ -28,7 +28,7 @@ class ItemRegistryImpl {
   }
   maxDurability(key: string) {
     const d = this.map.get(key);
-    return d?.tool?.durability ?? d?.armor?.durability ?? 0;
+    return d?.tool?.durability ?? d?.armor?.durability ?? d?.durability ?? 0;
   }
   all(): ItemDef[] {
     return [...this.map.values()];

@@ -220,6 +220,18 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.shear = s.mix({ buf: s.noise(0.08, { hp: 3500, decay: 40, gain: 0.5 }) }, { buf: s.noise(0.08, { hp: 3500, decay: 40, gain: 0.5 }), at: 0.1 });
   out.ignite = s.noise(0.3, { hp: 2500, lp: 7000, decay: 12, gain: 0.4, crackle: 0.8 });
   out.burp = s.tone(0.3, 160, 110, { wave: 'saw', decay: 6, gain: 0.25, vibrato: 0.1, vibRate: 30 });
+  // humeur des grottes : son étrange et lointain (ambient.cave du jeu original)
+  out.cave_mood = s.mix(
+    { buf: s.tone(2.2, 140, 70, { wave: 'tri', decay: 1.2, gain: 0.25, vibrato: 0.03, vibRate: 3 }) },
+    { buf: s.noise(2.4, { lp: 500, decay: 1.4, gain: 0.5, attack: 0.3 }) },
+    { buf: s.tone(1.6, 420, 380, { decay: 1.8, gain: 0.06, vibrato: 0.05, vibRate: 5 }), at: 0.4 },
+  );
+  // une bouchée (mastication répétée toutes les 0,2 s) et une gorgée
+  out.munch = s.noise(0.08, { lp: 2500, hp: 400, decay: 30, gain: 0.6, seed: 5, crackle: 0.5 });
+  out.drink = s.mix({ buf: s.tone(0.12, 220, 140, { wave: 'tri', decay: 14, gain: 0.3 }) }, { buf: s.noise(0.1, { lp: 900, hp: 150, decay: 18, gain: 0.25 }) });
+  // bouclier : choc sourd du bois, et craquement quand une hache le désactive
+  out.shield_block = s.mix({ buf: s.noise(0.12, { lp: 900, decay: 22, gain: 0.8 }) }, { buf: s.tone(0.1, 140, 90, { decay: 25, gain: 0.4 }) });
+  out.shield_break = s.mix({ buf: s.noise(0.3, { lp: 2400, hp: 300, decay: 9, gain: 0.8, crackle: 0.7 }) }, { buf: s.tone(0.2, 180, 70, { decay: 12, gain: 0.3 }) });
   return out;
 }
 
@@ -254,5 +266,31 @@ export function buildAmbience(s: SynthContext): Record<string, Float32Array> {
     const f = 2600 + Math.sin(ph * 40) * 500;
     return Math.sin(2 * Math.PI * f * t) * 0.07 * Math.sin((ph / 0.35) * Math.PI);
   });
-  return { wind, rain, cave, crickets, birds };
+  // sous l'eau : grondement étouffé qui enfle lentement
+  let uw = 0;
+  const underwater = s.loop(8, (t) => {
+    const v = r.next() * 2 - 1;
+    uw = uw * 0.997 + v * 0.003;
+    return uw * (9 + Math.sin(t * 0.8) * 3) + Math.sin(2 * Math.PI * 38 * t) * 0.03;
+  });
+  // biomes du Nether (boucles d'ambiance du jeu original) : grondement, bourdonnements, souffle, sifflement
+  const rumble = (base: number, wob: number, gain: number, hiss = 0, whoosh = 0, tone = 0) => {
+    let a = 0, b = 0;
+    return s.loop(8, (t) => {
+      const v = r.next() * 2 - 1;
+      a = a * 0.996 + v * 0.004;
+      b = b * 0.7 + v * 0.3;
+      const swell = 1 + Math.sin(t * wob) * 0.5;
+      return a * gain * swell + Math.sin(2 * Math.PI * base * t) * 0.05 * swell + (v - b) * hiss + a * whoosh * Math.max(0, Math.sin(t * 0.6)) * 8 + Math.sin(2 * Math.PI * tone * t + Math.sin(t * 1.7) * 3) * (tone ? 0.025 : 0);
+    });
+  };
+  const nether_wastes = rumble(42, 0.5, 7);
+  const crimson = rumble(55, 0.9, 6, 0, 0, 180);
+  const warped = rumble(70, 0.7, 4, 0, 0, 310);
+  const soul = rumble(35, 0.35, 3, 0, 1);
+  const basalt = rumble(48, 1.1, 5, 0.12);
+  return { wind, rain, cave, crickets, birds, underwater, nether_wastes, crimson, warped, soul, basalt };
 }
+
+/** Boucles d'ambiance connues (ordre de mise à jour). */
+export const AMBIENCE = ['wind', 'rain', 'cave', 'crickets', 'birds', 'underwater', 'nether_wastes', 'crimson', 'warped', 'soul', 'basalt'];

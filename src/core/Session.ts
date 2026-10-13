@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { updateAnimLUT } from '../render/ChunkMaterial';
+import type { HeldUse } from '../render/HeldItem';
 import { PortalView } from '../render/PortalView';
 import { AmbientParticles } from '../render/AmbientParticles';
 import { applyPotion, potionColor } from '../inventory/Potions';
@@ -354,7 +355,8 @@ export class Session implements GameContext {
       view: () => ({ fov: game.renderer.camera.fov, aspect: game.renderer.camera.aspect }),
       canEdit: (x, y, z, a, b) => (!this.server || this.server.canEdit(x, y, z, a, b)) && (!this.smp || this.smp.canEdit(x, y, z)),
       afterBreak: (x, y, z, b, item) => this.smp?.afterBreak(x, y, z, b, item),
-      useItem: (id) => !!this.server?.useItem(id),
+      // fusée d'artifice en vol plané : poussée vers le regard
+      useItem: (id) => this.controller.useFirework(id) || !!this.server?.useItem(id),
       mobInteract: (m) => !!this.server?.mobInteract(m),
     });
     this.server = meta.server ? new ServerNetwork(this) : null;
@@ -380,6 +382,19 @@ export class Session implements GameContext {
       if (!m || (m as { kind?: string }).kind !== 'mob' || m.dead) return;
       this.entities.combat.damageMob(m, dmg, { kind: 'player', fromPlayer: true });
       this.particles.burst('crit', m.x, m.y + m.body.height * 0.6, m.z, 6);
+    };
+    // bouclier : choc, l'attaquant au corps à corps recule ; une hache le désactive (craquement)
+    this.player.onShieldBlock = (attacker, broken) => {
+      const p = this.player;
+      this.audio.play(broken ? 'shield_break' : 'shield_block', { x: p.x, y: p.y + 1, z: p.z, pitch: 0.8 + Math.random() * 0.4 });
+      const m = attacker as unknown as Mob;
+      if (m && (m as { kind?: string }).kind === 'mob' && !m.dead) {
+        const dx = m.x - p.x, dz = m.z - p.z, d = Math.hypot(dx, dz) || 1;
+        m.body.vx += (dx / d) * 5;
+        m.body.vz += (dz / d) * 5;
+        m.body.vy = Math.max(m.body.vy, 3);
+      }
+      if (broken) this.hud.toast('Bouclier désactivé', 'warn');
     };
     // totem d'immortalité : gerbe verte et jaune, son et message (comme le jeu original)
     this.player.onTotem = () => {
@@ -817,6 +832,35 @@ export class Session implements GameContext {
       n++;
     }
     if (n === 3) this.tickAcc = 0;
+  }
+
+  /** Texture d'état de l'objet tenu, comme les modèles du jeu original (arc et arbalète en tension, arbalète chargée). */
+  private heldVariant(id: string): string {
+    const c = this.interaction.bowCharge;
+    if (id === 'shield' && this.player.blocking) return '@blocking';
+    if (id === 'bow' && c > 0) return `@bow_pulling_${c < 0.65 ? 0 : c < 0.9 ? 1 : 2}`;
+    if (id === 'crossbow') {
+      if (this.player.inventory.selectedStack?.meta?.charged) return '@crossbow_arrow';
+      if (c > 0) return `@crossbow_pulling_${c < 0.58 ? 0 : c < 1 ? 1 : 2}`;
+    }
+    return '';
+  }
+
+  /** Humeur des grottes (0..1), comme le jeu original. */
+  private caveMood = 0;
+
+  /** Pose de l'objet tenu : consommation, arc, trident, arbalète ou bouclier en cours. */
+  private heldUse(): HeldUse | null {
+    const it = this.interaction, p = this.player;
+    const c = it.consuming;
+    if (c) return { kind: c.kind, ticks: c.t * 20, duration: c.dur * 20 };
+    if (p.blocking && p.inventory.selectedStack?.id === 'shield') return { kind: 'block', ticks: 0, duration: 0 };
+    if (it.bowCharge <= 0) return null;
+    const id = p.inventory.selectedStack?.id;
+    if (id === 'bow') return { kind: 'bow', ticks: it.bowCharge * 20, duration: 20 };
+    if (id === 'trident') return { kind: 'spear', ticks: (it.bowCharge / 1.6) * 20, duration: 10 };
+    if (id === 'crossbow') return { kind: 'crossbow', ticks: it.bowCharge * 25, duration: 25 };
+    return null;
   }
 
   /** Portail : 4 s dedans (1 s en créatif) pour changer de dimension ; il faut en sortir pour repartir. */
@@ -1311,9 +1355,9 @@ export class Session implements GameContext {
     } else if (tg && BlockRegistry.get(tg.block).render === 'cross') box = [2, 0, 2, 14, 13, 14];
     this.highlight.update(tg ? { x: tg.x, y: tg.y, z: tg.z, box } : null, this.interaction.miningProgress);
     const held = p.inventory.selectedStack?.id ?? '';
-    this.held.setItem(held);
+    this.held.setItem(held + this.heldVariant(held));
     const br = Math.max(nether ? 0.45 : 0.15, Math.pow(Math.max((light.sky / 15) * this.dayCycle.daylight, light.block / 15), 1.2));
-    this.held.update(cam.aspect, this.entities.combat.swing, this.controller.bobPhase * 2, Math.min(1, Math.hypot(p.body.vx, p.body.vz) / 4), br, p.sneaking);
+    this.held.update(cam.aspect, this.entities.combat.swing, this.controller.bobPhase * 2, Math.min(1, Math.hypot(p.body.vx, p.body.vz) / 4), br, p.sneaking, this.heldUse());
     // modèle du joueur (vues à la 3e personne)
     if (this.perspective && !this.avatar) {
       this.avatar = new PlayerAvatar(this.shadowTexture, this.skins, (id) => this.iconTexture(id), `player_${this.game.settings.playerSkin ?? 'steve'}`);
@@ -1325,23 +1369,43 @@ export class Session implements GameContext {
     }
     this.avatar?.update({
       x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, phase: this.controller.bobPhase, speed: Math.hypot(p.body.vx, p.body.vz),
-      swing: this.entities.combat.swing, sneaking: p.sneaking, held, light: br, hurt: p.hurtFlash > 0, prone: p.swimming || p.crawling,
+      swing: this.entities.combat.swing, sneaking: p.sneaking, held, light: br, hurt: p.hurtFlash > 0, prone: p.swimming || p.crawling || p.gliding,
       visible: this.perspective !== 0 && !p.dead && !p.effects.level('invisibility'),
+      use: ((u) => (!u ? null : u.kind === 'bow' || u.kind === 'crossbow' ? 'bow' : u.kind === 'block' || u.kind === 'spear' ? u.kind : null))(this.heldUse()),
     });
     // audio
     this.audio.setListener(p.x, p.y + p.eyeHeight, p.z, p.yaw);
-    const underground = light.sky < 5 && p.y < SEA_LEVEL + 4;
+    const inNether = this.dimension === 'nether';
+    const over = this.dimension === 'overworld';
+    const underground = over && light.sky < 5 && p.y < SEA_LEVEL + 4;
     const night = this.dayCycle.isNight;
+    // Nether : boucle d'ambiance propre à chaque biome (comme le jeu original)
+    const nb = inNether ? this.world.biomeAt(Math.floor(p.x), Math.floor(p.z)).key : '';
+    const dry = !underwater;
     this.audio.setAmbience(
       {
-        cave: underground ? 0.9 : 0,
-        wind: underground ? 0 : 0.25 + clamp((p.y - SEA_LEVEL - 20) / 40, 0, 0.6),
-        rain: sheltered ? rain * 0.4 : rain,
-        crickets: !underground && night && rain < 0.2 ? 0.5 : 0,
-        birds: !underground && !night && rain < 0.2 ? 0.45 : 0,
+        cave: underground && dry ? 0.9 : 0,
+        wind: over && !underground && dry ? 0.25 + clamp((p.y - SEA_LEVEL - 20) / 40, 0, 0.6) : 0,
+        rain: over ? (sheltered ? rain * 0.4 : rain) : 0,
+        crickets: over && !underground && dry && night && rain < 0.2 ? 0.5 : 0,
+        birds: over && !underground && dry && !night && rain < 0.2 ? 0.45 : 0,
+        underwater: underwater ? 0.8 : 0,
+        nether_wastes: inNether && dry && nb === 'nether_wastes' ? 0.8 : 0,
+        crimson: inNether && dry && nb === 'crimson_forest' ? 0.8 : 0,
+        warped: inNether && dry && nb === 'warped_forest' ? 0.8 : 0,
+        soul: inNether && dry && nb === 'soul_sand_valley' ? 0.8 : 0,
+        basalt: inNether && dry && nb === 'basalt_deltas' ? 0.8 : 0,
       },
       dt,
     );
+    // humeur des grottes : elle monte dans le noir complet ; à 100 %, un son étrange retentit tout près
+    if (over && light.sky === 0 && light.block <= 2) this.caveMood += dt / 120;
+    else this.caveMood = Math.max(0, this.caveMood - dt / 600);
+    if (this.caveMood >= 1) {
+      this.caveMood = 0;
+      const a = Math.random() * Math.PI * 2;
+      this.audio.play('cave_mood', { x: p.x + Math.cos(a) * 6, y: p.y + 1, z: p.z + Math.sin(a) * 6, volume: 0.7, pitch: 0.8 + Math.random() * 0.4 });
+    }
     this.audio.setMusicMood(
       this.dimension === 'nether' ? 'nether' : this.dimension === 'end' ? 'end' : this.dimension === 'paper' ? 'paper' : underwater ? 'underwater' : underground ? 'cave' : p.creative ? 'creative' : night ? 'night' : 'day',
     );
