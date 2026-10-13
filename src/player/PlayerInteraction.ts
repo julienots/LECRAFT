@@ -779,6 +779,12 @@ export class PlayerInteraction {
     // feuilles posées par le joueur : persistantes (ne se décomposent pas)
     // rail : nord-sud ou est-ouest selon le regard (puis raccordé aux voisins, world/Rails.ts)
     if (isRailKey(b.key)) return this.validate(mk(x, y, z, look & 1));
+    // piston : tourné vers le joueur, aussi vers le haut (regard vers le bas) ou le bas
+    if (b.key === 'piston' || b.key === 'sticky_piston') {
+      const p = this.ctx.player, cp = Math.cos(p.pitch), sp = Math.sin(p.pitch);
+      const vertical = Math.abs(sp) > Math.max(Math.abs(Math.sin(p.yaw) * cp), Math.abs(Math.cos(p.yaw) * cp));
+      return this.validate(mk(x, y, z, vertical ? (sp < 0 ? 4 : 5) : opposite(look)));
+    }
     return this.validate(mk(x, y, z, b.orientable ? opposite(look) : b.key.endsWith('_leaves') ? 1 : 0));
   }
 

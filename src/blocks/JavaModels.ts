@@ -136,8 +136,48 @@ function turnFace(d: number, steps: number): number {
   return ring[(ring.indexOf(d) + steps) & 3];
 }
 
+/** Rotations (repère centré) qui amènent la face +Y d'un modèle « debout » vers chaque orientation 0..5. */
+const SIX: ((v: V3) => V3)[] = [
+  ([x, y, z]) => [x, -z, y], // 0 sud (+Z)
+  ([x, y, z]) => [-y, x, z], // 1 ouest (-X)
+  ([x, y, z]) => [x, z, -y], // 2 nord (-Z)
+  ([x, y, z]) => [y, -x, z], // 3 est (+X)
+  (v) => v, // 4 haut
+  ([x, y, z]) => [x, -y, -z], // 5 bas
+];
+const DIR6: V3[] = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+const dirIndex = (v: V3) => DIR6.findIndex((d) => d[0] === Math.round(v[0]) && d[1] === Math.round(v[1]) && d[2] === Math.round(v[2]));
+
+/** Visuel d'un modèle décrit face vers le haut, tourné vers l'orientation `f` (0 sud, 1 ouest, 2 nord, 3 est, 4 haut, 5 bas). */
+export function rotateVisual6(v: BedrockVisual, f: number): BedrockVisual {
+  const r = SIX[f];
+  const pt = (x: number, y: number, z: number): V3 => {
+    const q = r([x - 8, y - 8, z - 8]);
+    return [q[0] + 8, q[1] + 8, q[2] + 8];
+  };
+  const quads = v.quads.map((q) => {
+    const p: number[] = [];
+    for (let i = 0; i < 4; i++) p.push(...pt(q.p[i * 3], q.p[i * 3 + 1], q.p[i * 3 + 2]));
+    return { ...q, p, edge: q.edge >= 0 ? dirIndex(r(DIR6[q.edge])) : -1, shade: q.shade >= 0 ? dirIndex(r(DIR6[q.shade])) : -1 };
+  });
+  const box = (b: Box): Box => {
+    const a = pt(b[0], b[1], b[2]), c = pt(b[3], b[4], b[5]);
+    return [Math.min(a[0], c[0]), Math.min(a[1], c[1]), Math.min(a[2], c[2]), Math.max(a[0], c[0]), Math.max(a[1], c[1]), Math.max(a[2], c[2])];
+  };
+  return { quads, collision: v.collision.map(box), selection: v.selection.map(box) };
+}
+
 /** Les quatre orientations (ou une seule) d'un modèle. */
 export function buildJavaVisuals(model: JModel): BedrockVisual[] {
+  // six orientations par état (pistons) : visuel n° orientation + 8 × état
+  if (model.six && model.variants) {
+    const out: BedrockVisual[] = [];
+    for (const v of model.variants) {
+      const up = buildJavaVisual(v, 0);
+      for (let f = 0; f < 8; f++) out.push(rotateVisual6(up, f < 6 ? f : 4));
+    }
+    return out;
+  }
   if (model.variants) return model.variants.map((v) => buildJavaVisual(v, 0));
   return model.facing ? [0, 1, 2, 3].map((m) => buildJavaVisual(model, m)) : [buildJavaVisual(model, 0)];
 }

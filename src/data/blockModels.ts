@@ -33,6 +33,8 @@ export interface JModel {
   steps?: number;
   /** Un modèle par méta (torches : 0 au sol, 1..4 au mur). */
   variants?: JModel[];
+  /** Variantes décrites face vers le haut, tournées dans les 6 directions : méta = orientation (0..5) + 8 × variante (pistons). */
+  six?: boolean;
 }
 
 type Tex = string | Partial<Record<FaceName | 'side' | 'all', string>>;
@@ -308,13 +310,24 @@ for (let i = 0; i < 4; i++) {
 }
 def('item_frame', { facing: true, els: [box([2, 2, 15], [14, 14, 16], { north: 'item_frame', south: 'item_frame', all: 'birch_planks' }, { uv: { north: [2, 2, 14, 14], south: [2, 2, 14, 14] } })], collision: [] });
 def('glow_item_frame', { facing: true, els: [box([2, 2, 15], [14, 14, 16], { north: 'glow_item_frame', south: 'glow_item_frame', all: 'birch_planks' }, { uv: { north: [2, 2, 14, 14], south: [2, 2, 14, 14] } })], collision: [] });
-def('piston_head', {
-  facing: true,
+// pistons : modèles décrits face vers le haut (méta = orientation 0 sud, 1 ouest, 2 nord, 3 est, 4 haut, 5 bas)
+// base : + 8 = sortie (face avant « piston_inner ») ; tête : + 8 = collante
+for (const [k, front, side] of [['piston', 'piston_top', 'piston'], ['sticky_piston', 'piston_top_sticky', 'sticky_piston']])
+  def(k, {
+    els: [],
+    six: true,
+    variants: [
+      { els: [box([0, 0, 0], [16, 16, 16], { up: front, down: 'piston_bottom', side })] },
+      { els: [box([0, 0, 0], [16, 12, 16], { up: 'piston_inner', down: 'piston_bottom', side }, { uv: { side: [0, 4, 16, 16] } })] },
+    ],
+  });
+const pistonHead = (front: string): JModel => ({
   els: [
-    box([0, 0, 0], [16, 16, 4], { north: 'piston_top', south: 'piston_inner', side: 'piston_side' }, { uv: { side: [0, 0, 16, 4] } }),
-    box([6, 6, 4], [10, 10, 16], 'piston_side', { uv: { side: [0, 4, 12, 8], up: [0, 4, 12, 8], down: [0, 4, 12, 8] }, skip: ['north'], frot: { west: 90, east: 270 } }),
+    box([0, 12, 0], [16, 16, 16], { up: front, down: 'piston_inner', side: 'piston_side' }),
+    box([6, 0, 6], [10, 12, 10], 'piston_side', { uv: { side: [0, 4, 12, 8] }, skip: ['up', 'down'], frot: { north: 90, south: 90, west: 90, east: 90 } }),
   ],
 });
+def('piston_head', { els: [], six: true, variants: [pistonHead('piston_top'), pistonHead('piston_top_sticky')] });
 def('big_dripleaf', {
   facing: true,
   els: [

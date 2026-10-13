@@ -220,6 +220,9 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.shear = s.mix({ buf: s.noise(0.08, { hp: 3500, decay: 40, gain: 0.5 }) }, { buf: s.noise(0.08, { hp: 3500, decay: 40, gain: 0.5 }), at: 0.1 });
   out.ignite = s.noise(0.3, { hp: 2500, lp: 7000, decay: 12, gain: 0.4, crackle: 0.8 });
   out.burp = s.tone(0.3, 160, 110, { wave: 'saw', decay: 6, gain: 0.25, vibrato: 0.1, vibRate: 30 });
+  // piston : glissement de pierre et choc mécanique (sortie plus aiguë que le retour)
+  out.piston_out = s.mix({ buf: s.noise(0.18, { lp: 1400, hp: 150, decay: 14, gain: 0.7 }) }, { buf: s.tone(0.12, 260, 180, { wave: 'square', decay: 22, gain: 0.08 }), at: 0.05 });
+  out.piston_in = s.mix({ buf: s.noise(0.18, { lp: 1100, hp: 120, decay: 14, gain: 0.7 }) }, { buf: s.tone(0.12, 200, 140, { wave: 'square', decay: 22, gain: 0.08 }), at: 0.05 });
   // humeur des grottes : son étrange et lointain (ambient.cave du jeu original)
   out.cave_mood = s.mix(
     { buf: s.tone(2.2, 140, 70, { wave: 'tri', decay: 1.2, gain: 0.25, vibrato: 0.03, vibRate: 3 }) },

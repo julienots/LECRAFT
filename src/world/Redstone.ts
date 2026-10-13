@@ -7,6 +7,7 @@ import type { World } from './World';
  * s'ouvrent qu'ainsi, comme dans le jeu original.
  *
  * Méta : levier / bouton bit 3 = activé ; plaque bit 0 = enfoncée ; ouvrants bit 2 = ouvert.
+ * Les pistons (world/Pistons.ts) utilisent les mêmes sources.
  */
 const kind = (id: number) => (id > 0 ? SHAPES[BlockRegistry.shape[id] - 1] : undefined);
 
@@ -74,6 +75,11 @@ export function updatePowerAround(world: World, x: number, y: number, z: number,
         const id = world.getBlock(px, py, pz);
         // distributeur, dropper, entonnoir : bit 8 = alimenté (front montant : tir ; entonnoir bloqué)
         const it = id > 0 ? BlockRegistry.get(id).interact : undefined;
+        // piston : mise à jour voisine (world/Pistons.ts, au tick du monde : sortie après 2 ticks)
+        if (id > 0 && (BlockRegistry.get(id).key === 'piston' || BlockRegistry.get(id).key === 'sticky_piston')) {
+          world.scheduleUpdate(px, py, pz);
+          continue;
+        }
         if (it === 'dispenser' || it === 'hopper') {
           const m = world.getMeta(px, py, pz);
           const p = poweredAt(world, px, py, pz);

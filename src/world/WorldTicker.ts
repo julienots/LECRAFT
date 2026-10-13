@@ -6,6 +6,7 @@ import type { GameContext } from '../core/GameContext';
 import type { EntitySpawner } from '../entities/Mob';
 import { buildTree } from './Trees';
 import { FluidSimulator } from './FluidSimulator';
+import { isPistonBase, isPistonHead, PistonSystem } from './Pistons';
 import { idx } from './ChunkData';
 import { updatedConnectionMeta } from '../addons/BlockRuntime';
 import type { TreeType } from '../data/biomes';
@@ -27,6 +28,7 @@ const SAPLING_TREES: Record<string, TreeType> = { oak_sapling: 'oak', spruce_sap
  */
 export class WorldTicker {
   readonly fluids = new FluidSimulator();
+  readonly pistons = new PistonSystem();
   randomTicksPerChunk = 12;
 
   /** Feuilles à vérifier (décomposition après la coupe d'un tronc), avec délai aléatoire. */
@@ -84,6 +86,8 @@ export class WorldTicker {
 
   tick(ctx: GameContext) {
     const w = ctx.world;
+    // 0) pistons (orientation à la pose, sorties / rentrées programmées)
+    this.pistons.tick(ctx, this.spawner);
     // 1) mises à jour voisines
     const q = w.updateQueue;
     w.updateQueue = [];
@@ -133,6 +137,10 @@ export class WorldTicker {
     const w = ctx.world;
     const id = w.getBlock(x, y, z);
     if (id <= 0) return;
+    if (isPistonBase(id) || isPistonHead(id)) {
+      this.pistons.neighborUpdate(ctx, this.spawner, x, y, z, id);
+      return;
+    }
     const b = BlockRegistry.get(id);
     if (b.liquid) {
       this.fluids.schedule(x, y, z, id);

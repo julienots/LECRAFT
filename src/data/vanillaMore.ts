@@ -91,8 +91,9 @@ cube('redstone_lamp', 'Lampe à redstone', (t) => { t.grain(['#5a3a24', '#4a2e1c
 cube('observer', 'Observateur', (t) => { t.grain(['#5a5a5a', '#6a6a6a'].map(hex), 0.4, 2); t.rect(3, 4, 10, 3, hex('#2a2a2a')); t.rect(3, 9, 10, 3, hex('#2a2a2a')); }, { hardness: 3, color: '#5a5a5a' });
 cube('dispenser', 'Distributeur', (t) => { paint.cobble(t, paint.ramp('#7a7a7a', 5, 0.4)); t.rect(5, 5, 6, 6, hex('#1a1a1a')); t.rect(6, 6, 4, 4, hex('#3a3a3a')); }, { hardness: 3.5, color: '#7a7a7a' });
 cube('dropper', 'Dropper', (t) => { paint.cobble(t, paint.ramp('#7a7a7a', 5, 0.4)); t.rect(5, 5, 6, 6, hex('#1a1a1a')); }, { hardness: 3.5, color: '#7a7a7a' });
-cube('piston', 'Piston', (t) => { paint.cobble(t, paint.ramp('#7a7a7a', 5, 0.4)); t.rect(0, 0, 16, 4, hex('#b8945f')); }, { hardness: 1.5, color: '#7a7a7a' });
-cube('sticky_piston', 'Piston collant', (t) => { paint.cobble(t, paint.ramp('#7a7a7a', 5, 0.4)); t.rect(0, 0, 16, 4, hex('#6ad850')); }, { hardness: 1.5, color: '#7a7a7a' });
+// pistons : modèle à 6 orientations (blockModels.ts), logique dans world/Pistons.ts
+cube('piston', 'Piston', (t) => { paint.cobble(t, paint.ramp('#7a7a7a', 5, 0.4)); t.rect(0, 0, 16, 4, hex('#b8945f')); }, { hardness: 1.5, minTier: 0, orientable: true, color: '#7a7a7a' });
+cube('sticky_piston', 'Piston collant', (t) => { paint.cobble(t, paint.ramp('#7a7a7a', 5, 0.4)); t.rect(0, 0, 16, 4, hex('#6ad850')); }, { hardness: 1.5, minTier: 0, orientable: true, color: '#7a7a7a' });
 cube('crafter', 'Fabricateur', (t) => { t.grain(['#7a7a7a', '#8a8a8a'].map(hex), 0.4, 2); t.border(hex('#4a4a4a')); t.rect(4, 4, 8, 8, hex('#b8945f')); }, { hardness: 1.5, color: '#7a7a7a' });
 cube('blast_furnace', 'Haut fourneau', (t) => { t.grain(['#5a5a5e', '#6a6a6e', '#4a4a4e'].map(hex), 0.4, 2); t.rect(3, 8, 10, 6, hex('#1a1a1a')); t.hline(3, 12, 10, hex('#8a8a8e')); }, { hardness: 3.5, color: '#5a5a5e' });
 cube('smoker', 'Fumoir', (t) => { paint.planks(t, '#5a4028'); t.rect(3, 8, 10, 6, hex('#1a1a1a')); }, { hardness: 3.5, tool: 'axe', minTier: 0, sound: 'wood', color: '#5a4028' });
