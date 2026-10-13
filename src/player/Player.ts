@@ -84,6 +84,7 @@ export class Player {
     // Bonus de vie : +2 cœurs par niveau
     return 20 + 2 * Math.min(5, Math.floor(this.level / 5)) + 4 * this.effects.level('health_boost');
   }
+  private lastMaxHealth = 20;
   /** Points de vie d'absorption (cœurs dorés), consommés avant la santé. */
   absorption = 0;
   /** Épines : l'attaquant au corps à corps est blessé (branché par la session). */
@@ -317,7 +318,10 @@ export class Player {
     // air
     // fin de l'absorption ou du bonus de vie
     if (this.absorption > 0 && !this.effects.level('absorption')) this.absorption = 0;
-    if (this.health > this.maxHealth) this.health = this.maxHealth;
+    // le maximum baisse (fin du Bonus de vie) : la santé en trop est perdue
+    const max = this.maxHealth;
+    if (max < this.lastMaxHealth && this.health > max) this.health = max;
+    this.lastMaxHealth = max;
     // Apnée (potion) ou Force de conduit : pas de noyade
     if (this.body.headInWater && !this.effects.level('water_breathing') && !this.effects.level('conduit_power')) {
       // Apnée (casque) : l'air baisse moins vite

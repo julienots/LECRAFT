@@ -163,6 +163,9 @@ try {
     p.inventory.selected = 0;
     return true;
   });
+  // le /fill reconstruit les tronçons : on attend qu'ils soient prêts, sinon une image lente
+  // retarde le relâcher du doigt au-delà de l'appui long (miner au lieu de poser)
+  await page.waitForFunction(() => window.__lecraft.session.chunks.pendingCount === 0, null, { timeout: 30000 }).catch(() => {});
   await wait(400);
   const before = await G(() => {
     const s = window.__lecraft.session, it = s.interaction;
@@ -174,15 +177,21 @@ try {
     for (let t = 0; t < 6 && !hit; t += 0.02) { const x = Math.floor(ox + dx * t), y = Math.floor(oy + dy * t), z = Math.floor(oz + dz * t); if (s.world.getBlock(x, y, z) > 0) hit = [x, y + 1, z]; }
     return { sx, sy, center, expect: hit };
   });
-  await touch('touchStart', [[before.sx, before.sy, 21]]);
-  await wait(60);
-  await touch('touchEnd', []);
+  // un toucher bref, envoyé dans la page (appui puis relâcher dans la même tâche) : avec le rendu
+  // logiciel, une image de plus de 280 ms retarde sinon le relâcher au-delà de l'appui long
+  await G((b) => {
+    const o = { pointerId: 21, pointerType: 'touch', isPrimary: true, clientX: b.sx, clientY: b.sy, bubbles: true, cancelable: true };
+    document.querySelector('.touch-layer').dispatchEvent(new PointerEvent('pointerdown', o));
+    window.dispatchEvent(new PointerEvent('pointerup', o));
+  }, before);
   await wait(400);
   const after = await G((b) => {
     const s = window.__lecraft.session, w = s.world, P = window.I('oak_planks');
     const atTap = b.expect && w.getBlock(b.expect[0], b.expect[1], b.expect[2]) === P;
     const atCenter = b.center && w.getBlock(b.center[0], b.center[1] + 1, b.center[2]) === P;
-    return { atTap, atCenter };
+    const found = [];
+    for (let x = b.expect[0] - 6; x <= b.expect[0] + 6; x++) for (let y = b.expect[1] - 3; y <= b.expect[1] + 4; y++) for (let z = b.expect[2] - 6; z <= b.expect[2] + 6; z++) if (w.getBlock(x, y, z) === P) found.push([x, y, z]);
+    return { atTap, atCenter, found, left: s.player.inventory.slots[0]?.count ?? 0 };
   }, before);
   check('Visée au doigt : le bloc est posé là où on touche (pas au viseur)', !!after.atTap && !after.atCenter, JSON.stringify({ before, after }));
 
