@@ -277,6 +277,9 @@ export class WorldGenerator implements TerrainQuery {
       blocks[i] = b;
     };
     const R = TREE_MAX_RADIUS;
+    // pas d'arbre dans l'emprise d'un village (feuillages au-dessus des rues et des toits)
+    const villages = this.structures.structuresNear(bx - R, bz - R, bx + CHUNK_SIZE + R, bz + CHUNK_SIZE + R).filter((v) => v.type.key === 'village').map((v) => v.inst);
+    const VILLAGE_R = 48 + R;
     for (let wz = bz - R; wz < bz + CHUNK_SIZE + R; wz++)
       for (let wx = bx - R; wx < bx + CHUNK_SIZE + R; wx++) {
         const col = this.column(wx, wz);
@@ -284,6 +287,7 @@ export class WorldGenerator implements TerrainQuery {
         if (biome.treeDensity <= 0 || col.height < SEA_LEVEL || col.river) continue;
         const hh = hash2(this.seed + 31, wx, wz);
         if ((hh & 0xffffff) / 0x1000000 >= biome.treeDensity) continue;
+        if (villages.some((v) => Math.abs(wx - v.x) <= VILLAGE_R && Math.abs(wz - v.z) <= VILLAGE_R)) continue;
         // pas d'arbre sur les versants raides ou la roche
         if (biome.key === 'mountain' && col.height > SEA_LEVEL + 46) continue;
         let total = 0;
