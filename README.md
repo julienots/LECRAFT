@@ -273,6 +273,37 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **Villages, structures du jeu original, hub HypXL et mini-jeux (v2.30)**
+  - **Villages proches de la 1.21** :
+    - chaque maison a une vraie porte (deux moitiés, tournée vers la rue) avec une marche et
+      un chemin à niveau devant ;
+    - rues principales et secondaires, styles plaine, désert, savane, taïga, taïga enneigée ;
+    - maisons avec un lit par villageois ;
+    - bâtiments de métier avec leur bloc de travail : bibliothèque, forge, boucher,
+      cartographe, temple, pêcheur, archer, tanneur, maçon, berger ;
+    - champs irrigués, enclos, puits, cloche, lampadaires ; plus d'arbres dans les rues.
+  - **Nouvelles structures**, avec `/locate structure <nom>` :
+    - pyramide du désert (salle secrète, piège à TNT) ;
+    - temple de la jungle (fil de déclenchement et distributeurs) ;
+    - igloo (sous-sol), cabane de sorcière, avant-poste de pillards ;
+    - épave, ruines sous-marines, portail en ruine (surface et Nether), ruines anciennes ;
+    - tables de butin proches du jeu Java ;
+    - aucune structure ne s'installe sur un village.
+  - **HypXL, un vrai hub de serveur** :
+    - PNJ de chaque jeu avec hologrammes et nombre de joueurs ;
+    - portail « Partie rapide », récompense quotidienne ;
+    - classements holographiques, parkour avec points de passage ;
+    - barre de boss, liste des joueurs avec rangs et ping (Tab ou `/list`), double saut.
+  - **Nouveaux mini-jeux** (12 jeux en tout) :
+    - **TNT Tag** : passez la TNT avant l'explosion ;
+    - **The Bridge** : marquez dans le trou adverse ;
+    - **Murder Mystery** : meurtrier, détective et innocents ;
+    - **Piliers de la Chance** : objets au hasard sur des piliers au-dessus du vide.
+  - **Pas encore fait** :
+    - mécanisme à leviers du temple de la jungle (le coffre caché s'atteint en minant) ;
+    - créatures placées à la génération (sorcière, golem dans la cage) ;
+    - Build Battle.
+
 - **Textures animées, consommation, bouclier, élytres, pistons et ambiances (v2.29)**
   - **Textures animées comme le jeu original** :
     - nombre d'images, vitesse, ordre et fondu repris des fichiers `.mcmeta` de la 1.21 ;
