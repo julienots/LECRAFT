@@ -3,19 +3,19 @@ import type { Screen } from './UIManager';
 import { el } from './dom';
 import { mcButton, mcLabel, mcRow, mcScreen } from './Mc';
 import { setMcText } from './McText';
-import { GAMES, SERVER_IP, SERVER_NAME, type ServerNetwork } from '../server/ServerNetwork';
+import { GAMES, NEW_GAMES, SERVER_IP, SERVER_NAME, type ServerNetwork } from '../server/ServerNetwork';
 import { COSMETICS, KIND_NAMES, MYSTERY_PRICE, RARITY_COLOR, type CosmeticKind } from '../server/Cosmetics';
 import { SMP_NAME } from '../server/SmpServer';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { GameKey } from '../server/ServerMaps';
 
-const ICON_FOR: Record<GameKey, string> = { bedwars: 'red_bed', skywars: 'grass_block', duels: 'iron_sword', sumo: 'slime_ball', blockparty: 'magenta_wool', tntrun: 'tnt', spleef: 'diamond_shovel', parkour: 'emerald_block' };
+const ICON_FOR: Record<GameKey, string> = { bedwars: 'red_bed', skywars: 'grass_block', duels: 'iron_sword', sumo: 'slime_ball', blockparty: 'magenta_wool', tntrun: 'tnt', spleef: 'diamond_shovel', parkour: 'emerald_block', murder: 'bow', bridge: 'red_terracotta', tnttag: 'flint_and_steel', pillars: 'bedrock' };
 
 /** Liste des serveurs (écran « Multijoueur ») : serveurs intégrés (mini-jeux, survie moddée). */
 export function serversScreen(game: Game): Screen {
   type Srv = { name: string; icon: string; motd: [string, string]; online: number; max: number; join: () => void };
   const servers: Srv[] = [
-    { name: SERVER_NAME, icon: 'red_bed', motd: [`§6§l      HypXL Network §r§7[1.21] §8${SERVER_IP}`, '§cBedWars §7· §eSkyWars §7· §6Sumo §7· §dBlock Party §7· §d§lCOSMÉTIQUES'], online: 38000 + Math.floor(Math.random() * 14000), max: 100000, join: () => game.joinServer() },
+    { name: SERVER_NAME, icon: 'red_bed', motd: [`§6§l      HypXL Network §r§7[1.21] §8${SERVER_IP}`, '§b§lNOUVEAU : §4Murder Mystery §7· §9The Bridge §7· §cTNT Tag §7· §5Piliers'], online: 38000 + Math.floor(Math.random() * 14000), max: 100000, join: () => game.joinServer() },
     { name: SMP_NAME, icon: 'oak_sapling', motd: ['§2§l       LeCraft SMP §r§7— survie moddée', '§fArbres entiers §7· §fFilons §7· §fTombes §7· §e/home /tpa /shop'], online: 4, max: 20, join: () => game.joinSmp() },
   ];
   let selected: Srv | null = null;
@@ -108,10 +108,12 @@ export function openShop(game: Game, items: [string, number, number][], coins: (
 export function openGameSelector(game: Game, net: ServerNetwork) {
   game.openScriptForm((close) => {
     const wins = net.profile.wins;
-    const rows = (Object.keys(GAMES) as GameKey[]).map((k) => {
+    // nouveaux jeux en tête du menu
+    const keys = (Object.keys(GAMES) as GameKey[]).sort((a, b) => Number(NEW_GAMES.includes(b)) - Number(NEW_GAMES.includes(a)));
+    const rows = keys.map((k) => {
       const g = GAMES[k];
       const label = el('span', { class: 'trade-row' }, el('img', { class: 'trade-icon', src: game.textures.iconURL(ICON_FOR[k]), alt: '' }), el('span', {}));
-      setMcText(label.lastChild as HTMLElement, `${g.color}§l${g.name} §r§8· §e${net.gameOnline(k).toLocaleString('fr-FR')} en jeu §8· §7${k === 'parkour' ? `record ${net.profile.bestParkour ? net.profile.bestParkour.toFixed(1) + ' s' : '-'}` : `${wins[k] ?? 0} victoire(s)`}`);
+      setMcText(label.lastChild as HTMLElement, `${NEW_GAMES.includes(k) ? '§b§lNOUVEAU ' : ''}${g.color}§l${g.name} §r§8· §e${net.gameOnline(k).toLocaleString('fr-FR')} en jeu §8· §7${k === 'parkour' ? `record ${net.profile.bestParkour ? net.profile.bestParkour.toFixed(1) + ' s' : '-'}` : `${wins[k] ?? 0} victoire(s)`}`);
       const b = mcButton(label, () => {
         close();
         net.join(k);

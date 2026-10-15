@@ -58,6 +58,10 @@ export class Bot extends Mob {
   private bowTimer = 1;
   /** Niveau 0..1 (précision, réflexes, cadence). */
   skill: number;
+  /** Niveau réseau affiché dans le chat et la liste des joueurs (« [42✫] »). */
+  level = 1 + Math.floor(Math.pow(Math.random(), 2.2) * 180);
+  /** Ping simulé (liste des joueurs). */
+  ping = 18 + Math.floor(Math.pow(Math.random(), 2) * 260);
   kills = 0;
   /** Dernier attaquant (pour créditer les éliminations). */
   lastAttacker: Bot | 'player' | null = null;
@@ -89,6 +93,8 @@ export class Bot extends Mob {
     this.model.parts.get('armR')?.[0]?.add(this.item);
   }
 
+  /** Taille du texte au-dessus de la tête (hologrammes de classement : plus grand). */
+  tagScale = 1;
   /** Pseudo (ou titre de PNJ, sur deux lignes séparées par \n) affiché au-dessus de la tête. */
   setTag(text: string) {
     const lines = text.split('\n');
@@ -122,9 +128,9 @@ export class Bot extends Mob {
     m.map = new THREE.CanvasTexture(c);
     m.map.colorSpace = THREE.SRGBColorSpace;
     m.needsUpdate = true;
-    const h = (lines.length * 0.28) / 0.9;
+    const h = (lines.length * 0.28 * this.tagScale) / 0.9;
     this.tag.scale.set((h * c.width) / c.height, h, 1);
-    this.tag.position.y = (2.1 + lines.length * 0.14) / 0.9;
+    this.tag.position.y = (2.1 + lines.length * 0.14 * this.tagScale) / 0.9;
   }
 
   /** Nom formaté pour le chat (rang + couleur). */

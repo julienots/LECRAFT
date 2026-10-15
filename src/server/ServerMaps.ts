@@ -16,12 +16,14 @@ const id = (k: string, fb: number) => (BlockRegistry.has(k) ? BlockRegistry.byNa
 /** Altitude du sol des cartes (on se tient en Y + 1). */
 export const FLOOR = 63;
 
-export type GameKey = 'skywars' | 'spleef' | 'duels' | 'parkour' | 'tntrun' | 'sumo' | 'blockparty' | 'bedwars';
+export type GameKey = 'skywars' | 'spleef' | 'duels' | 'parkour' | 'tntrun' | 'sumo' | 'blockparty' | 'bedwars' | 'tnttag' | 'bridge' | 'murder' | 'pillars';
 
 /** Hub HypXL : grande île flottante (place, fontaine, lettres géantes, quartiers, tours). */
-export const HUB = { x: 0, z: 0, radius: 56, spawn: { x: 0.5, y: FLOOR + 1, z: 44.5, yaw: Math.PI } };
+export const HUB = { x: 0, z: 0, radius: 56, spawn: { x: 0.5, y: FLOOR + 1, z: 44.5, yaw: 0 } };
 /** Socles des PNJ des jeux : arc au nord de la place. */
 const ARC_GAMES: { game: GameKey; block: string; accent: string }[] = [
+  { game: 'murder', block: 'black_concrete', accent: 'red_concrete' },
+  { game: 'bridge', block: 'blue_concrete', accent: 'red_concrete' },
   { game: 'bedwars', block: 'red_concrete', accent: 'red_wool' },
   { game: 'skywars', block: 'gold_block', accent: 'yellow_concrete' },
   { game: 'duels', block: 'diamond_block', accent: 'light_blue_concrete' },
@@ -29,11 +31,13 @@ const ARC_GAMES: { game: GameKey; block: string; accent: string }[] = [
   { game: 'blockparty', block: 'magenta_concrete', accent: 'lime_concrete' },
   { game: 'tntrun', block: 'redstone_block', accent: 'red_concrete' },
   { game: 'spleef', block: 'snow_block', accent: 'light_blue_wool' },
+  { game: 'pillars', block: 'bedrock', accent: 'purple_concrete' },
+  { game: 'tnttag', block: 'tnt', accent: 'red_concrete' },
   { game: 'parkour', block: 'emerald_block', accent: 'lime_wool' },
 ];
 export const HUB_NPCS: { game: GameKey; x: number; z: number; block: string; accent: string }[] = ARC_GAMES.map((g, i) => {
-  const a = -Math.PI / 2 + (i - (ARC_GAMES.length - 1) / 2) * (Math.PI / 9);
-  return { ...g, x: Math.round(Math.cos(a) * 30), z: Math.round(Math.sin(a) * 30) };
+  const a = -Math.PI / 2 + (i - (ARC_GAMES.length - 1) / 2) * (Math.PI / 14);
+  return { ...g, x: Math.round(Math.cos(a) * 32), z: Math.round(Math.sin(a) * 32) };
 });
 /** PNJ de services du hub (cosmétiques, boîtes mystères, survie, classements). */
 export const HUB_SERVICES = {
@@ -42,7 +46,13 @@ export const HUB_SERVICES = {
   smp: { x: 12, z: 38 },
   leaderboard: { x: -30, z: 26 },
   parkourStart: { x: -30, y: FLOOR + 1, z: 6 },
+  /** Récompense quotidienne (PNJ près de l'entrée). */
+  daily: { x: -12, z: 38 },
+  /** Portail « Partie rapide » au bout de l'avenue nord (cadre de x0 à x1, épaisseur en z). */
+  portal: { x0: -3, x1: 3, z: -42, y0: FLOOR + 1, y1: FLOOR + 5 },
 };
+/** Points de contrôle du parcours du hub (indices dans hubParkour()). */
+export const HUB_PARKOUR_CHECKS = [5, 10];
 /** Parcours du hub (autour de la tour ouest). */
 export function hubParkour() {
   const out: { x: number; y: number; z: number }[] = [];
@@ -69,6 +79,62 @@ export const BEDWARS_TEAMS: { name: string; color: string; wool: string; dx: num
   { name: 'Verte', color: '§a', wool: 'lime', dx: 0, dz: -1 },
   { name: 'Jaune', color: '§e', wool: 'yellow', dx: -1, dz: 0 },
 ];
+// ---------- nouveaux mini-jeux ----------
+/** TNT Tag : place fermée avec obstacles (caisses, bottes de foin). */
+export const TNTTAG = { x: 3600, z: 0, half: 15, outY: FLOOR - 10 };
+/** Obstacles de TNT Tag (coordonnées absolues, hauteur en blocs). */
+export function tntTagObstacles() {
+  const r = new Rng(7070);
+  const out: { x: number; z: number; h: number; block: string }[] = [];
+  for (let i = 0; i < 80 && out.length < 16; i++) {
+    const x = r.int(-TNTTAG.half + 2, TNTTAG.half - 2), z = r.int(-TNTTAG.half + 2, TNTTAG.half - 2);
+    const d = Math.hypot(x, z);
+    if (d < 3 || Math.abs(d - 9) < 2 || out.some((o) => Math.abs(o.x - TNTTAG.x - x) + Math.abs(o.z - TNTTAG.z - z) < 5)) continue;
+    const k = r.int(0, 2);
+    out.push({ x: TNTTAG.x + x, z: TNTTAG.z + z, h: k === 0 ? 1 : 2, block: ['hay_block', 'tnt', 'oak_log'][k] });
+  }
+  return out;
+}
+
+/** The Bridge : deux îles reliées par un pont étroit ; on marque en sautant dans le trou adverse. */
+export const BRIDGE = { x: 4000, z: 0, len: 18, goalZ: 23, spawnZ: 27, outY: FLOOR - 12, goals: 3 };
+export const BRIDGE_TEAMS: { name: string; color: string; block: string; side: 1 | -1 }[] = [
+  { name: 'Rouge', color: '§c', block: 'red', side: 1 },
+  { name: 'Bleue', color: '§9', block: 'blue', side: -1 },
+];
+/** Base d'une équipe : centre du trou (but), point d'apparition et orientation (vers le pont). */
+export function bridgeBase(i: number) {
+  const sd = BRIDGE_TEAMS[i].side;
+  return {
+    goal: [BRIDGE.x, FLOOR, BRIDGE.z + sd * BRIDGE.goalZ] as [number, number, number],
+    spawn: [BRIDGE.x + 0.5, FLOOR + 2, BRIDGE.z + sd * BRIDGE.spawnZ + 0.5] as [number, number, number],
+    yaw: sd > 0 ? 0 : Math.PI,
+  };
+}
+
+/** Murder Mystery : petit village clos (maisons, puits, étals). */
+export const MURDER = { x: 4400, z: 0, half: 22 };
+/** Maisons du village (centre, porte du côté de la place). */
+export const MURDER_HOUSES: { x: number; z: number }[] = [
+  { x: MURDER.x - 14, z: MURDER.z - 14 }, { x: MURDER.x, z: MURDER.z - 15 }, { x: MURDER.x + 14, z: MURDER.z - 14 },
+  { x: MURDER.x - 14, z: MURDER.z + 14 }, { x: MURDER.x, z: MURDER.z + 15 }, { x: MURDER.x + 14, z: MURDER.z + 14 },
+];
+/** Lieux où flânent les joueurs de Murder Mystery (place, rues, intérieur des maisons). */
+export function murderSpots(): [number, number][] {
+  const out: [number, number][] = [[MURDER.x + 5, MURDER.z], [MURDER.x - 5, MURDER.z], [MURDER.x, MURDER.z + 6], [MURDER.x, MURDER.z - 6], [MURDER.x + 17, MURDER.z], [MURDER.x - 17, MURDER.z], [MURDER.x + 8, MURDER.z + 8], [MURDER.x - 8, MURDER.z - 8], [MURDER.x - 8, MURDER.z + 8], [MURDER.x + 8, MURDER.z - 8]];
+  for (const h of MURDER_HOUSES) out.push([h.x + 0.5, h.z + 0.5]);
+  return out;
+}
+
+/** Pillars of Fortune : piliers de bedrock au-dessus du vide. */
+export const PILLARS = { x: 4800, z: 0, r: 9, n: 8, outY: FLOOR - 24 };
+export function pillarPositions(): [number, number][] {
+  return Array.from({ length: PILLARS.n }, (_, i): [number, number] => {
+    const a = (i / PILLARS.n) * Math.PI * 2;
+    return [PILLARS.x + Math.round(Math.cos(a) * PILLARS.r), PILLARS.z + Math.round(Math.sin(a) * PILLARS.r)];
+  });
+}
+
 /** Île d'une équipe de BedWars : centre, lit (pied, tête) et point de réapparition. */
 export function bedwarsIsland(i: number) {
   const t = BEDWARS_TEAMS[i];
@@ -224,6 +290,7 @@ function buildHub(set: Set3) {
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       for (const side of [-4, 4]) {
         const x = cx + dx * t + (dz ? side : 0), z = cz + dz * t + (dx ? side : 0);
+        if (HUB_NPCS.some((n) => Math.hypot(n.x - x, n.z - z) < 5)) continue;
         for (let y = 1; y <= 3; y++) set(x, FLOOR + y, z, id('dark_oak_fence', B.OAK_FENCE));
         set(x, FLOOR + 4, z, B.LANTERN);
       }
@@ -260,6 +327,33 @@ function buildHub(set: Set3) {
       set(n.x + dx, FLOOR + 1, n.z + dz, id('end_rod', B.OAK_FENCE));
     }
   }
+  // --- portail « Partie rapide » au bout de l'avenue nord (cadre d'obsidienne, champ violet)
+  {
+    const P = HUB_SERVICES.portal;
+    const frame = id('crying_obsidian', B.OBSIDIAN);
+    for (let x = P.x0 - 1; x <= P.x1 + 1; x++)
+      for (let y = P.y0 - 1; y <= P.y1 + 1; y++) {
+        const edge = x === P.x0 - 1 || x === P.x1 + 1 || y === P.y0 - 1 || y === P.y1 + 1;
+        if (!edge) continue;
+        const corner = (x === P.x0 - 1 || x === P.x1 + 1) && (y === P.y0 - 1 || y === P.y1 + 1);
+        set(cx + x, y, cz + P.z, corner ? gold : y === P.y0 - 1 ? id('purpur_block', frame) : frame);
+      }
+    for (let x = P.x0; x <= P.x1; x++) set(cx + x, P.y0 - 1, cz + P.z + 1, id('purpur_block', frame));
+    for (const x of [P.x0 - 2, P.x1 + 2]) {
+      for (let y = P.y0; y <= P.y1 + 2; y++) set(cx + x, y, cz + P.z, y === P.y1 + 2 ? lamp : id('purpur_pillar', qpillar));
+    }
+    set(cx, P.y1 + 2, cz + P.z, id('beacon', lamp));
+  }
+  // --- récompense quotidienne : estrade dorée, coffres et tonneaux
+  {
+    const { x: dx, z: dz } = HUB_SERVICES.daily;
+    disc(set, dx, dz, 3, FLOOR, (_x, _z, d) => (d < 1.2 ? gold : d < 2.4 ? id('yellow_concrete', quartz) : andesite));
+    for (const [ox, oz, b] of [[-2, 1, B.CHEST], [2, 1, B.CHEST], [-2, -1, id('barrel', B.OAK_PLANKS)], [2, -1, id('barrel', B.OAK_PLANKS)]] as [number, number, number][]) set(dx + ox, FLOOR + 1, dz + oz, b);
+    for (const ox of [-3, 3]) {
+      for (let y = 1; y <= 3; y++) set(dx + ox, FLOOR + y, dz + 2, id('dark_oak_fence', B.OAK_FENCE));
+      set(dx + ox, FLOOR + 4, dz + 2, B.LANTERN);
+    }
+  }
   // --- quartier est : boutique de cosmétiques (auvent rayé) et sanctuaire des boîtes mystères
   {
     const { x: sx, z: sz } = HUB_SERVICES.cosmetics;
@@ -289,10 +383,20 @@ function buildHub(set: Set3) {
     disc(set, tx, tz, 4, FLOOR + 18, (x, z, d) => (d > 3.3 && (x + z) % 2 ? B.AIR : bricks));
     disc(set, tx, tz, 4, FLOOR + 19, (x, z, d) => (d > 3.3 && (x + z) % 2 === 0 ? bricks : B.AIR));
     set(tx, FLOOR + 19, tz, lamp);
-    hubParkour().forEach((p, i, all) => set(p.x, p.y, p.z, i === 0 ? gold : i === all.length - 1 ? id('emerald_block', gold) : id(`${['white', 'yellow', 'lime', 'light_blue', 'magenta', 'orange'][i % 6]}_wool`, quartz)));
+    hubParkour().forEach((p, i, all) => set(p.x, p.y, p.z, i === 0 ? gold : i === all.length - 1 ? id('emerald_block', gold) : HUB_PARKOUR_CHECKS.includes(i) ? id('diamond_block', gold) : id(`${['white', 'yellow', 'lime', 'light_blue', 'magenta', 'orange'][i % 6]}_wool`, quartz)));
+    // mur des classements : deux panneaux (victoires, pièces) encadrés de lanternes de mer, podium devant
     const { x: lx, z: lz } = HUB_SERVICES.leaderboard;
-    for (let x = lx - 5; x <= lx + 5; x++) for (let y = FLOOR + 1; y <= FLOOR + 7; y++) set(x, y, lz + 1, x === lx - 5 || x === lx + 5 || y === FLOOR + 7 ? id('dark_oak_log', B.OAK_LOG) : id('dark_oak_planks', B.OAK_PLANKS));
-    for (const x of [lx - 3, lx, lx + 3]) set(x, FLOOR + 1, lz - 1, x === lx ? gold : x < lx ? id('iron_block', quartz) : id('copper_block', quartz));
+    for (let x = lx - 10; x <= lx + 10; x++)
+      for (let y = FLOOR + 1; y <= FLOOR + 8; y++) {
+        const frame = x === lx - 10 || x === lx + 10 || x === lx || y === FLOOR + 8 || y === FLOOR + 1;
+        set(x, y, lz + 1, frame ? (y === FLOOR + 8 && x % 3 === 0 ? lamp : id('dark_oak_log', B.OAK_LOG)) : id('black_concrete', id('dark_oak_planks', B.OAK_PLANKS)));
+        set(x, y, lz + 2, bricks);
+      }
+    for (const ox of [-5, 5]) {
+      set(lx + ox, FLOOR + 1, lz - 1, gold);
+      set(lx + ox - 2, FLOOR + 1, lz - 1, id('iron_block', quartz));
+      set(lx + ox + 2, FLOOR + 1, lz - 1, id('copper_block', quartz));
+    }
   }
   // --- entrée sud : arche et terrasse d'arrivée
   {
@@ -327,10 +431,11 @@ function buildHub(set: Set3) {
     const x = Math.round(cx + Math.cos(a) * d), z = Math.round(cz + Math.sin(a) * d);
     if (Math.abs(x) < 7 || Math.abs(z) < 7) continue;
     if (z < -20 && Math.abs(x) < 34) continue; // arc des jeux et logo
+    if (HUB_NPCS.some((n) => Math.hypot(n.x - x, n.z - z) < 9)) continue;
     if (x > 30 && Math.abs(z) < 16) continue; // boutique
     if (x < -30 && Math.abs(z) < 14) continue; // tour du parcours
-    if (Math.abs(x + 30) < 8 && Math.abs(z - 26) < 5) continue; // classements
-    if (Math.abs(x - 12) < 4 && Math.abs(z - 38) < 4) continue;
+    if (Math.abs(x + 30) < 13 && Math.abs(z - 26) < 6) continue; // classements
+    if (Math.abs(Math.abs(x) - 12) < 5 && Math.abs(z - 38) < 5) continue; // survie, récompense quotidienne
     if (trees.some(([, tx, tz]) => Math.hypot(tx - x, tz - z) < 7)) continue;
     trees.push([r.next() < 0.4 ? 'cherry' : r.next() < 0.5 ? 'birch' : 'oak', x, z]);
   }
@@ -510,6 +615,124 @@ function buildBedWars(set: Set3) {
   buildBedWarsBeds(set);
 }
 
+function buildTntTag(set: Set3) {
+  const { x, z, half } = TNTTAG;
+  const h = half + 1;
+  const a = id('smooth_stone', B.STONE), b = id('polished_andesite', B.STONE), red = id('red_concrete', B.STONE), wall = B.STONE_BRICKS;
+  for (let dz = -h; dz <= h; dz++)
+    for (let dx = -h; dx <= h; dx++) {
+      set(x + dx, FLOOR - 1, z + dz, B.STONE);
+      const ring = Math.abs(Math.hypot(dx, dz) - 9) < 0.55;
+      set(x + dx, FLOOR, z + dz, dx === 0 || dz === 0 || ring ? red : ((dx >> 1) + (dz >> 1)) & 1 ? a : b);
+    }
+  walls(set, x - h, z - h, x + h, z + h, FLOOR + 1, FLOOR + 3, wall);
+  walls(set, x - h, z - h, x + h, z + h, FLOOR + 4, FLOOR + 5, id('red_stained_glass', B.GLASS));
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) for (let y = FLOOR + 1; y <= FLOOR + 6; y++) set(x + sx * h, y, z + sz * h, y === FLOOR + 6 ? id('sea_lantern', B.GLASS) : id('tnt', wall));
+  for (const o of tntTagObstacles()) for (let y = 1; y <= o.h; y++) set(o.x, FLOOR + y, o.z, id(o.block, B.OAK_PLANKS));
+}
+
+function buildBridge(set: Set3) {
+  const { x, z, len } = BRIDGE;
+  BRIDGE_TEAMS.forEach((t, i) => {
+    const sd = t.side, base = bridgeBase(i);
+    const z0 = z + sd * (len + 1), z1 = z + sd * (BRIDGE.spawnZ + 3);
+    const [zl, zh] = sd > 0 ? [z0, z1] : [z1, z0];
+    for (let k = 0; k <= 4; k++)
+      for (let zz = zl + k; zz <= zh - k; zz++)
+        for (let xx = x - 6 + k; xx <= x + 6 - k; xx++) {
+          const edge = xx === x - 6 || xx === x + 6 || zz === zl || zz === zh;
+          set(xx, FLOOR - k, zz, k === 0 ? (edge ? id('white_terracotta', B.STONE) : id(`${t.block}_terracotta`, B.STONE)) : k === 1 ? B.DIRT : B.STONE);
+        }
+    // trou (but) : 3×3, 4 blocs de profondeur, fond d'obsidienne pleureuse, bords lumineux
+    const [gx, , gz] = base.goal;
+    for (let dz = -2; dz <= 2; dz++)
+      for (let dx = -2; dx <= 2; dx++) {
+        const inner = Math.abs(dx) <= 1 && Math.abs(dz) <= 1;
+        for (let y = FLOOR - 4; y <= FLOOR; y++) {
+          if (inner) set(gx + dx, y, gz + dz, y === FLOOR - 4 ? id('crying_obsidian', B.OBSIDIAN) : B.AIR);
+          else if (y < FLOOR) set(gx + dx, y, gz + dz, id('black_concrete', B.OBSIDIAN));
+          else set(gx + dx, y, gz + dz, Math.abs(dx) === 2 && Math.abs(dz) === 2 ? id('sea_lantern', B.GLASS) : id(`${t.block}_concrete`, B.STONE));
+        }
+      }
+    // estrade d'apparition et piliers de couleur
+    const [sx, , sz] = base.spawn;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) set(Math.floor(sx) + dx, FLOOR + 1, Math.floor(sz) + dz, id(`${t.block}_concrete`, B.STONE));
+    for (const ox of [-6, 6]) for (let y = FLOOR + 1; y <= FLOOR + 5; y++) set(x + ox, y, z + sd * (len + 1), y === FLOOR + 5 ? id('sea_lantern', B.GLASS) : id(`${t.block}_concrete`, B.STONE));
+  });
+  // pont : 3 blocs de large, moitié rouge, moitié bleue, centre blanc
+  for (let dz = -len; dz <= len; dz++)
+    for (let dx = -1; dx <= 1; dx++) set(x + dx, FLOOR, z + dz, Math.abs(dz) <= 1 ? id('white_concrete', B.SNOW_BLOCK) : id(`${dz > 0 ? 'red' : 'blue'}_terracotta`, B.STONE));
+}
+
+function buildMurder(set: Set3) {
+  const { x, z, half } = MURDER;
+  const h = half + 1;
+  const r = new Rng(5150);
+  const path = id('dirt_path', B.GRAVEL), cobble = B.COBBLESTONE ?? B.STONE;
+  for (let dz = -h; dz <= h; dz++)
+    for (let dx = -h; dx <= h; dx++) {
+      set(x + dx, FLOOR - 1, z + dz, B.DIRT);
+      const road = Math.abs(dx) <= 1 || Math.abs(dz) <= 1 || Math.abs(Math.hypot(dx, dz) - 6) < 1.2;
+      set(x + dx, FLOOR, z + dz, road ? (r.next() < 0.7 ? path : B.GRAVEL) : r.next() < 0.06 ? id('coarse_dirt', B.DIRT) : B.GRASS_BLOCK);
+    }
+  walls(set, x - h, z - h, x + h, z + h, FLOOR + 1, FLOOR + 5, id('mossy_stone_bricks', B.STONE_BRICKS));
+  for (let k = -h; k <= h; k += 6) for (const [ax, az] of [[k, -h], [k, h], [-h, k], [h, k]]) set(x + ax, FLOOR + 6, z + az, B.LANTERN);
+  // puits central
+  for (let dz = -2; dz <= 2; dz++)
+    for (let dx = -2; dx <= 2; dx++) {
+      const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
+      set(x + dx, FLOOR, z + dz, edge ? cobble : B.WATER);
+      if (edge) set(x + dx, FLOOR + 1, z + dz, cobble);
+    }
+  for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) for (let y = 2; y <= 3; y++) set(x + dx, FLOOR + y, z + dz, B.OAK_FENCE);
+  for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) set(x + dx, FLOOR + 4, z + dz, id('oak_slab', B.OAK_PLANKS));
+  // maisons : murs en planches, poteaux en bûches, toit plat, porte vers la place, fenêtres
+  const planks = [B.OAK_PLANKS, id('spruce_planks', B.OAK_PLANKS), id('birch_planks', B.OAK_PLANKS)];
+  MURDER_HOUSES.forEach((hs, i) => {
+    const wall = planks[i % planks.length], log = id(i % 2 ? 'spruce_log' : 'oak_log', B.OAK_LOG);
+    const doorSide = hs.z < z ? 1 : -1;
+    for (let dz = -3; dz <= 3; dz++)
+      for (let dx = -3; dx <= 3; dx++) {
+        set(hs.x + dx, FLOOR, hs.z + dz, wall);
+        const edge = Math.abs(dx) === 3 || Math.abs(dz) === 3;
+        for (let y = 1; y <= 4; y++) {
+          if (!edge) {
+            set(hs.x + dx, FLOOR + y, hs.z + dz, B.AIR);
+            continue;
+          }
+          const corner = Math.abs(dx) === 3 && Math.abs(dz) === 3;
+          const door = dz === doorSide * 3 && Math.abs(dx) <= 1 && y <= 2;
+          const win = y === 2 && !corner && (Math.abs(dx) === 3 ? Math.abs(dz) === 1 : Math.abs(dx) === 2) && !(dz === doorSide * 3);
+          set(hs.x + dx, FLOOR + y, hs.z + dz, door ? B.AIR : corner ? log : win ? id('glass_pane', B.GLASS) : wall);
+        }
+        set(hs.x + dx, FLOOR + 5, hs.z + dz, edge ? id('dark_oak_planks', wall) : id('dark_oak_slab', wall));
+      }
+    set(hs.x - 2, FLOOR + 1, hs.z - doorSide * 2, i % 2 ? B.CHEST : id('crafting_table', wall));
+    set(hs.x + 2, FLOOR + 1, hs.z - doorSide * 2, id('bookshelf', wall));
+    set(hs.x, FLOOR + 4, hs.z, B.LANTERN);
+    set(hs.x + 2, FLOOR + 3, hs.z + doorSide * 4, B.LANTERN);
+  });
+  // étals du marché (toits de laine, on passe dessous)
+  for (const [sx, c] of [[-9, 'red'], [9, 'yellow']] as [number, string][]) {
+    for (const [dx, dz] of [[-1, -2], [1, -2], [-1, 2], [1, 2]]) for (let y = 1; y <= 2; y++) set(x + sx + dx, FLOOR + y, z + dz, B.OAK_FENCE);
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -1; dx <= 1; dx++) set(x + sx + dx, FLOOR + 3, z + dz, id(`${dz % 2 ? 'white' : c}_wool`, B.OAK_PLANKS));
+    set(x + sx, FLOOR + 1, z, id('barrel', B.OAK_PLANKS));
+  }
+  for (const [tx, tz] of [[-19, -4], [19, 4], [-6, 19], [7, -20]]) buildTree('oak', x + tx, FLOOR + 1, z + tz, 99 + tx, (bx, by, bz, b) => set(bx, by, bz, b));
+}
+
+function buildPillars(set: Set3) {
+  const bedrock = id('bedrock', B.OBSIDIAN);
+  for (const [px, pz] of pillarPositions()) for (let y = FLOOR - 14; y <= FLOOR; y++) set(px, y, pz, y === FLOOR - 14 ? id('sea_lantern', B.GLASS) : bedrock);
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) set(PILLARS.x + dx, FLOOR - 1, PILLARS.z + dz, id('purpur_block', bedrock));
+  set(PILLARS.x, FLOOR, PILLARS.z, id('beacon', bedrock));
+  // anneau décoratif lointain (bordure de la carte)
+  for (let a = 0; a < 360; a += 3) {
+    const rad = (a * Math.PI) / 180;
+    set(Math.round(PILLARS.x + Math.cos(rad) * 22), FLOOR + 8 + Math.round(Math.sin(rad * 3) * 2), Math.round(PILLARS.z + Math.sin(rad) * 22), id(a % 6 ? 'purple_stained_glass' : 'sea_lantern', B.GLASS));
+  }
+}
+
 /** Emprises des cartes (pour ne construire que les chunks concernés). */
 const MAPS: { x0: number; z0: number; x1: number; z1: number; build: (set: Set3) => void }[] = [
   { x0: -64, z0: -64, x1: 64, z1: 64, build: buildHub },
@@ -521,6 +744,10 @@ const MAPS: { x0: number; z0: number; x1: number; z1: number; build: (set: Set3)
   { x0: DUELS.x - 12, z0: -18, x1: DUELS.x + 12, z1: 18, build: buildDuels },
   { x0: TNTRUN.x - 13, z0: -13, x1: TNTRUN.x + 13, z1: 13, build: buildTntRun },
   { x0: PARKOUR.x - 80, z0: -80, x1: PARKOUR.x + 80, z1: 80, build: buildParkour },
+  { x0: TNTTAG.x - 17, z0: -17, x1: TNTTAG.x + 17, z1: 17, build: buildTntTag },
+  { x0: BRIDGE.x - 7, z0: -34, x1: BRIDGE.x + 7, z1: 34, build: buildBridge },
+  { x0: MURDER.x - 28, z0: -28, x1: MURDER.x + 28, z1: 28, build: buildMurder },
+  { x0: PILLARS.x - 24, z0: -24, x1: PILLARS.x + 24, z1: 24, build: buildPillars },
 ];
 
 /**

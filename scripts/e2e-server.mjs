@@ -31,7 +31,7 @@ try {
     return { npcs: bots.filter((b) => b.npc).length, walkers: bots.filter((b) => !b.npc).length, compass: p.inventory.slots[0]?.id, sidebar: document.querySelector('.mc-sidebar:not(.hidden)')?.textContent ?? '', y: p.y, floor: s.world.getBlock(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) };
   });
   check('Menu Multijoueur → serveur : hub chargé (sol, boussole)', hub.floor > 0 && hub.compass === 'compass', JSON.stringify(hub));
-  check('Hub : 8 PNJ de jeux + cosmétiques, boîtes mystères, survie, hologrammes et des bots joueurs', hub.npcs >= 14 && hub.walkers >= 20, JSON.stringify(hub));
+  check('Hub : 12 PNJ de jeux + cosmétiques, boîtes mystères, survie, hologrammes et des bots joueurs', hub.npcs >= 14 && hub.walkers >= 20, JSON.stringify(hub));
   check('Tableau de scores latéral', /HYPXL/.test(hub.sidebar) && /Pièces/.test(hub.sidebar), hub.sidebar);
   await G(() => { const p = window.__lecraft.session.player; p.body.flying = true; p.body.setPos(0.5, 80, 30); p.yaw = 0; p.pitch = -0.55; });
   await wait(2500);
@@ -49,7 +49,7 @@ try {
   await G(() => window.__lecraft.session.server.useItem('compass'));
   await wait(400);
   const menu = await G(() => [...document.querySelectorAll('[data-game]')].map((b) => b.dataset.game));
-  check('Boussole : menu des 8 jeux', menu.length === 8, menu.join(','));
+  check('Boussole : menu des 12 jeux', menu.length === 12, menu.join(','));
   await shot('02-menu');
   await page.keyboard.press('Escape');
   await wait(300);
