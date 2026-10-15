@@ -7,6 +7,7 @@ import { computeHeights, createChunkData, idx, type ChunkData, type SpecialBlock
 import { scanSpecials } from './WorldGenerator';
 import { chestMeta, LOOT } from './StructureGenerator';
 import { MOB_DEFS } from '../data/mobs';
+import { applyNetherRuinedPortals, locateNetherRuinedPortal } from './MoreStructures';
 
 /** Niveau de l'océan de lave du Nether (comme le jeu de référence : y = 31). */
 export const NETHER_LAVA_LEVEL = 31;
@@ -31,7 +32,7 @@ export class NetherGenerator {
   private biomeB: SimplexNoise;
   private patch: SimplexNoise;
   /** Interface commune avec le générateur de la surface (commande /locate). */
-  readonly structures = { locate: (key: string, x: number, z: number) => (key.includes('fortress') ? this.locateFortress(x, z) : null) };
+  readonly structures = { locate: (key: string, x: number, z: number) => (key.includes('fortress') ? this.locateFortress(x, z) : key === 'ruined_portal' ? locateNetherRuinedPortal(this.seed, x, z) : null) };
   private ids: Record<string, number>;
 
   constructor(seed: number) {
@@ -54,6 +55,17 @@ export class NetherGenerator {
     if (a > 0.32) k = b > 0 ? 'crimson_forest' : 'warped_forest';
     else if (a < -0.32) k = b > 0 ? 'soul_sand_valley' : 'basalt_deltas';
     return BiomeManager.byName(k).id;
+  }
+
+  /** Sol d'une caverne assez haute (6 blocs d'air), sinon la surface de l'océan de lave. */
+  private floorAt(x: number, z: number): number {
+    for (let y = NETHER_LAVA_LEVEL; y < 96; y++) {
+      if (!this.solidAt(x, y, z)) continue;
+      let air = true;
+      for (let k = 1; k <= 6 && air; k++) air = !this.solidAt(x, y + k, z);
+      if (air) return y;
+    }
+    return NETHER_LAVA_LEVEL;
   }
 
   private solidAt(x: number, y: number, z: number): boolean {
@@ -120,6 +132,8 @@ export class NetherGenerator {
     this.decorate(c);
     this.ores(c);
     this.fortress(c);
+    // portails en ruine (world/MoreStructures.ts), posés sur le sol des cavernes ou sur la lave
+    applyNetherRuinedPortals(this.seed, c, { heightAt: (x, z) => this.floorAt(x, z), biomeAt: (x, z) => this.biomeAt(x, z) });
     computeHeights(c);
     return { data: c, specials: scanSpecials(c) };
   }

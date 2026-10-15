@@ -8,6 +8,7 @@ import { onDeathEffects, onHurtEffects } from '../entities/EffectOutcomes';
 import { EFFECT_COLORS } from '../entities/Effects';
 import { ChestLids } from '../render/ChestLids';
 import { Machines } from '../world/Machines';
+import { isTripwire, springTripwire } from '../world/MoreStructures';
 import { tickBrewing } from '../crafting/Brewing';
 import type { BrewingState } from '../crafting/Brewing';
 import type { Game } from './Game';
@@ -1131,6 +1132,12 @@ export class Session implements GameContext {
     const p = this.player;
     if (this.plateTimer > 0 || p.dead || !p.body.onGround) return;
     const x = Math.floor(p.x), y = Math.floor(p.y + 0.05), z = Math.floor(p.z);
+    // fil de déclenchement (temple de la jungle) : les distributeurs piégés tirent des flèches
+    if (isTripwire(this.world.getBlock(x, y, z))) {
+      this.plateTimer = 1;
+      springTripwire(this.world, x, y, z, (dx, dy, dz) => this.machines.fire(this, dx, dy, dz, false));
+      return;
+    }
     if (this.world.getBlock(x, y, z) !== B.STONE_PRESSURE_PLATE) return;
     this.plateTimer = 1;
     for (let dy = -4; dy <= -1; dy++)

@@ -934,7 +934,7 @@ const COMMANDS: CommandDef[] = [
     name: 'locate', usage: '/locate structure <nom>', desc: 'Trouve la structure la plus proche', cheat: true,
     async run(c) {
       const name = strip(c.args[0] === 'structure' ? c.args[1] ?? '' : c.args[0] ?? '');
-      const map: Record<string, string> = { village: 'village', temple: 'temple', desert_pyramid: 'temple', mineshaft: 'mine', mine: 'mine', dungeon: 'dungeon', monster_room: 'dungeon', ruins: 'ruins', ruined_portal: 'ruins', tower: 'tower', pillager_outpost: 'tower', igloo: 'ice_temple', ice_temple: 'ice_temple', camp: 'camp', golem_lair: 'golem_lair', abandoned_house: 'abandoned_house' };
+      const map: Record<string, string> = { village: 'village', temple: 'temple', desert_pyramid: 'desert_pyramid', jungle_temple: 'jungle_temple', jungle_pyramid: 'jungle_temple', mineshaft: 'mine', mine: 'mine', dungeon: 'dungeon', monster_room: 'dungeon', ruins: 'ruins', ruined_portal: 'ruined_portal', tower: 'tower', pillager_outpost: 'pillager_outpost', igloo: 'igloo', swamp_hut: 'witch_hut', witch_hut: 'witch_hut', shipwreck: 'shipwreck', ocean_ruin: 'ocean_ruins', ocean_ruins: 'ocean_ruins', trail_ruins: 'trail_ruins', ice_temple: 'ice_temple', camp: 'camp', golem_lair: 'golem_lair', abandoned_house: 'abandoned_house' };
       const key = map[name];
       if (!key) throw new CommandError(`Structure inconnue : ${name} (${Object.keys(map).join(', ')})`);
       const p = c.s.player;
@@ -1586,7 +1586,7 @@ export function suggest(text: string): string[] {
     case 'execute':
       return pick(['as', 'at', 'positioned', 'if', 'unless', 'run', 'facing', 'rotated', 'align', 'anchored']);
     case 'locate':
-      return argIdx === 0 ? ['structure'] : argIdx === 1 ? pick(['village', 'temple', 'mineshaft', 'dungeon', 'ruins', 'tower', 'igloo', 'camp', 'golem_lair']) : [];
+      return argIdx === 0 ? ['structure'] : argIdx === 1 ? pick(['village', 'temple', 'mineshaft', 'dungeon', 'ruins', 'tower', 'igloo', 'camp', 'golem_lair', 'desert_pyramid', 'jungle_temple', 'swamp_hut', 'pillager_outpost', 'shipwreck', 'ocean_ruin', 'ruined_portal', 'trail_ruins']) : [];
     case 'tp':
       return ['~'];
     default:

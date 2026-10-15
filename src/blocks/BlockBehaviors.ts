@@ -5,6 +5,7 @@ import type { ItemStack } from '../inventory/Item';
 import { makeStack } from '../inventory/Inventory';
 import type { World } from '../world/World';
 import { LOOT } from '../world/StructureGenerator';
+import { MORE_LOOT_TABLES } from '../world/MoreStructures';
 import { Rng } from '../util/math';
 import { FACING_DIR } from './Shapes';
 
@@ -171,6 +172,8 @@ const LOOT_TABLES: Record<number, { rolls: [number, number]; entries: LootEntry[
   [LOOT.FORTRESS]: { rolls: [2, 5], entries: [T('diamond', 1, 3, 5), T('iron_ingot', 1, 5, 5), T('gold_ingot', 1, 3, 15), T('golden_sword', 1, 1, 5), T('saddle', 1, 1, 10), T('flint_and_steel', 1, 1, 5), T('nether_wart', 3, 7, 5), T('obsidian', 2, 4, 2), T('blaze_rod', 1, 2, 3)] },
   [LOOT.BOSS]: { rolls: [5, 8], entries: [T('diamond', 2, 5, 8), T('emerald', 3, 8, 8), T('gold_block', 1, 2, 4), T('ancient_relic', 1, 2, 5), T('diamond_sword', 1, 1, 2), T('diamond_helmet', 1, 1, 2), T('golden_apple', 1, 2, 3)] },
   [LOOT.CAMP]: { rolls: [2, 5], entries: [T('cooked_beef', 1, 4, 8), T('bread', 1, 3, 6), T('torch', 2, 6, 6), T('coal', 2, 6, 6), T('leather', 1, 3, 4), T('copper_ingot', 1, 3, 4)] },
+  // pyramide, temple de la jungle, igloo, épaves, ruines sous-marines, portail en ruine, avant-poste
+  ...MORE_LOOT_TABLES,
 };
 
 /** Génère le contenu d'un coffre de structure de façon déterministe (seed + position). */

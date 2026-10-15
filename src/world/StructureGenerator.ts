@@ -13,6 +13,7 @@ import { CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT } from '../core/Config';
 import { hash3, Rng } from '../util/math';
 import { BiomeManager } from './BiomeManager';
 import { buildVillage } from './Village';
+import { MORE_STRUCTURES } from './MoreStructures';
 
 export interface TerrainQuery {
   heightAt(x: number, z: number): number;
@@ -39,6 +40,8 @@ interface StructureType {
   underground?: boolean;
   /** Si absent : autorisé si le biome liste la structure. */
   anyBiome?: boolean;
+  /** Autorisé sous le niveau de la mer (épaves, ruines sous-marines, cabane du marais). */
+  aquatic?: boolean;
   build(w: StructWriter, ox: number, oz: number, rng: Rng, t: TerrainQuery): void;
   /** Emplacement acceptable (relief, eau…) ; absent : toujours. */
   site?(t: TerrainQuery, x: number, z: number): boolean;
@@ -494,9 +497,13 @@ const TYPES: StructureType[] = [
       w.set(px - 6, y - 2, pz - 5, B.CHEST, chestMeta(LOOT.DUNGEON, 0));
     },
   },
+  // structures du jeu de référence (pyramide, temple de la jungle, igloo, épave…) : world/MoreStructures.ts
+  ...MORE_STRUCTURES,
 ];
 
 export const STRUCTURE_KEYS = TYPES.map((t) => t.key);
+/** Structures de surface refusées près d'un village. */
+const AVOID_VILLAGE = new Set(['abandoned_house', 'ruins', 'camp', 'desert_pyramid', 'jungle_temple', 'igloo', 'witch_hut', 'pillager_outpost', 'ruined_portal', 'trail_ruins']);
 
 export interface StructureInstance {
   key: string;
@@ -518,13 +525,28 @@ export class StructureGenerator {
     if (!type.anyBiome) {
       const biome = BiomeManager.get(this.terrain.biomeAt(x, z));
       if (!biome.structures.includes(type.key)) return null;
-      if (this.terrain.heightAt(x, z) < SEA_LEVEL) return null;
+      if (!type.aquatic && this.terrain.heightAt(x, z) < SEA_LEVEL) return null;
       if (type.site && !type.site(this.terrain, x, z)) return null;
     } else if (!type.underground) {
       const biome = BiomeManager.get(this.terrain.biomeAt(x, z));
       if (biome.key === 'ocean' || biome.key === 'deep_ocean' || biome.key === 'river') return null;
     }
+    // pas de petite structure de surface dans un village (elle écraserait maisons et portes)
+    if (AVOID_VILLAGE.has(type.key) && this.nearVillage(x, z, Math.max(56, 46 + type.radius))) return null;
     return { key: type.key, x, z };
+  }
+
+  private villageCache = new Map<string, StructureInstance | null>();
+  /** Village le plus proche (région voisine comprise) à moins de `dist` blocs ? */
+  private nearVillage(x: number, z: number, dist: number): boolean {
+    const k = `${x},${z}`;
+    let v = this.villageCache.get(k);
+    if (v === undefined) {
+      v = this.locate('village', x, z, 1);
+      if (this.villageCache.size > 4096) this.villageCache.clear();
+      this.villageCache.set(k, v);
+    }
+    return !!v && Math.hypot(v.x - x, v.z - z) < dist;
   }
 
   /** Liste les structures dont l'emprise peut toucher la zone [x0..x1]x[z0..z1]. */
