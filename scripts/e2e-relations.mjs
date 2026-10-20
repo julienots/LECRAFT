@@ -83,7 +83,7 @@ try {
   r = await until(() => { const m = window.__m; return { ok: m.cod.health < m.cod.maxHealth, axolotl: m.axolotl.ai.state, cod: m.cod.health, inWater: m.cod.body.inWater }; });
   check('Axolotl : attaque la morue dans l’eau', !!r?.ok, JSON.stringify(r));
 
-  await scene({ frog: ['frog', -3, 0], slime: ['slime', 3, 0, { baby: true }] });
+  await scene({ frog: ['frog', -3, 0], slime: ['slime', 3, 0, { size: 1 }] });
   r = await until(() => {
     const m = window.__m, s = window.__lecraft.session;
     const balls = s.entities.entities.filter((e) => e.kind === 'item' && e.itemId === 'slime_ball').length;

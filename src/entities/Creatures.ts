@@ -15,31 +15,84 @@ export class Enderman extends Animal {
   carried = 0;
   private stareTimer = 0;
   private wanderTp = 5 + Math.random() * 10;
+  private chaseTp = 0;
+  private dodgeTp = 0;
+
+  /** Les projectiles ne le blessent pas (il les esquive en se téléportant, voir dodgeProjectiles). */
+  get armored() {
+    return true;
+  }
+
+  /** Mort : lâche le bloc qu'il transportait. */
+  protected onDeath(_ctx: GameContext) {
+    if (this.carried) {
+      const key = BlockRegistry.get(this.carried)?.key;
+      if (key) this.spawner.spawnItem(key, 1, this.x, this.y + 1, this.z);
+      this.carried = 0;
+    }
+  }
+
+  /** Le joueur regarde-t-il la tête de l'enderman (sans obstacle) ? */
+  private lookedAt(ctx: GameContext): boolean {
+    const p = ctx.player;
+    const cp = Math.cos(p.pitch);
+    const lx = -Math.sin(p.yaw) * cp, ly = Math.sin(p.pitch), lz = -Math.cos(p.yaw) * cp;
+    const ex = p.x, ey = p.y + p.eyeHeight, ez = p.z;
+    const hx = this.x - ex, hy = this.y + 2.55 - ey, hz = this.z - ez;
+    const d = Math.hypot(hx, hy, hz) || 1;
+    const dot = (hx * lx + hy * ly + hz * lz) / d;
+    if (dot <= 1 - 0.025 / d) return false;
+    const hit = raycastBlocks(ctx.world, ex, ey, ez, hx / d, hy / d, hz / d, d);
+    return !hit || !BlockRegistry.opaque[hit.block];
+  }
+
+  /** Esquive : une flèche / un projectile du joueur arrive sur lui → téléportation. */
+  private dodgeProjectiles(ctx: GameContext) {
+    const list = (ctx as unknown as { entities?: { entities: { kind: string; fromPlayer?: boolean; removed: boolean; stuck?: boolean; x: number; y: number; z: number }[] } }).entities?.entities ?? [];
+    for (const e of list) {
+      if (e.kind !== 'projectile' || e.removed || e.stuck || !e.fromPlayer) continue;
+      if (Math.hypot(e.x - this.x, e.y - (this.y + 1.45), e.z - this.z) < 2.5) {
+        this.dodgeTp = 0.5;
+        this.teleportRandom(ctx, 16);
+        return;
+      }
+    }
+  }
 
   protected customUpdate(ctx: GameContext, dt: number) {
     super.customUpdate(ctx, dt);
     const p = ctx.player;
-    // regard du joueur sur la tête (à moins de 64 blocs, sans obstacle)
-    if (!p.dead && !p.creative && this.anger <= 0 && this.distToPlayer < 64) {
-      const cp = Math.cos(p.pitch);
-      const lx = -Math.sin(p.yaw) * cp, ly = Math.sin(p.pitch), lz = -Math.cos(p.yaw) * cp;
-      const ex = p.x, ey = p.y + p.eyeHeight, ez = p.z;
-      const hx = this.x - ex, hy = this.y + 2.55 - ey, hz = this.z - ez;
-      const d = Math.hypot(hx, hy, hz) || 1;
-      const dot = (hx * lx + hy * ly + hz * lz) / d;
-      if (dot > 1 - 0.025 / d) {
-        const hit = raycastBlocks(ctx.world, ex, ey, ez, hx / d, hy / d, hz / d, d);
-        if (!hit || !BlockRegistry.opaque[hit.block]) {
-          this.stareTimer += dt;
-          if (this.stareTimer > 0.25) {
-            this.anger = 30;
-            this.ai.lastSeenX = p.x;
-            this.ai.lastSeenZ = p.z;
-            this.ai.fsm.set(AIState.CHASE);
-            ctx.audio.play('enderman_scream', { x: this.x, y: this.y + 2, z: this.z });
-          }
+    // regard du joueur sur la tête (à moins de 64 blocs, sans obstacle) ; une citrouille sculptée portée protège
+    const pumpkin = p.inventory.armor.head?.id === 'carved_pumpkin';
+    if (!p.dead && !p.creative && this.anger <= 0 && this.distToPlayer < 64 && !pumpkin) {
+      if (this.lookedAt(ctx)) {
+        this.stareTimer += dt;
+        if (this.stareTimer > 0.25) {
+          this.anger = 30;
+          this.ai.lastSeenX = p.x;
+          this.ai.lastSeenZ = p.z;
+          this.ai.fsm.set(AIState.CHASE);
+          ctx.audio.play('enderman_scream', { x: this.x, y: this.y + 2, z: this.z });
         }
       } else this.stareTimer = 0;
+    }
+    // en colère : se téléporte si on le fixe de près (< 4 blocs), et vers le joueur s'il est à plus de 16 blocs
+    this.chaseTp -= dt;
+    if (this.anger > 0 && !p.dead && this.chaseTp <= 0) {
+      if (this.distToPlayer < 4 && this.lookedAt(ctx)) {
+        this.chaseTp = 1;
+        this.teleportRandom(ctx, 16);
+      } else if (this.distToPlayer > 16) {
+        this.chaseTp = 1.5;
+        this.teleportNear(ctx, p.x, p.z, 4);
+      }
+    }
+    this.dodgeTp -= dt;
+    if (this.dodgeTp <= 0) this.dodgeProjectiles(ctx);
+    // en plein jour à découvert : téléportation aléatoire de temps en temps (il abandonne sa cible)
+    if (ctx.dimension === 'overworld' && ctx.dayCycle.daylight > 0.8 && Math.random() < dt * 0.15 && ctx.world.getLight(Math.floor(this.x), Math.floor(this.y + 2), Math.floor(this.z)).sky >= 15) {
+      this.anger = 0;
+      this.teleportRandom(ctx, 32);
     }
     // l'eau (et la pluie) le blessent : il se téléporte
     if (this.body.inWater || (ctx.raining() && ctx.world.getLight(Math.floor(this.x), Math.floor(this.y + 2), Math.floor(this.z)).sky >= 15 && ctx.dimension === 'overworld')) {
@@ -50,8 +103,7 @@ export class Enderman extends Animal {
     this.wanderTp -= dt;
     if (this.wanderTp <= 0) {
       this.wanderTp = 8 + Math.random() * 20;
-      if (this.anger > 0 && this.distToPlayer > 12) this.teleportNear(ctx, p.x, p.z, 6);
-      else if (Math.random() < 0.3) this.teleportRandom(ctx, 16);
+      if (this.anger <= 0 && Math.random() < 0.3) this.teleportRandom(ctx, 16);
     }
     // ramasse / pose des blocs (herbe, terre, sable, gravier, citrouille, melon)
     if (ctx.gamerules.mobGriefing !== false && Math.random() < dt / 30) {
@@ -67,9 +119,12 @@ export class Enderman extends Animal {
     }
   }
 
-  /** Blessé : se téléporte (comme les flèches qu'il esquive dans le jeu de référence). */
+  /**
+   * Blessé : comme le jeu Java, il se téléporte (9 fois sur 10) quand les dégâts ne viennent pas d'une
+   * créature (feu, lave, eau…) ; un coup d'épée ne le fait pas fuir.
+   */
   onHurt(ctx: GameContext) {
-    if (!this.dead && Math.random() < 0.8) this.teleportRandom(ctx, 16);
+    if (!this.dead && (this.fireTime > 0 || this.body.inLava || this.body.inWater) && Math.random() < 0.9) this.teleportRandom(ctx, 32);
   }
 
   teleportRandom(ctx: GameContext, r: number) {
@@ -95,6 +150,9 @@ export class Enderman extends Animal {
     return false;
   }
 }
+
+/** PV d'un loup apprivoisé. */
+export const WOLF_TAMED_HEALTH = 40;
 
 /**
  * Loup : neutre (la meute attaque si on en frappe un). Apprivoisé avec des os (1 chance sur 3) :
@@ -127,7 +185,9 @@ export class Wolf extends Animal {
       ctx.particles.burst('smoke', this.x, this.y + 0.8, this.z, 6);
       return 'failed';
     }
-    if (itemId && this.def.food?.includes(itemId) && this.health < this.maxHealth) {
+    if (itemId && this.def.food?.includes(itemId)) {
+      // en pleine santé, la viande le met en mode « amour » (reproduction, voir Animal.feed)
+      if (this.health >= this.maxHealth) return null;
       this.health = Math.min(this.maxHealth, this.health + 4);
       ctx.particles.burst('hearts', this.x, this.y + 0.8, this.z, 3);
       return 'healed';
@@ -141,8 +201,9 @@ export class Wolf extends Animal {
     this.tamed = true;
     this.persistent = true;
     this.anger = 0;
-    this.maxHealthOverride = 20;
-    this.health = 20;
+    // 40 PV une fois apprivoisé (Java 1.20.5+)
+    this.maxHealthOverride = WOLF_TAMED_HEALTH;
+    this.health = WOLF_TAMED_HEALTH;
     this.sitting = true;
     this.dynProps.set('__tamed', true);
     ctx.particles.burst('hearts', this.x, this.y + 0.8, this.z, 7);
@@ -168,7 +229,7 @@ export class Wolf extends Animal {
     if (!this.tamed && this.dynProps.get('__tamed')) {
       this.sitting = !!this.dynProps.get('__sitting');
       this.tamed = true;
-      this.maxHealthOverride = 20;
+      this.maxHealthOverride = WOLF_TAMED_HEALTH;
     }
     if (!this.tamed) return;
     this.dynProps.set('__sitting', this.sitting);

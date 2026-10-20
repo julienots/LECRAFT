@@ -80,7 +80,8 @@ const canFight = (m: Mob) => m.def.damage > 0 || !!m.def.ranged || !!HUNTS[m.def
 
 function matches(h: HuntRule, hunter: Mob, t: Mob): boolean {
   if (t === hunter || t.dead || t.removed || t.net || NEVER_PREY.has(t.def.key)) return false;
-  if (h.baby && !t.baby) return false;
+  // petit slime / cube de magma : taille 1 (et non plus « bébé »)
+  if (h.baby && !t.baby && !((t.def.key === 'slime' || t.def.key === 'magma_cube') && (t.def.scale ?? 1) <= 1)) return false;
   if (h.water && !t.body.inWater) return false;
   if (h.prey === 'all') return t.def.key !== hunter.def.key && t.def.category !== 'boss';
   if (h.prey === 'monsters') return t.def.category === 'hostile';

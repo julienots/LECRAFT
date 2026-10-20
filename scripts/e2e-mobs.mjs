@@ -71,7 +71,7 @@ try {
     }
     return { tamed: w.tamed, sitting: w.sitting, tries, hp: w.maxHealth, bones: p.inventory.count('bone') };
   });
-  check('Loup apprivoisé avec des os (assis, 20 PV)', tame.tamed && tame.sitting && tame.hp === 20 && tame.bones === 40 - tame.tries, JSON.stringify(tame));
+  check('Loup apprivoisé avec des os (assis, 40 PV comme Java 1.20.5+)', tame.tamed && tame.sitting && tame.hp === 40 && tame.bones === 40 - tame.tries, JSON.stringify(tame));
   const sit = await G(() => {
     const s = window.__lecraft.session, w = s.entities.mobs.find((m) => m.def.key === 'wolf');
     s.player.inventory.selected = 3;
@@ -109,18 +109,29 @@ try {
   await wait(1200);
   const angry = await G(() => { const e = window.__lecraft.session.entities.mobs.find((m) => m.def.key === 'enderman'); return { anger: e.anger, x: e.x, z: e.z }; });
   check('Enderman : se met en colère quand on le regarde', ender.anger0 === 0 && angry.anger > 0, JSON.stringify(angry));
+  // jeu Java : un coup d'épée ne le fait pas fuir, le feu oui (9 fois sur 10), les projectiles ne le blessent pas
   const tp = await G(() => {
     const s = window.__lecraft.session, e = s.entities.mobs.find((m) => m.def.key === 'enderman');
-    let moved = 0;
+    let melee = 0, fire = 0;
     for (let i = 0; i < 6; i++) {
       const x0 = e.x, z0 = e.z;
       e.iframes = 0;
       s.combat.damageMob(e, 1, { kind: 'player', fromPlayer: true });
-      if (Math.hypot(e.x - x0, e.z - z0) > 1) moved++;
+      if (Math.hypot(e.x - x0, e.z - z0) > 1) melee++;
     }
-    return moved;
+    for (let i = 0; i < 6; i++) {
+      const x0 = e.x, z0 = e.z;
+      e.fireTime = 3;
+      s.combat.damageMob(e, 1, { kind: 'environment', fire: true });
+      e.fireTime = 0;
+      if (Math.hypot(e.x - x0, e.z - z0) > 1) fire++;
+    }
+    const h0 = e.health;
+    e.iframes = 0;
+    const arrow = s.combat.damageMob(e, 5, { kind: 'projectile', fromPlayer: true, itemId: 'bow' });
+    return { melee, fire, arrow, same: e.health === h0 };
   });
-  check('Enderman : se téléporte quand on le frappe', tp >= 2, `${tp}/6 téléportations`);
+  check('Enderman : se téléporte quand il brûle, pas sous les coups ; flèches sans effet', tp.melee === 0 && tp.fire >= 2 && tp.arrow === 0 && tp.same, JSON.stringify(tp));
   await G(() => { for (const m of window.__lecraft.session.entities.mobs) m.removed = true; });
 
   // ---------- villageois : échanges ----------
@@ -228,6 +239,114 @@ try {
     return out;
   });
   check('Zombie : contourne un mur (chemin A*) pour atteindre le joueur', nav.best < 2 && nav.pathLen > 5, JSON.stringify(nav));
+
+  // ---------- conformité au jeu Java 1.21 ----------
+  // slime : un grand slime (taille 4, 16 PV) se divise en 2 à 4 slimes moyens (4 PV)
+  const slime = await G(async () => {
+    const s = window.__lecraft.session, a = window.__arena, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (const m of s.entities.mobs) m.removed = true;
+    const big = s.entities.spawnMob('slime', a.x + 0.5, a.y, a.z - 6.5, { size: 4 });
+    const info = { size: big.size, hp: big.health, w: +(big.body.halfWidth * 2).toFixed(2) };
+    s.combat.damageMob(big, 100, { kind: 'player', fromPlayer: true });
+    for (let t = 0; t < 40 && s.entities.mobs.filter((m) => m.def.key === 'slime' && !m.dead).length === 0; t++) await sleep(100);
+    const kids = s.entities.mobs.filter((m) => m.def.key === 'slime' && !m.dead);
+    const out = { ...info, kids: kids.length, kidSize: kids[0]?.size, kidHp: kids[0]?.health, babies: kids.some((k) => k.baby) };
+    for (const m of s.entities.mobs) m.removed = true;
+    return out;
+  });
+  check('Slime : grand (16 PV, 2,08 de large) → 2 à 4 moyens de 4 PV', slime.size === 4 && slime.hp === 16 && slime.w === 2.08 && slime.kids >= 2 && slime.kids <= 4 && slime.kidSize === 2 && slime.kidHp === 4 && !slime.babies, JSON.stringify(slime));
+
+  // mouton : lâche sa laine à la mort (s'il n'est pas tondu)
+  const wool = await G(async () => {
+    const s = window.__lecraft.session, a = window.__arena, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (const e of s.entities.entities) if (e.kind === 'item') e.removed = true;
+    const sh = s.entities.spawnMob('sheep', a.x + 6.5, a.y, a.z - 6.5);
+    sh.setWool('black', false);
+    s.combat.damageMob(sh, 100, { kind: 'player', fromPlayer: true });
+    for (let t = 0; t < 40 && !s.entities.entities.some((e) => e.kind === 'item' && e.itemId === 'black_wool'); t++) await sleep(100);
+    return s.entities.entities.filter((e) => e.kind === 'item').map((e) => e.itemId);
+  });
+  check('Mouton : laine de sa couleur lâchée à la mort', wool.includes('black_wool') && wool.includes('mutton'), JSON.stringify(wool));
+
+  // zombie au soleil : prend feu (8 s), pas dans l'eau
+  const burn = await G(async () => {
+    const s = window.__lecraft.session, a = window.__arena, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    s.runCommand('/time set noon');
+    s.runCommand('/weather clear');
+    for (const m of s.entities.mobs) m.removed = true;
+    const z = s.entities.spawnMob('zombie', a.x - 8.5, a.y, a.z - 8.5, { persistent: true });
+    const h = s.entities.spawnMob('husk', a.x - 6.5, a.y, a.z - 8.5, { persistent: true });
+    z.ai.update = () => {}; h.ai.update = () => {};
+    for (let t = 0; t < 40 && z.fireTime <= 0; t++) await sleep(100);
+    const out = { zombieFire: +z.fireTime.toFixed(1), huskFire: h.fireTime };
+    await sleep(2500);
+    out.zombieHp = z.health;
+    for (const m of s.entities.mobs) m.removed = true;
+    return out;
+  });
+  check('Soleil : le zombie brûle (8 s, 1 dégât/s), pas le zombie momifié', burn.zombieFire > 5 && burn.huskFire === 0 && burn.zombieHp < 20, JSON.stringify(burn));
+
+  // squelette : tourne autour du joueur en tirant
+  const strafe = await G(async () => {
+    const s = window.__lecraft.session, a = window.__arena, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    s.runCommand('/time set midnight');
+    p.body.setPos(a.x + 0.5, a.y, a.z + 0.5);
+    const sk = s.entities.spawnMob('skeleton', a.x + 0.5, a.y, a.z - 7.5, { persistent: true });
+    const x0 = sk.x, z0 = sk.z;
+    let lateral = 0, attack = 0, shots = 0;
+    const shoot = sk.fireShot.bind(sk);
+    sk.fireShot = (c) => { shots++; shoot(c); };
+    for (let t = 0; t < 60; t++) {
+      await sleep(100);
+      p.health = 20;
+      p.body.setPos(a.x + 0.5, a.y, a.z + 0.5);
+      lateral = Math.max(lateral, Math.abs(sk.x - x0));
+      if (sk.ai.state === 'ATTACK') attack++;
+    }
+    const out = { lateral: +lateral.toFixed(2), attack, shots, dz: +(sk.z - z0).toFixed(2) };
+    sk.removed = true;
+    for (const e of s.entities.entities) if (e.kind === 'projectile') e.removed = true;
+    return out;
+  });
+  check('Squelette : mitraille en tournant autour du joueur', strafe.lateral > 0.8 && strafe.shots >= 1, JSON.stringify(strafe));
+
+  // piglin : hostile sans armure en or, paisible avec un casque en or
+  const pig = await G(async () => {
+    const s = window.__lecraft.session, a = window.__arena, p = s.player, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    p.body.setPos(a.x + 0.5, a.y, a.z + 0.5);
+    p.inventory.armor.head = null;
+    const pg = s.entities.spawnMob('piglin', a.x + 0.5, a.y, a.z - 6.5, { persistent: true });
+    let chase = false;
+    for (let t = 0; t < 40 && !chase; t++) {
+      await sleep(100);
+      p.health = 20;
+      chase = pg.ai.state === 'CHASE' || pg.ai.state === 'ATTACK';
+    }
+    p.inventory.armor.head = { id: 'golden_helmet', count: 1 };
+    let calm = false;
+    for (let t = 0; t < 40 && !calm; t++) {
+      await sleep(100);
+      p.health = 20;
+      calm = pg.ai.state !== 'CHASE' && pg.ai.state !== 'ATTACK';
+    }
+    p.inventory.armor.head = null;
+    const st = pg.ai.state;
+    pg.removed = true;
+    return { chase, calm, st };
+  });
+  check('Piglin : hostile sans or, paisible avec un casque en or', pig.chase && pig.calm, JSON.stringify(pig));
+
+  // créeper chargé : puissance 6 ; insomnie suivie pour les phantoms
+  const misc = await G(() => {
+    const s = window.__lecraft.session, a = window.__arena;
+    const c = s.entities.spawnMob('creeper', a.x + 0.5, a.y, a.z + 9.5);
+    c.charged = true;
+    const out = { charged: c.charged, rest: typeof s.entities.timeSinceRest === 'number' && s.entities.timeSinceRest > 0 };
+    c.removed = true;
+    return out;
+  });
+  check('Créeper chargé et statistique d’insomnie (phantoms)', misc.charged && misc.rest, JSON.stringify(misc));
+  await G(() => window.__lecraft.session.runCommand('/time set day'));
 
   // ---------- village : cloche et villageois ----------
   const vloc = await G(async () => { const s = window.__lecraft.session, p = s.player; return s.chunks.locate('village', p.x, p.z); });

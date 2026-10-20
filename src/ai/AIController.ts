@@ -5,6 +5,10 @@ import { BlockRegistry } from '../blocks/BlockRegistry';
 import { AIState, StateMachine, type StateHandlers } from './StateMachine';
 import { findPath } from './Pathfinder';
 import { huntStep } from '../entities/MobRelations';
+import { wearsGold } from '../entities/SpawnRules';
+
+/** Archers à l'arc qui tournent autour de leur cible (RangedBowAttackGoal du jeu Java). */
+export const BOW_STRAFERS = new Set(['skeleton', 'stray', 'bogged', 'parched']);
 
 /**
  * Contrôleur d'IA : perception (distance, ligne de vue), déplacement (steering simple,
@@ -30,6 +34,11 @@ export class AIController {
   private pathIdx = 0;
   private repath = 0;
   private goal: [number, number, number] = [0, 0, 0];
+  /** Mitraillage des squelettes : temps de visée, minuterie, sens (horaire / recul). */
+  seeTime = 0;
+  strafeTime = -1;
+  strafeCW = false;
+  strafeBack = false;
 
   constructor(readonly mob: Mob, overrides: Partial<Record<AIState, StateHandlers<Mob>>> = {}) {
     this.fsm = new StateMachine<Mob>({ ...defaultHandlers(this), ...overrides }, mob);
@@ -38,6 +47,11 @@ export class AIController {
 
   get state() {
     return this.fsm.state;
+  }
+
+  /** Pas de temps du tick courant. */
+  get dtStep() {
+    return this.dt;
   }
 
   update(ctx: GameContext, dt: number) {
@@ -221,6 +235,8 @@ export class AIController {
 
 function isHostile(m: Mob, ctx?: GameContext) {
   if (m.anger > 0) return true;
+  // piglins : hostiles envers le joueur qui ne porte aucune pièce d'armure en or (adultes seulement)
+  if (m.def.key === 'piglin' && ctx && !m.baby && !(m as Mob & { barterTimer?: number }).barterTimer) return !wearsGold(ctx.player.inventory.armor);
   if (m.def.category === 'neutral') return false;
   // les araignées sont neutres en pleine lumière (comportement vanilla)
   if (m.has('neutralInDay') && ctx) {
@@ -236,6 +252,35 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
     if (!m.def.food || m.def.category === 'hostile') return false;
     const held = ai.ctx.player.inventory.selectedStack;
     return !!held && m.def.food.includes(held.id) && ai.playerDist < 10 && !ai.ctx.player.dead;
+  };
+  /**
+   * Squelette : une fois la cible vue depuis 1 s, il tourne autour (sens changé au hasard), recule
+   * sous 25 % de sa portée et avance au-delà de 75 % (RangedBowAttackGoal).
+   */
+  const strafe = (m: Mob) => {
+    const p = ai.ctx.player, range = m.def.ranged!.range;
+    ai.seeTime = ai.canSee ? ai.seeTime + ai.dtStep : 0;
+    if (ai.seeTime < 1) {
+      ai.navigateTo(p.x, p.y, p.z, 1);
+      m.yaw = Math.atan2(p.x - m.x, p.z - m.z);
+      return;
+    }
+    ai.strafeTime += ai.dtStep;
+    if (ai.strafeTime >= 1) {
+      if (Math.random() < 0.3) ai.strafeCW = !ai.strafeCW;
+      if (Math.random() < 0.3) ai.strafeBack = !ai.strafeBack;
+      ai.strafeTime = 0;
+    }
+    const d = ai.playerDist;
+    if (d > range * 0.75) ai.strafeBack = false;
+    else if (d < range * 0.25) ai.strafeBack = true;
+    const dx = p.x - m.x, dz = p.z - m.z, l = Math.hypot(dx, dz) || 1;
+    const fx = dx / l, fz = dz / l;
+    const fw = ai.strafeBack ? -0.5 : 0.5, side = ai.strafeCW ? 0.5 : -0.5;
+    // déplacement relatif : avant/arrière + latéral (perpendiculaire)
+    const tx = m.x + (fx * fw + -fz * side) * 3, tz = m.z + (fz * fw + fx * side) * 3;
+    ai.moveTowards(tx, tz, 0.9, true);
+    m.yaw = Math.atan2(dx, dz);
   };
   return {
     [AIState.IDLE]: {
@@ -313,6 +358,15 @@ function defaultHandlers(ai: AIController): Partial<Record<AIState, StateHandler
         if (m.def.ranged) {
           if (!ai.canSee) return AIState.SEARCH;
           if (ai.playerDist > m.def.ranged.range) return AIState.CHASE;
+          if (BOW_STRAFERS.has(m.def.key)) {
+            strafe(m);
+            // cadence de tir : 1 flèche / 2 s (1 s en difficile)
+            if (m.attackTimer <= 0) {
+              m.rangedAttack(ai.ctx);
+              if (ai.ctx.player.difficulty === 'hard') m.attackTimer *= 0.5;
+            }
+            return;
+          }
           // garde ses distances
           if (ai.playerDist < 4) {
             const dx = m.x - p.x, dz = m.z - p.z, d = Math.hypot(dx, dz) || 1;

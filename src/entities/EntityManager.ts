@@ -3,8 +3,9 @@ import { ArmorStand } from './ArmorStand';
 import type { ArmorSlot } from '../inventory/Item';
 import type { GameContext } from '../core/GameContext';
 import { B, BlockRegistry } from '../blocks/BlockRegistry';
-import { MOB_BY_KEY, MOB_DEFS, type MobDef } from '../data/mobs';
-import { CHUNK_SIZE, SEA_LEVEL } from '../core/Config';
+import { MOB_BY_KEY, MOB_DEFS, SLIME_SIZES, slimeDef, type MobDef } from '../data/mobs';
+import { CHUNK_SIZE, DAY_LENGTH_SECONDS, SEA_LEVEL } from '../core/Config';
+import { BABY_ZOMBIE_CHANCE, BABY_ZOMBIE_KEYS, darkEnoughToSpawn, phantomGroupMax, phantomSpawnChance } from './SpawnRules';
 import { MobModel } from '../render/MobModels';
 import { rayAABB } from '../util/Raycast';
 import type { Entity } from './Entity';
@@ -60,6 +61,10 @@ export class EntityManager implements EntitySpawner {
   private pool = new Map<string, MobModel[]>();
   private spawnTimer = 0;
   private lodTick = 0;
+  /** Temps (s) écoulé depuis le dernier sommeil du joueur (statistique « time_since_rest » : phantoms). */
+  timeSinceRest = 0;
+  private phantomTimer = 60;
+  private lastDayTime = -1;
   readonly damage: DamageSystem;
   readonly combat: CombatSystem;
   activeBoss: Boss | null = null;
@@ -122,10 +127,13 @@ export class EntityManager implements EntitySpawner {
     else m.dispose();
   }
 
-  spawnMob(key: string, x: number, y: number, z: number, opts: { baby?: boolean; persistent?: boolean; altar?: string; cause?: 'Spawned' | 'Born' | 'Loaded' } = {}): Mob | null {
+  spawnMob(key: string, x: number, y: number, z: number, opts: { baby?: boolean; persistent?: boolean; altar?: string; cause?: 'Spawned' | 'Born' | 'Loaded'; size?: number } = {}): Mob | null {
     const info = MOB_BY_KEY.get(key);
     if (!info) return null;
-    const { def, index } = info;
+    let { def } = info;
+    const { index } = info;
+    // slimes et cubes de magma : taille 1, 2 ou 4 (au hasard si non précisée)
+    if (key === 'slime' || key === 'magma_cube') def = slimeDef(def, opts.size ?? SLIME_SIZES[Math.floor(Math.random() * SLIME_SIZES.length)]);
     let m: Mob;
     if (key === 'ender_dragon') m = new EnderDragon(def, index, x, y, z, this, 'end_dragon');
     else if (key === 'wither') m = new WitherBoss(def, index, x, y, z, this, 'wither');
@@ -216,6 +224,7 @@ export class EntityManager implements EntitySpawner {
     const prof = ctx.profile;
     const simDist = ctx.profile.simulationDistance * CHUNK_SIZE + 8;
     this.lodTick++;
+    this.trackRest(ctx, dt);
     const mobs: Mob[] = [];
     const items = this.entities.filter((e): e is ItemEntity => e.kind === 'item' && !e.removed);
     for (const e of this.entities) {
@@ -300,6 +309,18 @@ export class EntityManager implements EntitySpawner {
     }
   }
 
+  /**
+   * Statistique « temps depuis le dernier repos » : augmente tant que le joueur est en vie,
+   * remise à zéro quand il dort (la nuit saute d'un coup au matin) ou qu'il meurt.
+   */
+  private trackRest(ctx: GameContext, dt: number) {
+    const t = ctx.dayCycle.time;
+    if (ctx.player.dead) this.timeSinceRest = 0;
+    else if (this.lastDayTime >= 0.45 && this.lastDayTime < 0.95 && t < 0.02) this.timeSinceRest = 0;
+    else if (!ctx.player.creative) this.timeSinceRest += dt;
+    this.lastDayTime = t;
+  }
+
   private projectileHits(ctx: GameContext, pr: Projectile) {
     const p = ctx.player;
     if (!pr.fromPlayer)
@@ -346,6 +367,8 @@ export class EntityManager implements EntitySpawner {
         const byMob = !!pr.owner && (pr.owner as { kind?: string }).kind === 'mob';
         // Empalement (trident lancé) : bonus contre les créatures aquatiques
         const impale = pr.pickupStack?.id === 'trident' && ((e as Mob).has('aquatic') || e.body.inWater) ? 2.5 * enchLevel(pr.pickupStack, 'impaling') : 0;
+        // boule de neige : 3 dégâts aux blazes (jeu original)
+        if (pr.def?.id === 'minecraft:snowball' && (e as Mob).def.key === 'blaze') this.damage.damageMob(e as Mob, 3, { kind: 'projectile', fromPlayer: !byMob, knockX: (pr.body.vx / v) * 2, knockZ: (pr.body.vz / v) * 2, projectile: pr, attacker: pr.owner ?? ctx.player });
         if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage + impale, { kind: 'projectile', fromPlayer: !byMob, knockX: (pr.body.vx / v) * kbk, knockZ: (pr.body.vz / v) * kbk, itemId: byMob ? undefined : pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
         else if (byMob) onMobHurtByMob(e as Mob, pr.owner as unknown as Mob);
         if (pr.type === 'frost_bolt') (e as Mob).slowTimer = 3;
@@ -424,10 +447,19 @@ export class EntityManager implements EntitySpawner {
         if (oy >= 0 && Math.abs(oy - y) <= 2) this.spawnMob(def.key, ox + 0.5, oy + 1, oz + 0.5);
       }
     }
-    // phantoms : la nuit, au-dessus des joueurs à l'air libre
-    if (!peaceful && ctx.dayCycle.isNight && Math.random() < 0.04 && this.mobs.filter((m) => m.def.key === 'phantom' && !m.dead).length < 3) {
-      const l = w.getLight(Math.floor(p.x), Math.floor(p.y + 1.6), Math.floor(p.z));
-      if (l.sky >= 14 && p.y > SEA_LEVEL - 2) this.spawnMob('phantom', p.x + (Math.random() - 0.5) * 20, p.y + 18 + Math.random() * 6, p.z + (Math.random() - 0.5) * 20);
+    // phantoms (jeu Java) : la nuit, au-dessus d'un joueur à l'air libre qui n'a pas dormi depuis 3 jours ;
+    // un essai toutes les 60 à 120 s, groupe de 1 à 1 + difficulté
+    this.phantomTimer -= 1;
+    if (this.phantomTimer <= 0) {
+      this.phantomTimer = 60 + Math.random() * 60;
+      const chance = phantomSpawnChance(this.timeSinceRest, DAY_LENGTH_SECONDS);
+      if (!peaceful && ctx.dayCycle.isNight && p === ctx.player && chance > 0 && Math.random() < chance) {
+        const l = w.getLight(Math.floor(p.x), Math.floor(p.y + 1.6), Math.floor(p.z));
+        if (l.sky >= 15 && p.y >= SEA_LEVEL) {
+          const n = 1 + Math.floor(Math.random() * phantomGroupMax(ctx.player.difficulty));
+          for (let i = 0; i < n; i++) this.spawnMob('phantom', p.x + (Math.random() - 0.5) * 20, p.y + 20 + Math.random() * 14, p.z + (Math.random() - 0.5) * 20);
+        }
+      }
     }
     // créatures aquatiques (calamars ; noyés la nuit) et chauves-souris / calamars luisants des grottes
     if (Math.random() < 0.25) this.waterAndCaveSpawns(ctx, peaceful);
@@ -457,8 +489,8 @@ export class EntityManager implements EntitySpawner {
       const below = w.getBlock(x, y - 1, z);
       if (below === B.WATER || BlockRegistry.blocks[below]?.liquid) continue;
       const l = w.getLight(x, y, z);
-      const effective = Math.max(Math.round(l.sky * ctx.dayCycle.daylight), l.block);
-      if (effective > 6) continue;
+      // règle 1.18+ : lumière des blocs nulle, lumière du ciel (selon l'heure) ≤ aléa 0..7
+      if (!darkEnoughToSpawn(l, ctx.dayCycle.daylight)) continue;
       const underground = l.sky < 4 && y < SEA_LEVEL;
       const biome = w.biomeAt(x, z);
       const candidates = MOB_DEFS.filter((d) => {
@@ -472,8 +504,9 @@ export class EntityManager implements EntitySpawner {
       });
       const def = weighted(candidates);
       if (!def) continue;
-      if (Math.hypot(x - p.x, z - p.z) < 18) continue;
-      this.spawnMob(def.key, x + 0.5, y, z + 0.5);
+      if (Math.hypot(x - p.x, z - p.z) < 24) continue;
+      // famille des zombies : 5 % de bébés
+      this.spawnMob(def.key, x + 0.5, y, z + 0.5, { baby: BABY_ZOMBIE_KEYS.has(def.key) && Math.random() < BABY_ZOMBIE_CHANCE });
     }
   }
 

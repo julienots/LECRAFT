@@ -3,6 +3,9 @@ import type { MobDef } from '../data/mobs';
 import { Mob, type EntitySpawner } from './Mob';
 import { B } from '../blocks/BlockRegistry';
 import { WOOL_COLORS } from '../data/blocks';
+import { ItemRegistry } from '../inventory/ItemRegistry';
+import { AIState } from '../ai/StateMachine';
+import { BREED_COOLDOWN_SECONDS, ironGolemDamage, rollBarter } from './SpawnRules';
 
 /** Couleurs naturelles des moutons (probabilités vanilla). */
 const SHEEP_COLORS: [string, number][] = [['white', 0.8184], ['black', 0.05], ['gray', 0.05], ['light_gray', 0.05], ['brown', 0.03], ['pink', 0.0016]];
@@ -22,6 +25,23 @@ export class Animal extends Mob {
   woolColor = 'white';
   sheared = false;
   private eggTimer = 300 + Math.random() * 300;
+  /** Piglin : troc en cours (secondes avant de lâcher le résultat). */
+  barterTimer = 0;
+
+  /** Animal apprivoisé (chat, perroquet ; le loup gère aussi ce drapeau). */
+  get tamedPet(): boolean {
+    return !!this.dynProps.get('__tamed');
+  }
+
+  /** Golem de fer : 7,5 à 21,5 dégâts (jeu Java), comme contre les monstres. */
+  meleeDamage(): number {
+    return this.def.key === 'iron_golem' ? ironGolemDamage() : this.def.damage;
+  }
+
+  /** Butin propre à l'individu : laine du mouton (s'il n'est pas tondu). */
+  protected onDeath(_ctx: GameContext) {
+    if (this.def.key === 'sheep' && !this.sheared && !this.baby) this.spawner.spawnItem(`${this.woolColor}_wool`, 1, this.x, this.y + 0.5, this.z);
+  }
 
   constructor(def: MobDef, index: number, x: number, y: number, z: number, spawner: EntitySpawner) {
     super(def, index, x, y, z, spawner);
@@ -65,7 +85,7 @@ export class Animal extends Mob {
           this.guardTimer = 1.2;
           this.attackAnim = 1;
           const d = best || 1;
-          ctx.combat.damageMob(foe, 7 + Math.random() * 7, { kind: 'bot', knockX: ((foe.x - this.x) / d) * 3, knockZ: ((foe.z - this.z) / d) * 3, attacker: this as never });
+          ctx.combat.damageMob(foe, ironGolemDamage(), { kind: 'bot', knockX: ((foe.x - this.x) / d) * 3, knockZ: ((foe.z - this.z) / d) * 3, attacker: this as never });
           foe.body.vy = 7;
           ctx.audio.play('stone_hit', { x: this.x, y: this.y, z: this.z });
         }
@@ -79,22 +99,63 @@ export class Animal extends Mob {
         this.setWool(this.woolColor, false);
       }
     }
-    // les poules pondent des œufs toutes les 5 à 10 minutes
-    if (this.has('laysEggs') && !this.baby) {
+    // les poules pondent des œufs toutes les 5 à 10 minutes ; le tatou perd une écaille aussi souvent
+    if ((this.has('laysEggs') || this.def.key === 'armadillo') && !this.baby) {
       this.eggTimer -= dt;
       if (this.eggTimer <= 0) {
         this.eggTimer = 300 + Math.random() * 300;
-        this.spawner.spawnItem('egg', 1, this.x, this.y + 0.3, this.z);
+        this.spawner.spawnItem(this.def.key === 'armadillo' ? 'armadillo_scute' : 'egg', 1, this.x, this.y + 0.3, this.z);
         ctx.audio.play('pop', { x: this.x, y: this.y, z: this.z, volume: 0.5 });
       }
     }
+    // piglin : examine le lingot d'or 6 s puis lâche le résultat du troc
+    if (this.barterTimer > 0) {
+      this.barterTimer -= dt;
+      this.ai.stop();
+      if (this.barterTimer <= 0 && !this.dead) {
+        const r = rollBarter((id) => ItemRegistry.has(id));
+        if (r) this.spawner.spawnItem(r.item, r.count, this.x, this.y + 1, this.z);
+      }
+    }
+    // chat / perroquet apprivoisé : suit son maître et le rejoint s'il est trop loin
+    if (this.tamedPet && this.def.key !== 'wolf' && !this.dead) {
+      const p = ctx.player;
+      if (this.ai.state === AIState.WANDER || this.ai.state === AIState.IDLE) {
+        if (this.distToPlayer > 12 && !p.dead) {
+          const x = Math.floor(p.x + (Math.random() - 0.5) * 3), z = Math.floor(p.z + (Math.random() - 0.5) * 3);
+          if (ctx.world.isSolid(x, Math.floor(p.y) - 1, z) && ctx.world.getBlock(x, Math.floor(p.y), z) === B.AIR) this.body.setPos(x + 0.5, Math.floor(p.y), z + 0.5);
+        } else if (this.distToPlayer > 5 && !p.dead) this.ai.moveTowards(p.x, p.z, 1);
+      }
+    }
+  }
+
+  /** Chat (1 chance sur 3, poisson cru) et perroquet (1 chance sur 10, graines) : apprivoisement. */
+  private tryTame(ctx: GameContext): boolean {
+    const chance = this.def.key === 'parrot' ? 0.1 : 1 / 3;
+    if (Math.random() < chance) {
+      this.dynProps.set('__tamed', true);
+      this.persistent = true;
+      this.fleeTimer = 0;
+      ctx.particles.burst('hearts', this.x, this.y + this.body.height, this.z, 7);
+    } else ctx.particles.burst('smoke', this.x, this.y + this.body.height, this.z, 6);
+    return true;
   }
 
   /** Nourrir : renvoie vrai si la nourriture a été acceptée. */
   feed(ctx: GameContext, itemId: string): boolean {
     if (!this.def.food?.includes(itemId) || this.dead) return false;
+    // piglin : troc contre un lingot d'or (adulte seulement)
+    if (this.def.key === 'piglin') {
+      if (this.baby || this.barterTimer > 0 || this.anger > 0) return false;
+      this.barterTimer = 6;
+      return true;
+    }
+    // apprivoisement (chat, perroquet) ; le loup sauvage ne se nourrit pas (os uniquement), le perroquet ne se reproduit pas
+    if (this.has('tameable') && !this.tamedPet) return this.def.key === 'wolf' ? false : this.tryTame(ctx);
+    if (this.def.key === 'parrot') return false;
     if (this.baby) {
-      this.growTimer -= 60;
+      // chaque nourriture retire 10 % du temps de croissance restant
+      this.growTimer -= this.growTimer * 0.1;
       ctx.particles.burst('hearts', this.x, this.y + this.body.height, this.z, 3);
       return true;
     }
@@ -120,13 +181,14 @@ export class Animal extends Mob {
         return;
       }
       this.loveTimer = o.loveTimer = 0;
-      this.breedCooldown = o.breedCooldown = 300;
+      this.breedCooldown = o.breedCooldown = BREED_COOLDOWN_SECONDS;
       const baby = this.spawner.spawnMob(this.def.key, (this.x + o.x) / 2, this.y + 0.2, (this.z + o.z) / 2, { baby: true, persistent: true });
       if (baby instanceof Animal && this.def.key === 'sheep') baby.setWool(Math.random() < 0.5 ? this.woolColor : o.woolColor, false);
       if (baby) {
         ctx.particles.burst('hearts', baby.x, baby.y + 0.6, baby.z, 8);
         ctx.stats.inc('animalsBred');
-        ctx.player.addXp(3);
+        // 1 à 7 points d'expérience par naissance
+        ctx.player.addXp(1 + Math.floor(Math.random() * 7));
       }
       return;
     }

@@ -11,11 +11,12 @@ import { Entity } from './Entity';
 import { scanRelations } from './MobRelations';
 import { EFFECT_COLORS } from './Effects';
 import type { ProjectileKind } from './Projectile';
+import { BABY_GROW_SECONDS } from './SpawnRules';
 
 /** Services fournis par l'EntityManager aux entités. */
 export interface EntitySpawner {
   spawnProjectile(kind: ProjectileKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, damage: number, fromPlayer: boolean, def?: ProjectileDef): Projectile;
-  spawnMob(key: string, x: number, y: number, z: number, opts?: { baby?: boolean; persistent?: boolean }): Mob | null;
+  spawnMob(key: string, x: number, y: number, z: number, opts?: { baby?: boolean; persistent?: boolean; size?: number }): Mob | null;
   spawnItem(id: string, count: number, x: number, y: number, z: number, durability?: number, meta?: Record<string, unknown>): void;
   modelFor(key: string, scale: number): MobModel;
 }
@@ -92,7 +93,8 @@ export class Mob extends Entity {
 
   setBaby(b: boolean) {
     this.baby = b;
-    this.growTimer = b ? 300 : 0;
+    // 20 minutes comme le jeu original (les bébés monstres, eux, ne grandissent jamais)
+    this.growTimer = b ? BABY_GROW_SECONDS : 0;
     const s = (this.def.scale ?? 1) * (b ? 0.55 : 1);
     this.model.group.scale.setScalar(s);
     this.body.height = this.def.height * (b ? 0.55 : 1);
@@ -108,7 +110,7 @@ export class Mob extends Entity {
     const dx = p.x - this.x, dz = p.z - this.z, d = Math.hypot(dx, dz) || 1;
     const dy = p.y - this.y;
     if (d > this.def.attackRange * 1.2 || dy > 2.5 || dy < -2) return;
-    const dealt = p.damage(this.def.damage, 'mob', (dx / d) * 5, (dz / d) * 5, this);
+    const dealt = p.damage(this.meleeDamage(), 'mob', (dx / d) * 5, (dz / d) * 5, this);
     if (dealt > 0 && this.has('poison') && this.def.key !== 'bee' && p.difficulty !== 'easy') p.poisonTimer = Math.max(p.poisonTimer, p.difficulty === 'hard' ? 15 : 7);
     // zombie momifié : inflige la faim
     if (dealt > 0 && this.def.key === 'husk') p.effects.add('hunger', 140, 0, true, p.effectTarget);
@@ -127,9 +129,19 @@ export class Mob extends Entity {
     }
   }
 
+  /** Dégâts d'un coup au corps à corps (avant la difficulté). */
+  meleeDamage(): number {
+    return this.def.damage;
+  }
+
   rangedAttack(ctx: GameContext) {
-    const r = this.def.ranged!;
     this.attackTimer = this.def.attackCooldown * (0.8 + Math.random() * 0.4);
+    this.fireShot(ctx);
+  }
+
+  /** Tire un projectile vers le joueur (sans toucher au délai d'attaque). */
+  fireShot(ctx: GameContext) {
+    const r = this.def.ranged!;
     this.attackAnim = 1;
     const p = ctx.player;
     const sx = this.x, sy = this.y + this.body.height * 0.8, sz = this.z;
@@ -188,11 +200,15 @@ export class Mob extends Entity {
     this.breedCooldown = Math.max(0, this.breedCooldown - dt);
     this.loveTimer = Math.max(0, this.loveTimer - dt);
     if (this.anger > 0) this.anger = Math.max(0, this.anger - dt);
-    if (this.baby) {
+    if (this.baby && this.def.category !== 'hostile') {
       this.growTimer -= dt;
       if (this.growTimer <= 0) this.setBaby(false);
     }
     if (this.dead) {
+      if (!this.deathHandled) {
+        this.deathHandled = true;
+        this.onDeath(ctx);
+      }
       this.deathTimer += dt;
       if (this.def.key === 'ender_dragon') {
         // mort du dragon : il s'élève lentement au milieu des explosions puis disparaît
@@ -266,18 +282,18 @@ export class Mob extends Entity {
       }
       if (Math.random() < dt * 12) ctx.particles.burst('fire', this.x, this.y + this.body.height * (0.3 + Math.random() * 0.6), this.z, 1);
     }
-    // brûlure au soleil
-    if (this.has('burnsInSun') && ctx.dayCycle.daylight > 0.8 && !ctx.raining() && !this.body.inWater) {
+    // brûlure au soleil (jeu Java) : à découvert en plein jour, la créature prend feu pour 8 s
+    // (1 dégât par seconde) ; l'eau, la pluie et un casque la protègent
+    if (this.has('burnsInSun') && !this.has('fireImmune') && ctx.dimension === 'overworld' && ctx.dayCycle.daylight > 0.8 && !ctx.raining() && !this.body.inWater && !this.sunProtected()) {
       const l = ctx.world.getLight(Math.floor(this.x), Math.floor(this.y + this.body.height), Math.floor(this.z));
       if (l.sky >= 15) {
         this.burnTimer += dt;
-        if (this.burnTimer > 1) {
-          this.burnTimer = 0;
-          ctx.combat.damageMob(this, 2, { kind: 'environment', fire: true });
-          ctx.particles.burst('fire', this.x, this.y + this.body.height * 0.8, this.z, 6);
-        }
-      }
-    }
+        if (this.fireTime <= 0) this.fireTick = 0;
+        this.fireTime = Math.max(this.fireTime, 8);
+      } else this.burnTimer = 0;
+    } else this.burnTimer = 0;
+    // la pluie éteint les créatures à découvert
+    if (this.fireTime > 0 && ctx.raining() && ctx.world.getLight(Math.floor(this.x), Math.floor(this.y + this.body.height), Math.floor(this.z)).sky >= 15) this.fireTime = 0;
     // animation de marche
     const sp = Math.hypot(this.body.vx, this.body.vz);
     this.walkPhase += sp * dt * 3.2;
@@ -343,6 +359,15 @@ export class Mob extends Entity {
 
   /** Point d'extension pour les sous-classes. */
   protected customUpdate(_ctx: GameContext, _dt: number) {}
+
+  private deathHandled = false;
+  /** Appelé une fois, au premier tick après la mort (butin propre à l'individu, division…). */
+  protected onDeath(_ctx: GameContext) {}
+
+  /** Créature protégée du soleil (casque porté, etc.). */
+  protected sunProtected(): boolean {
+    return false;
+  }
 
   /** Synchronise l'objet 3D avec la simulation (à chaque frame de rendu). */
   render(ctx: GameContext, alpha: number, t: number) {

@@ -151,6 +151,12 @@ export function newMonsterUpdate(m: Mob & { timer2?: number; life?: number }, ct
       if (m.life < 0 && Math.random() < dt) ctx.combat.damageMob(m, 1, { kind: 'environment' });
       break;
     }
+    case 'endermite': {
+      // disparaît au bout de 2 minutes (sauf s'il est nommé / persistant)
+      m.life = (m.life ?? 0) + dt;
+      if (m.life > 120 && !m.persistent && !m.nameTag) m.removed = true;
+      break;
+    }
     case 'creaking': {
       // se fige tant que le joueur le regarde (comme le jeu original)
       if (p.dead || m.distToPlayer > 32) break;

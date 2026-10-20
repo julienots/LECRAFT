@@ -37,6 +37,9 @@ export interface ProjectileDef {
 }
 
 /** Projectiles connus (add-ons et équivalents des projectiles du jeu de référence). */
+/** Chance qu'une perle de l'Ender lancée par le joueur fasse apparaître un endermite. */
+export const ENDERMITE_PEARL_CHANCE = 0.05;
+
 export const PROJECTILE_DEFS = new Map<string, ProjectileDef>([
   ['minecraft:snowball', { id: 'minecraft:snowball', color: '#f4f8ff', size: 0.25, gravity: 12, damage: 0, knockback: 2 }],
   ['minecraft:egg', { id: 'minecraft:egg', color: '#e8dcc0', size: 0.25, gravity: 12, damage: 0, knockback: 2 }],
@@ -288,7 +291,12 @@ export class Projectile extends Entity {
         p.body.vy = Math.max(p.body.vy, d.knockback * 0.6);
       }
     }
-    if (d.teleport && this.owner && 'body' in this.owner) this.owner.body.setPos(this.x, this.y + 0.2, this.z);
+    if (d.teleport && this.owner && 'body' in this.owner) {
+      this.owner.body.setPos(this.x, this.y + 0.2, this.z);
+      // perle de l'Ender : 5 % de chances de faire apparaître un endermite (jeu original)
+      const em = (ctx as unknown as { entities?: { spawnMob?(k: string, x: number, y: number, z: number): unknown } }).entities;
+      if (this.fromPlayer && Math.random() < ENDERMITE_PEARL_CHANCE) em?.spawnMob?.('endermite', this.x, this.y + 0.2, this.z);
+    }
     ctx.audio.play(d.explode ? 'explode' : d.knockback ? 'slam' : 'pop', { x: this.x, y: this.y, z: this.z, volume: 0.6 });
   }
 
