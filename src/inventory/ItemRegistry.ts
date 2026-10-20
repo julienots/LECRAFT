@@ -1,5 +1,6 @@
 import { ITEM_DEFS } from '../data/items';
 import type { ItemDef } from './Item';
+import { javaItemProps } from '../data/javaItemProps';
 
 /** Registre des objets (clé texte → définition). Les sauvegardes stockent les clés texte. */
 class ItemRegistryImpl {
@@ -9,6 +10,9 @@ class ItemRegistryImpl {
   }
   register(def: ItemDef) {
     if (this.map.has(def.key)) throw new Error(`Objet dupliqué: ${def.key}`);
+    // piles, usure, nourriture et combustible du jeu original (objets-blocs compris)
+    const fix = javaItemProps(def);
+    if (Object.keys(fix).length) Object.assign(def, fix);
     this.map.set(def.key, def);
   }
   get(key: string): ItemDef | undefined {

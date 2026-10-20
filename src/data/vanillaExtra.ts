@@ -13,13 +13,15 @@ import { hex, registerPainter, paint, type Tile } from '../render/TextureGenerat
 import { MORE_BLOCKS, MORE_ITEMS, MORE_RECIPES, MORE_SMELTING } from './vanillaMore';
 import { PAPER_BLOCKS, PAPER_ITEMS, PAPER_RECIPES, PAPER_SMELTING } from './paperContent';
 import { applyPackFaces, PACK_BLOCK_DEFS, PACK_ITEM_DEFS, PACK_RECIPES } from './packContent';
+import { SMELT_XP, VANILLA_RECIPES, VANILLA_SMELTING } from './vanillaRecipes';
+import { applyJavaBlockProps } from './javaBlockProps';
 
 const B: BlockDef[] = [];
 const I: ItemDef[] = [];
 const R: CraftingRecipe[] = [];
 const S: SmeltingRecipe[] = [];
 /** Ajouts aux tags de recettes existants (planches, bûches…). */
-export const EXTRA_TAGS: Record<string, string[]> = { planks: [], logs: [] };
+export const EXTRA_TAGS: Record<string, string[]> = { planks: [], logs: [], wooden_slabs: [], stone_tool: [], soul_fire_base_blocks: [], eggs: [] };
 
 type P = (t: Tile) => void;
 const tile = (name: string, fn: P) => registerPainter(name, fn);
@@ -46,7 +48,7 @@ const smelt = (input: string, result: string) => S.push({ id: `extra:smelt:${inp
 
 // ---------- couleurs : béton, terre cuite, verre teinté, colorants ----------
 const DYE_NAMES: Record<string, string> = { white: 'blanc', orange: 'orange', magenta: 'magenta', light_blue: 'bleu clair', yellow: 'jaune', lime: 'vert clair', pink: 'rose', gray: 'gris', light_gray: 'gris clair', cyan: 'cyan', purple: 'violet', blue: 'bleu', brown: 'marron', green: 'vert', red: 'rouge', black: 'noir' };
-const DYE_FROM: Record<string, string> = { white: 'bone_meal', yellow: 'dandelion', red: 'poppy', blue: 'cornflower', light_gray: 'oxeye_daisy', black: 'ink_sac', brown: 'cocoa_beans', green: 'cactus', orange: 'orange_tulip', pink: 'pink_tulip', magenta: 'allium', light_blue: 'blue_orchid', purple: '', cyan: '', lime: '', gray: '' };
+const DYE_FROM: Record<string, string> = { white: 'bone_meal', yellow: 'dandelion', red: 'poppy', blue: 'cornflower', light_gray: 'oxeye_daisy', black: 'ink_sac', brown: 'cocoa_beans', green: '', orange: 'orange_tulip', pink: 'pink_tulip', magenta: 'allium', light_blue: 'blue_orchid', purple: '', cyan: '', lime: '', gray: '' };
 for (const [c, n, h] of WOOL_COLORS) {
   item(`${c}_dye`, `Colorant ${DYE_NAMES[c] ?? c}`, 'dust', [h, h]);
   cube(`${c}_concrete`, `Béton ${n}`, flat(h, 0.06), { hardness: 1.8, color: h });
@@ -63,11 +65,12 @@ for (const [c, n, h] of WOOL_COLORS) {
   B.push({ key: `${c}_stained_glass`, name: `Verre ${n}`, textures: { all: `${c}_stained_glass` }, hardness: 0.3, render: 'translucent', sound: 'glass', drops: [], color: h });
   B.push({ key: `${c}_stained_glass_pane`, name: `Vitre ${n}`, textures: { all: `${c}_stained_glass` }, hardness: 0.3, render: 'model', shape: 'pane', sound: 'glass', drops: [], color: h });
   if (DYE_FROM[c]) shapeless(`${c}_dye`, `${c}_dye`, c === 'white' ? 1 : 1, [DYE_FROM[c]]);
-  shaped(`${c}_concrete_powder`, `${c}_concrete_powder`, 8, ['SSS', 'SDS', 'GGG'], { S: 'sand', D: `${c}_dye`, G: 'gravel' });
+  shapeless(`${c}_concrete_powder`, `${c}_concrete_powder`, 8, [`${c}_dye`, 'sand', 'sand', 'sand', 'sand', 'gravel', 'gravel', 'gravel', 'gravel']);
   shaped(`${c}_terracotta`, `${c}_terracotta`, 8, ['TTT', 'TDT', 'TTT'], { T: 'terracotta', D: `${c}_dye` });
   shaped(`${c}_stained_glass`, `${c}_stained_glass`, 8, ['GGG', 'GDG', 'GGG'], { G: 'glass', D: `${c}_dye` });
   shaped(`${c}_stained_glass_pane`, `${c}_stained_glass_pane`, 16, ['GGG', 'GGG'], { G: `${c}_stained_glass` });
-  if (c !== 'white') shapeless(`${c}_wool_dye`, `${c}_wool`, 1, ['white_wool', `${c}_dye`]);
+  // teinture de n'importe quelle laine (jeu original) ; le colorant vert s'obtient en cuisant un cactus
+  shapeless(`${c}_wool_dye`, `${c}_wool`, 1, ['tag:wool', `${c}_dye`]);
 }
 shapeless('purple_dye', 'purple_dye', 2, ['blue_dye', 'red_dye']);
 shapeless('cyan_dye', 'cyan_dye', 2, ['blue_dye', 'green_dye']);
@@ -94,7 +97,8 @@ for (const [w, n, plank, bark, leaf] of WOODS2) {
   tile(`${log}_top`, (t) => void paint.logTop(t, plank, bark));
   B.push({ key: log, name: stem ? `Tige de ${n}` : w === 'bamboo' ? 'Bloc de bambou' : `Bûche de ${n}`, textures: { top: `${log}_top`, bottom: `${log}_top`, side: `${log}_side` }, hardness: 2, tool: 'axe', flammable: !stem, sound: 'wood', color: bark });
   EXTRA_TAGS.planks.push(`${w}_planks`);
-  EXTRA_TAGS.logs.push(log);
+  // le bloc de bambou ne fait pas partie de #logs (feu de camp, fumoir) dans le jeu original
+  if (w !== 'bamboo') EXTRA_TAGS.logs.push(log);
   shapeless(`${w}_planks`, `${w}_planks`, w === 'bamboo' ? 2 : 4, [log]);
   for (const [suffix, shape, nm] of [['stairs', 'stairs', 'Escalier'], ['slab', 'slab', 'Dalle'], ['fence', 'fence', 'Barrière']] as const)
     B.push({ key: `${w}_${suffix}`, name: `${nm} en ${n}`, textures: { all: `${w}_planks` }, hardness: 2, tool: 'axe', render: 'model', shape, sound: 'wood', color: plank });
@@ -116,7 +120,7 @@ for (const [w, n, plank, bark, leaf] of WOODS2) {
         t.data[i * 4 + 3] = 255;
       }
     });
-    B.push({ key: `${w}_leaves`, name: `Feuilles de ${n}`, textures: { all: `${w}_leaves` }, hardness: 0.2, tool: 'shears', render: 'cutout', flammable: true, sound: 'leaves', lightFilter: 1, sway: true, drops: [{ item: 'stick', chance: 0.05 }], color: leaf, ...(w === 'mangrove' ? { tint: 'foliage' } : {}) });
+    B.push({ key: `${w}_leaves`, name: `Feuilles de ${n}`, textures: { all: `${w}_leaves` }, hardness: 0.2, tool: 'shears', render: 'cutout', flammable: true, sound: 'leaves', lightFilter: 1, sway: true, drops: [...(w === 'cherry' || w === 'pale_oak' ? [{ item: `${w}_sapling`, chance: 0.05 }] : []), { item: 'stick', min: 1, max: 2, chance: 0.02 }], color: leaf, ...(w === 'mangrove' ? { tint: 'foliage' } : {}) });
   }
 }
 for (const [k, n, c] of [['azalea_leaves', "Feuilles d'azalée", '#5a8a2a'], ['flowering_azalea_leaves', "Feuilles d'azalée fleurie", '#6a8a3a']] as const) {
@@ -131,7 +135,7 @@ for (const [k, n, c] of [['azalea_leaves', "Feuilles d'azalée", '#5a8a2a'], ['f
     }
     if (k.startsWith('flowering')) t.speckle(hex('#e070c0'), 10);
   });
-  B.push({ key: k, name: n, textures: { all: k }, hardness: 0.2, tool: 'shears', render: 'cutout', sound: 'leaves', lightFilter: 1, sway: true, drops: [], color: c });
+  B.push({ key: k, name: n, textures: { all: k }, hardness: 0.2, tool: 'shears', render: 'cutout', sound: 'leaves', lightFilter: 1, sway: true, drops: [{ item: k.startsWith('flowering') ? 'flowering_azalea' : 'azalea', chance: 0.05 }, { item: 'stick', min: 1, max: 2, chance: 0.02 }], color: c });
 }
 
 // ---------- pierres et minéraux ----------
@@ -242,15 +246,15 @@ sided('campfire', 'Feu de camp', (t) => {
   t.speckle(hex('#ffe060'), 10);
 }, { light: 15, solid: true });
 shaped('campfire', 'campfire', 1, [' S ', 'SCS', 'LLL'], { S: 'stick', C: 'tag:coals', L: 'tag:logs' });
-shaped('barrel', 'barrel', 1, ['PSP', 'P P', 'PSP'], { P: 'tag:planks', S: 'oak_slab' });
-shaped('composter', 'composter', 1, ['S S', 'S S', 'SSS'], { S: 'oak_slab' });
+shaped('barrel', 'barrel', 1, ['PSP', 'P P', 'PSP'], { P: 'tag:planks', S: 'tag:wooden_slabs' });
+shaped('composter', 'composter', 1, ['S S', 'S S', 'SSS'], { S: 'tag:wooden_slabs' });
 shaped('noteblock', 'noteblock', 1, ['PPP', 'PRP', 'PPP'], { P: 'tag:planks', R: 'redstone' });
 shaped('jukebox', 'jukebox', 1, ['PPP', 'PDP', 'PPP'], { P: 'tag:planks', D: 'diamond' });
 shaped('cartography_table', 'cartography_table', 1, ['AA', 'PP', 'PP'], { A: 'paper', P: 'tag:planks' });
 shaped('fletching_table', 'fletching_table', 1, ['FF', 'PP', 'PP'], { F: 'flint', P: 'tag:planks' });
 shaped('smithing_table', 'smithing_table', 1, ['II', 'PP', 'PP'], { I: 'iron_ingot', P: 'tag:planks' });
 shaped('loom', 'loom', 1, ['SS', 'PP'], { S: 'string', P: 'tag:planks' });
-shaped('lectern', 'lectern', 1, ['SSS', ' B ', ' S '], { S: 'oak_slab', B: 'bookshelf' });
+shaped('lectern', 'lectern', 1, ['SSS', ' B ', ' S '], { S: 'tag:wooden_slabs', B: 'bookshelf' });
 shaped('jack_o_lantern', 'jack_o_lantern', 1, ['P', 'T'], { P: 'carved_pumpkin', T: 'torch' });
 shaped('quartz_block', 'quartz_block', 1, ['QQ', 'QQ'], { Q: 'quartz' });
 shaped('quartz_bricks', 'quartz_bricks', 4, ['QQ', 'QQ'], { Q: 'quartz_block' });
@@ -294,7 +298,7 @@ for (const [k, n, flame, light] of [['soul_torch', 'Torche des âmes', '#60e0f0'
   });
   B.push({ key: k, name: n, textures: { all: k }, hardness: 0, render: 'model', shape: 'torch', solid: false, light, sound: 'wood', needsSupport: true, color: flame });
 }
-shaped('soul_torch', 'soul_torch', 4, ['C', 'S', 'D'], { C: 'tag:coals', S: 'stick', D: 'soul_sand' });
+shaped('soul_torch', 'soul_torch', 4, ['C', 'S', 'D'], { C: 'tag:coals', S: 'stick', D: 'tag:soul_fire_base_blocks' });
 shaped('copper_torch', 'copper_torch', 4, ['N', 'C', 'S'], { N: 'copper_nugget', C: 'tag:coals', S: 'stick' });
 
 // ---------- fleurs ----------
@@ -355,6 +359,8 @@ item('heart_of_the_sea', 'Cœur de la mer', 'gem', ['#1a5aa0', '#4aa0f0']);
 item('copper_nugget', 'Pépite de cuivre', 'nugget', ['#c06c50', '#e09070']);
 item('netherite_scrap', 'Fragment de netherite', 'lump', ['#4a3a34', '#6a5a50']);
 item('netherite_ingot', 'Lingot de netherite', 'ingot', ['#3a3434', '#5a5050']);
+// pomme de Notch : même texture que la pomme dorée, avec reflet (butin des coffres du jeu original)
+item('enchanted_golden_apple', 'Pomme dorée enchantée', 'apple', ['#f6d03d', '#4f8a2c'], { food: { hunger: 4, saturation: 9.6, effect: 'regen' }, rare: true, tab: 'food', packTexture: 'golden_apple' });
 item('echo_shard', "Éclat d'écho", 'gem', ['#0a3a4a', '#2a8aa0']);
 item('rabbit_hide', 'Peau de lapin', 'leather', ['#a88060', '#c8a080']);
 item('totem_of_undying', "Totem d'immortalité", 'relic', ['#e8c040', '#40a060'], { maxStack: 1 });
@@ -393,7 +399,7 @@ shapeless('copper_nugget', 'copper_nugget', 9, ['copper_ingot']);
 shaped('glistering_melon_slice', 'glistering_melon_slice', 1, ['NNN', 'NMN', 'NNN'], { N: 'gold_nugget', M: 'melon_slice' });
 shaped('golden_carrot', 'golden_carrot', 1, ['NNN', 'NCN', 'NNN'], { N: 'gold_nugget', C: 'carrot' });
 shaped('cookie', 'cookie', 8, ['WCW'], { W: 'wheat', C: 'cocoa_beans' });
-shapeless('pumpkin_pie', 'pumpkin_pie', 1, ['pumpkin', 'sugar', 'egg']);
+shapeless('pumpkin_pie', 'pumpkin_pie', 1, ['pumpkin', 'sugar', 'tag:eggs']);
 shapeless('pumpkin_seeds', 'pumpkin_seeds', 4, ['pumpkin']);
 shapeless('melon_seeds', 'melon_seeds', 1, ['melon_slice']);
 shaped('glass_bottle', 'glass_bottle', 3, ['G G', ' G '], { G: 'glass' });
@@ -492,14 +498,15 @@ smelt('ancient_debris', 'netherite_scrap');
 // ---------- grottes : minerais d'ardoise, spéléothèmes, grottes luxuriantes, géodes ----------
 const DS = ['#3a3a40', '#46464c', '#505056', '#5a5a60'];
 const DEEP_ORES: [string, string, number, { item: string; min?: number; max?: number }[], string[]][] = [
-  ['coal', 'charbon', 0, [{ item: 'coal' }], ['#1a1a1a', '#0c0c0c', '#2e2e2e']],
-  ['copper', 'cuivre', 1, [{ item: 'raw_copper', min: 2, max: 5 }], ['#c56b4b', '#e08b63', '#4f9d82']],
-  ['iron', 'fer', 1, [{ item: 'raw_iron' }], ['#d8af93', '#f0d4b8', '#a0806a']],
-  ['gold', 'or', 2, [{ item: 'raw_gold' }], ['#f2d14a', '#fff58a', '#b58b1c']],
-  ['redstone', 'redstone', 2, [{ item: 'redstone', min: 4, max: 5 }], ['#b0120a', '#ff2a1a', '#6e0703']],
-  ['lapis', 'lapis-lazuli', 1, [{ item: 'lapis_lazuli', min: 4, max: 9 }], ['#1f4ea0', '#4b75d0', '#123673']],
-  ['diamond', 'diamant', 2, [{ item: 'diamond' }], ['#5decf5', '#d8fffd', '#1aa7a0']],
-  ['emerald', 'émeraude', 2, [{ item: 'emerald' }], ['#17dd62', '#9dffb8', '#0b7c34']],
+  // tiers comme les minerais de surface (1 bois, 2 pierre, 3 fer)
+  ['coal', 'charbon', 1, [{ item: 'coal' }], ['#1a1a1a', '#0c0c0c', '#2e2e2e']],
+  ['copper', 'cuivre', 2, [{ item: 'raw_copper', min: 2, max: 5 }], ['#c56b4b', '#e08b63', '#4f9d82']],
+  ['iron', 'fer', 2, [{ item: 'raw_iron' }], ['#d8af93', '#f0d4b8', '#a0806a']],
+  ['gold', 'or', 3, [{ item: 'raw_gold' }], ['#f2d14a', '#fff58a', '#b58b1c']],
+  ['redstone', 'redstone', 3, [{ item: 'redstone', min: 4, max: 5 }], ['#b0120a', '#ff2a1a', '#6e0703']],
+  ['lapis', 'lapis-lazuli', 2, [{ item: 'lapis_lazuli', min: 4, max: 9 }], ['#1f4ea0', '#4b75d0', '#123673']],
+  ['diamond', 'diamant', 3, [{ item: 'diamond' }], ['#5decf5', '#d8fffd', '#1aa7a0']],
+  ['emerald', 'émeraude', 3, [{ item: 'emerald' }], ['#17dd62', '#9dffb8', '#0b7c34']],
 ];
 for (const [k, n, tier, drops, spot] of DEEP_ORES) {
   cube(`deepslate_${k}_ore`, `Minerai de ${n} des abîmes`, (t) => {
@@ -710,8 +717,27 @@ shapeless('stone_button', 'stone_button', 1, ['stone']);
 
 applyPackFaces(B);
 applyPackFaces(MORE_BLOCKS);
+// tags complets du jeu original : #logs (bûches, bois et versions écorcées), #wooden_slabs,
+// #stone_tool_materials, #soul_fire_base_blocks, #eggs (seuls les objets existants sont retenus)
+{
+  const ALL = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'cherry', 'mangrove', 'pale_oak', 'crimson', 'warped'];
+  for (const w of ALL) {
+    const stem = w === 'crimson' || w === 'warped';
+    const [log, wood] = stem ? [`${w}_stem`, `${w}_hyphae`] : [`${w}_log`, `${w}_wood`];
+    EXTRA_TAGS.logs.push(log, wood, `stripped_${log}`, `stripped_${wood}`);
+  }
+  EXTRA_TAGS.wooden_slabs.push(...ALL.map((w) => `${w}_slab`), 'bamboo_slab');
+  EXTRA_TAGS.stone_tool.push('blackstone', 'cobbled_deepslate');
+  EXTRA_TAGS.soul_fire_base_blocks.push('soul_sand', 'soul_soil');
+  EXTRA_TAGS.eggs.push('blue_egg', 'brown_egg');
+}
+
 export const EXTRA_BLOCKS: BlockDef[] = [...B, ...MORE_BLOCKS, ...PAPER_BLOCKS, ...PACK_BLOCK_DEFS];
+// dureté / outil / tier du jeu original (l'ordre, donc les identifiants, ne change pas)
+applyJavaBlockProps(EXTRA_BLOCKS);
 const MORE_KEYS = new Set([...I, ...MORE_ITEMS, ...PAPER_ITEMS].map((i) => i.key));
 export const EXTRA_ITEMS: ItemDef[] = [...I, ...MORE_ITEMS, ...PAPER_ITEMS, ...PACK_ITEM_DEFS.filter((i) => !MORE_KEYS.has(i.key))];
-export const EXTRA_RECIPES = [...R, ...MORE_RECIPES, ...PAPER_RECIPES, ...PACK_RECIPES];
-export const EXTRA_SMELTING = [...S, ...MORE_SMELTING, ...PAPER_SMELTING];
+// recettes officielles manquantes (générées, voir vanillaRecipes.ts) : ajoutées en dernier
+export const EXTRA_RECIPES = [...R, ...MORE_RECIPES, ...PAPER_RECIPES, ...PACK_RECIPES, ...VANILLA_RECIPES];
+// expérience de cuisson du jeu original (minerais des abîmes, débris antiques, argile…)
+export const EXTRA_SMELTING = [...S, ...MORE_SMELTING, ...PAPER_SMELTING, ...VANILLA_SMELTING].map((r) => (SMELT_XP[r.input] !== undefined ? { ...r, xp: SMELT_XP[r.input] } : r));

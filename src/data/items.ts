@@ -6,12 +6,12 @@ const NO_ITEM = new Set(['air', 'water', 'lava', 'bedrock', 'wheat', 'carrots', 
 
 /** Matériaux d'outils (valeurs du jeu vanilla Java). */
 export const MATERIALS = {
-  wooden: { name: 'en bois', tier: 1, speed: 2, durability: 59, color: '#a8834b', item: 'tag:planks', dmg: { sword: 4, axe: 7, pickaxe: 2, shovel: 2.5, hoe: 1 }, axeCd: 1.25 },
-  stone: { name: 'en pierre', tier: 2, speed: 4, durability: 131, color: '#8a8a8a', item: 'tag:stone_tool', dmg: { sword: 5, axe: 9, pickaxe: 3, shovel: 3.5, hoe: 1 }, axeCd: 1.25 },
-  copper: { name: 'en cuivre', tier: 2, speed: 5, durability: 190, color: '#d8844c', item: 'copper_ingot', dmg: { sword: 5, axe: 9, pickaxe: 3, shovel: 3.5, hoe: 1 }, axeCd: 1.25 },
-  iron: { name: 'en fer', tier: 3, speed: 6, durability: 250, color: '#e6e6e6', item: 'iron_ingot', dmg: { sword: 6, axe: 9, pickaxe: 4, shovel: 4.5, hoe: 1 }, axeCd: 1.1 },
-  golden: { name: 'en or', tier: 1, speed: 12, durability: 32, color: '#fae24a', item: 'gold_ingot', dmg: { sword: 4, axe: 7, pickaxe: 2, shovel: 2.5, hoe: 1 }, axeCd: 1 },
-  diamond: { name: 'en diamant', tier: 4, speed: 8, durability: 1561, color: '#4fe0d6', item: 'diamond', dmg: { sword: 7, axe: 9, pickaxe: 5, shovel: 5.5, hoe: 1 }, axeCd: 1 },
+  wooden: { name: 'en bois', tier: 1, speed: 2, durability: 59, color: '#a8834b', item: 'tag:planks', dmg: { sword: 4, axe: 7, pickaxe: 2, shovel: 2.5, hoe: 1 }, axeCd: 1.25, hoeCd: 1 },
+  stone: { name: 'en pierre', tier: 2, speed: 4, durability: 131, color: '#8a8a8a', item: 'tag:stone_tool', dmg: { sword: 5, axe: 9, pickaxe: 3, shovel: 3.5, hoe: 1 }, axeCd: 1.25, hoeCd: 0.5 },
+  copper: { name: 'en cuivre', tier: 2, speed: 5, durability: 190, color: '#d8844c', item: 'copper_ingot', dmg: { sword: 5, axe: 9, pickaxe: 3, shovel: 3.5, hoe: 1 }, axeCd: 1.25, hoeCd: 0.5 },
+  iron: { name: 'en fer', tier: 3, speed: 6, durability: 250, color: '#e6e6e6', item: 'iron_ingot', dmg: { sword: 6, axe: 9, pickaxe: 4, shovel: 4.5, hoe: 1 }, axeCd: 1.1, hoeCd: 1 / 3 },
+  golden: { name: 'en or', tier: 1, speed: 12, durability: 32, color: '#fae24a', item: 'gold_ingot', dmg: { sword: 4, axe: 7, pickaxe: 2, shovel: 2.5, hoe: 1 }, axeCd: 1, hoeCd: 1 },
+  diamond: { name: 'en diamant', tier: 4, speed: 8, durability: 1561, color: '#4fe0d6', item: 'diamond', dmg: { sword: 7, axe: 9, pickaxe: 5, shovel: 5.5, hoe: 1 }, axeCd: 1, hoeCd: 0.25 },
 } as const;
 export type MaterialKey = keyof typeof MATERIALS;
 
@@ -127,7 +127,8 @@ for (const [mk, m] of Object.entries(MATERIALS))
       maxStack: 1,
       tool: { type: tk as keyof typeof TOOL_KINDS, tier: m.tier, speed: m.speed, durability: m.durability, material: mk },
       damage: m.dmg[tk as keyof typeof m.dmg],
-      attackCooldown: tk === 'axe' ? m.axeCd : t.cd,
+      // vitesse d'attaque de la houe selon le matériau (bois 1, pierre 2, fer 3, diamant 4, or 1)
+      attackCooldown: tk === 'axe' ? m.axeCd : tk === 'hoe' ? m.hoeCd : t.cd,
       use: tk === 'hoe' ? 'till' : undefined,
       bonusVs: mk === 'golden' ? { liche: 2 } : undefined,
       burnTime: mk === 'wooden' ? 10 : undefined,

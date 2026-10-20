@@ -5,6 +5,9 @@ import type { ItemStack } from '../inventory/Item';
 import type { CraftingRecipe } from './Recipe';
 import { RecipeRegistry } from './RecipeRegistry';
 
+/** Contenant rendu après fabrication (jeu original). */
+export const CRAFT_REMAINDER: Record<string, string> = { milk_bucket: 'bucket', water_bucket: 'bucket', lava_bucket: 'bucket', powder_snow_bucket: 'bucket', honey_bottle: 'glass_bottle', dragon_breath: 'glass_bottle' };
+
 /** Grille de fabrication (2x2 dans l'inventaire, 3x3 sur l'établi). */
 export class CraftingGrid {
   readonly slots: (ItemStack | null)[];
@@ -18,14 +21,22 @@ export class CraftingGrid {
     const r = this.recipe;
     return r ? makeStack(r.result.item, r.result.count) : null;
   }
-  /** Consomme un exemplaire de chaque case (prise du résultat). */
-  consume() {
+  /**
+   * Consomme un exemplaire de chaque case (prise du résultat). Comme le jeu original, les seaux
+   * (lait, eau, lave) et les fioles (miel, souffle du dragon) laissent leur contenant : il reste
+   * dans la case quand elle se vide ; sinon il est retourné (à ranger dans l'inventaire).
+   */
+  consume(): ItemStack[] {
+    const left: ItemStack[] = [];
     for (let i = 0; i < this.slots.length; i++) {
       const s = this.slots[i];
       if (!s) continue;
+      const rem = CRAFT_REMAINDER[s.id];
       s.count--;
-      if (s.count <= 0) this.slots[i] = null;
+      if (s.count <= 0) this.slots[i] = rem && ItemRegistry.has(rem) ? makeStack(rem, 1) : null;
+      else if (rem && ItemRegistry.has(rem)) left.push(makeStack(rem, 1));
     }
+    return left;
   }
   /** Rend le contenu à l'inventaire ; retourne ce qui n'a pas pu être rangé. */
   clearInto(inv: Inventory): ItemStack[] {
@@ -96,6 +107,8 @@ export class CraftingSystem {
 
 /** État d'un fourneau (entité de bloc), simulé comme dans le jeu vanilla. */
 export interface FurnaceState {
+  /** Poste : fourneau (défaut), haut fourneau (minerais / métaux) ou fumoir (nourriture), deux fois plus rapides. */
+  kind?: 'furnace' | 'blast_furnace' | 'smoker';
   input: ItemStack | null;
   fuel: ItemStack | null;
   output: ItemStack | null;
@@ -114,7 +127,9 @@ export function newFurnace(): FurnaceState {
 /** Avance la simulation d'un fourneau ; retourne vrai si l'état « allumé » a changé. */
 export function tickFurnace(f: FurnaceState, dt: number): boolean {
   const wasLit = f.burn > 0;
-  const recipe = f.input ? RecipeRegistry.smeltingFor(f.input.id) : undefined;
+  const recipe = f.input ? RecipeRegistry.smeltingFor(f.input.id, f.kind) : undefined;
+  // haut fourneau / fumoir : cuisson et combustion deux fois plus rapides (jeu original)
+  const rate = f.kind && f.kind !== 'furnace' ? 2 : 1;
   const canSmelt = !!recipe && (!f.output || (f.output.id === recipe.result && f.output.count < ItemRegistry.maxStack(recipe.result)));
   if (f.burn <= 0 && canSmelt && f.fuel) {
     const bt = ItemRegistry.get(f.fuel.id)?.burnTime ?? 0;
@@ -128,9 +143,9 @@ export function tickFurnace(f: FurnaceState, dt: number): boolean {
     }
   }
   if (f.burn > 0) {
-    f.burn = Math.max(0, f.burn - dt);
+    f.burn = Math.max(0, f.burn - dt * rate);
     if (canSmelt) {
-      f.cook += dt;
+      f.cook += dt * rate;
       if (f.cook >= recipe!.time) {
         f.cook = 0;
         if (f.output) f.output.count++;

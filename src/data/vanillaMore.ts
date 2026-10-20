@@ -267,8 +267,8 @@ for (const [c, n, h] of WOOL_COLORS) {
   tile(`${c}_shulker_box`, (t) => { t.grain(paint.ramp(h, 4, 0.15), 0.3, 2); t.hline(0, 15, 9, hex(shade(h, 0.6))); t.border(hex(shade(h, 0.7))); });
   B.push({ key: `${c}_shulker_box`, name: `Boîte de shulker ${n}`, textures: { all: `${c}_shulker_box` }, hardness: 2, tool: 'pickaxe', minTier: 0, sound: 'stone', color: h });
   // boîte de shulker de base (shulker + coffre), puis teinte avec un colorant
-  if (c === 'white') shaped('shulker_box_base', `${c}_shulker_box`, 1, ['S', 'C', 'S'], { S: 'shulker_shell', C: 'chest' });
-  else shapeless(`${c}_shulker_box`, `${c}_shulker_box`, 1, ['white_shulker_box', `${c}_dye`]);
+  if (c === 'white') shaped('shulker_box_base', 'shulker_box', 1, ['S', 'C', 'S'], { S: 'shulker_shell', C: 'chest' });
+  shapeless(`${c}_shulker_box`, `${c}_shulker_box`, 1, ['shulker_box', `${c}_dye`]);
 }
 B.push({ key: 'moss_carpet', name: 'Tapis de mousse', textures: { all: 'moss_block' }, hardness: 0.1, render: 'model', shape: 'carpet', solid: false, sound: 'grass', color: '#596e2d' });
 shaped('moss_carpet', 'moss_carpet', 3, ['MM'], { M: 'moss_block' });
@@ -295,7 +295,7 @@ shaped('tuff_bricks', 'tuff_bricks', 4, ['TT', 'TT'], { T: 'polished_tuff' });
 shaped('netherite_block', 'netherite_block', 1, ['NNN', 'NNN', 'NNN'], { N: 'netherite_ingot' });
 shapeless('netherite_ingot_from_block', 'netherite_ingot', 9, ['netherite_block']);
 shaped('target', 'target', 1, [' R ', 'RHR', ' R '], { R: 'redstone', H: 'hay_block' });
-shaped('lodestone', 'lodestone', 1, ['CCC', 'CNC', 'CCC'], { C: 'chiseled_stone_bricks', N: 'netherite_ingot' });
+shaped('lodestone', 'lodestone', 1, ['CCC', 'CNC', 'CCC'], { C: 'chiseled_stone_bricks', N: 'iron_ingot' });
 shaped('dried_kelp_block', 'dried_kelp_block', 1, ['KKK', 'KKK', 'KKK'], { K: 'dried_kelp' });
 shapeless('dried_kelp', 'dried_kelp', 9, ['dried_kelp_block']);
 shaped('honey_block', 'honey_block', 1, ['HH', 'HH'], { H: 'honey_bottle' });
@@ -309,7 +309,7 @@ shaped('piston', 'piston', 1, ['PPP', 'CIC', 'CRC'], { P: 'tag:planks', C: 'cobb
 shapeless('sticky_piston', 'sticky_piston', 1, ['piston', 'slime_ball']);
 shaped('blast_furnace', 'blast_furnace', 1, ['III', 'IFI', 'SSS'], { I: 'iron_ingot', F: 'furnace', S: 'smooth_stone' });
 shaped('smoker', 'smoker', 1, [' L ', 'LFL', ' L '], { L: 'tag:logs', F: 'furnace' });
-shaped('chiseled_bookshelf', 'chiseled_bookshelf', 1, ['PPP', 'SSS', 'PPP'], { P: 'tag:planks', S: 'oak_slab' });
+shaped('chiseled_bookshelf', 'chiseled_bookshelf', 1, ['PPP', 'SSS', 'PPP'], { P: 'tag:planks', S: 'tag:wooden_slabs' });
 shaped('crafter', 'crafter', 1, ['III', 'ICI', 'RDR'], { I: 'iron_ingot', C: 'crafting_table', R: 'redstone', D: 'dropper' });
 shapeless('mushroom_stem', 'mushroom_stem', 1, ['brown_mushroom', 'red_mushroom']);
 shaped('respawn_anchor', 'respawn_anchor', 1, ['OOO', 'GGG', 'OOO'], { O: 'crying_obsidian', G: 'glowstone' });

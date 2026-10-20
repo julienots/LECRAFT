@@ -264,8 +264,10 @@ export class PlayerInteraction {
     if (this.host.canEdit && !this.host.canEdit(t.x, t.y, t.z, 'break', t.block)) return;
     const held = p.inventory.selectedStack;
     // Affinité aquatique (casque) : pas de pénalité sous l'eau
-    const wet = (p.body.headInWater || (!p.body.onGround && p.body.inWater)) && !enchLevel(p.inventory.armor.head, 'aqua_affinity');
-    const time = breakTime(t.block, itemId, p.creative, wet, enchLevel(held, 'efficiency'));
+    // comme le jeu original : ×5 la tête sous l'eau (sans Affinité aquatique), ×5 en l'air, Célérité / Fatigue
+    const wet = p.body.headInWater && !enchLevel(p.inventory.armor.head, 'aqua_affinity');
+    const airborne = !p.body.onGround && !p.body.flying;
+    const time = breakTime(t.block, itemId, p.creative, wet, enchLevel(held, 'efficiency'), airborne, p.effects.level('haste'), p.effects.level('mining_fatigue'));
     if (!isFinite(time)) return;
     this.miningProgress += dt / time;
     this.entities.combat.swing = Math.max(this.entities.combat.swing, 0.6);
@@ -348,7 +350,8 @@ export class PlayerInteraction {
       const xp = ench.silk_touch ? 0 : blockXp(id);
       if (xp) p.addXp(xp);
       const tool = itemId ? ItemRegistry.get(itemId)?.tool : undefined;
-      if (tool && b.hardness > 0) p.inventory.damageSelected(1);
+      // usure : 1 par bloc (2 pour une épée, faite pour combattre), comme le jeu original
+      if (tool && b.hardness > 0) p.inventory.damageSelected(tool.type === 'sword' ? 2 : 1);
       p.addExhaustion(0.005);
     }
     // les plantes au-dessus tombent (vérifié par le WorldTicker)

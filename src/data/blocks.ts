@@ -1,5 +1,6 @@
 import type { BlockDef, DropDef } from '../blocks/Block';
 import { applyPackFaces } from './packContent';
+import { applyJavaBlockProps } from './javaBlockProps';
 
 /**
  * Définitions des blocs (inspirées du jeu vanilla, noms français officiels).
@@ -150,3 +151,5 @@ export const BLOCK_DEFS: BlockDef[] = [
 
 // faces multiples des textures du pack (dessus / dessous / avant…)
 applyPackFaces(BLOCK_DEFS);
+// dureté / outil / tier du jeu original
+applyJavaBlockProps(BLOCK_DEFS);

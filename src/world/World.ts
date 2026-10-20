@@ -222,6 +222,11 @@ export class World {
       f = newFurnace();
       this.furnaces.set(k, f);
     }
+    // haut fourneau et fumoir : deux fois plus rapides, ingrédients limités (CraftingSystem)
+    if (f) {
+      const key = BlockRegistry.get(this.getBlock(x, y, z))?.key ?? '';
+      f.kind = key.startsWith('blast_furnace') ? 'blast_furnace' : key.startsWith('smoker') ? 'smoker' : 'furnace';
+    }
     return f ?? null;
   }
 

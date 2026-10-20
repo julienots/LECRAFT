@@ -1,4 +1,5 @@
 import { CRAFTING_RECIPES, SMELTING_RECIPES, TAGS } from '../data/recipes';
+import { BLAST_FURNACE_INPUTS, SMOKER_INPUTS } from '../data/vanillaRecipes';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { ItemStack } from '../inventory/Item';
 import type { CraftingRecipe, SmeltingRecipe } from './Recipe';
@@ -49,7 +50,10 @@ class RecipeRegistryImpl {
     return itemId === ingredient;
   }
 
-  smeltingFor(itemId: string): SmeltingRecipe | undefined {
+  /** Cuisson d'un objet ; le haut fourneau n'accepte que minerais et métaux, le fumoir que la nourriture. */
+  smeltingFor(itemId: string, station: 'furnace' | 'blast_furnace' | 'smoker' = 'furnace'): SmeltingRecipe | undefined {
+    if (station === 'blast_furnace' && !BLAST_FURNACE_INPUTS.has(itemId)) return undefined;
+    if (station === 'smoker' && !SMOKER_INPUTS.has(itemId) && !ItemRegistry.get(itemId)?.food) return undefined;
     return this.smeltByInput.get(itemId);
   }
 

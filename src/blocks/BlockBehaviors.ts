@@ -1,66 +1,109 @@
-import { randomEnchantedBook } from '../inventory/Enchantments';
+import { enchantRandomly, randomEnchantedBook } from '../inventory/Enchantments';
 import { BlockRegistry, B } from './BlockRegistry';
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import type { ItemStack } from '../inventory/Item';
 import { makeStack } from '../inventory/Inventory';
 import type { World } from '../world/World';
 import { LOOT } from '../world/StructureGenerator';
-import { MORE_LOOT_TABLES } from '../world/MoreStructures';
+import { MORE_LOOT, MORE_LOOT_TABLES } from '../world/MoreStructures';
+import { VANILLA_CHEST_LOOT, type LootPool } from '../data/vanillaLoot';
 import { Rng } from '../util/math';
 import { FACING_DIR } from './Shapes';
 
-/** Temps de minage en secondes (Infinity = incassable). */
-export function breakTime(blockId: number, itemId: string | undefined, creative: boolean, underwater: boolean, efficiency = 0): number {
+/** Feuilles (outil réel : cisailles ou houe ; épée efficace). */
+const isLeaves = (key: string) => key.endsWith('_leaves');
+
+/**
+ * Temps de minage en secondes (Infinity = incassable), formule du jeu original :
+ * vitesse de l'outil (bois 2, pierre 4, fer 6, diamant 8, netherite 9, or 12) si c'est le bon type
+ * d'outil, + Efficacité (niveau² + 1) ; dureté × 1,5 si le bloc peut être récolté, × 5 sinon ;
+ * × 5 sous l'eau (sans Affinité aquatique) et × 5 en l'air ; Célérité +20 %/niveau,
+ * Fatigue ×0,3 / ×0,09 / ×0,0027 / ×0,00081 ; arrondi au tick (1/20 s).
+ */
+export function breakTime(blockId: number, itemId: string | undefined, creative: boolean, underwater: boolean, efficiency = 0, airborne = false, haste = 0, fatigue = 0): number {
   const b = BlockRegistry.get(blockId);
   if (creative) return 0.05;
   if (b.hardness < 0) return Infinity;
   if (b.hardness === 0) return 0.05;
   const tool = itemId ? ItemRegistry.get(itemId)?.tool : undefined;
-  const correct = !!tool && !!b.tool && tool.type === b.tool;
+  const correct = !!tool && !!b.tool && (tool.type === b.tool || (tool.type === 'hoe' && isLeaves(b.key)));
   const harvest = canHarvest(blockId, itemId);
   let speed = correct ? tool!.speed : 1;
-  if (tool?.type === 'sword' && (b.render === 'cutout' || b.key === 'cactus')) speed = 1.5;
-  // Efficacité : plus rapide avec le bon outil (niveau² + 1)
-  if (efficiency > 0 && correct) speed += efficiency * efficiency + 1;
-  let t = (b.hardness * (harvest ? 1.5 : 5)) / speed;
-  if (underwater) t *= 3;
-  return Math.max(0.05, t);
+  // cisailles : 15 sur les feuilles et la toile, 5 sur la laine ; épée : 15 sur la toile, 1,5 sur les plantes
+  if (tool?.type === 'shears') {
+    if (isLeaves(b.key) || b.key === 'cobweb') speed = 15;
+    else if (b.key.endsWith('_wool')) speed = 5;
+    else if (b.key === 'vine' || b.key === 'glow_lichen') speed = 2;
+  } else if (tool?.type === 'sword') {
+    if (b.key === 'cobweb') speed = 15;
+    else if (b.render === 'cutout' || b.render === 'cross' || b.key === 'cactus' || b.key === 'pumpkin' || b.key === 'melon' || isLeaves(b.key)) speed = 1.5;
+  }
+  // Efficacité : seulement avec un outil efficace (vitesse > 1)
+  if (efficiency > 0 && speed > 1) speed += efficiency * efficiency + 1;
+  if (haste > 0) speed *= 1 + 0.2 * haste;
+  if (fatigue > 0) speed *= [0.3, 0.09, 0.0027, 0.00081][Math.min(fatigue, 4) - 1];
+  if (underwater) speed /= 5;
+  if (airborne) speed /= 5;
+  // dégâts par tick ≥ 1 : cassé instantanément
+  const perTick = speed / b.hardness / (harvest ? 30 : 100);
+  if (perTick >= 1) return 0.05;
+  return Math.max(0.05, Math.ceil(1 / perTick) / 20);
 }
 
 export function canHarvest(blockId: number, itemId: string | undefined): boolean {
   const b = BlockRegistry.get(blockId);
   if (b.minTier <= 0) return true;
   const tool = itemId ? ItemRegistry.get(itemId)?.tool : undefined;
+  // toile d'araignée : épée ou cisailles
+  if (b.key === 'cobweb' && tool?.type === 'shears') return true;
   return !!tool && tool.type === b.tool && tool.tier >= b.minTier;
 }
+
+/** Blocs que le Toucher de soie ne permet pas d'obtenir dans le jeu original. */
+const NO_SILK = new Set(['spawner', 'budding_amethyst', 'reinforced_deepslate', 'vault', 'trial_spawner', 'powder_snow', 'farmland', 'dirt_path', 'snowy_grass_block', 'lit_furnace', 'frosted_ice']);
+/** Chances par niveau de Fortune (0 à 3) : pousses, bâtons, pommes, silex (jeu original). */
+const SAPLING_CHANCE = [1 / 20, 1 / 16, 1 / 12, 1 / 10];
+const SAPLING_CHANCE_JUNGLE = [1 / 40, 1 / 36, 1 / 32, 1 / 24];
+const STICK_CHANCE = [1 / 50, 1 / 45, 1 / 40, 1 / 30];
+const APPLE_CHANCE = [1 / 200, 1 / 180, 1 / 160, 1 / 120];
+const FLINT_CHANCE = [0.1, 1 / 7, 0.25, 1];
+/** Fortune « bonus uniforme » (+0..niveau) plafonné : redstone, pierre lumineuse, pastèque, lanterne aquatique. */
+const UNIFORM_BONUS: Record<string, number> = { redstone_ore: 99, deepslate_redstone_ore: 99, glowstone: 4, melon: 9, sea_lantern: 5 };
 
 /** Objets obtenus en cassant un bloc. */
 export function getDrops(blockId: number, meta: number, itemId: string | undefined, rng: () => number = Math.random, ench?: Record<string, number>): ItemStack[] {
   const b = BlockRegistry.get(blockId);
   if (!canHarvest(blockId, itemId)) return [];
   // Toucher de soie : le bloc lui-même (minerais, verre, herbe…), sauf blocs en deux parties
-  if (ench?.silk_touch && ItemRegistry.has(b.key) && !b.def.doublePlant && b.shape !== 'door' && b.shape !== 'bed' && b.shape !== 'slab' && b.interact !== 'chest') return [makeStack(b.key, 1)];
+  if (ench?.silk_touch && ItemRegistry.has(b.key) && !NO_SILK.has(b.key) && !b.def.doublePlant && b.shape !== 'door' && b.shape !== 'bed' && b.shape !== 'slab' && b.interact !== 'chest') return [makeStack(b.key, 1)];
   // plante haute : seule la moitié basse donne quelque chose (la haute la fait tomber)
   if (b.def.doublePlant && meta & 1) return [];
   const out: ItemStack[] = [];
   const add = (id: string, n: number) => n > 0 && ItemRegistry.has(id) && out.push(makeStack(id, n));
   const tool = itemId ? ItemRegistry.get(itemId)?.tool : undefined;
   // cisailles : feuilles, herbes, toiles... récupérées telles quelles
-  if (tool?.type === 'shears' && (b.key.endsWith('_leaves') || b.key === 'short_grass' || b.key === 'fern' || b.key === 'tall_grass' || b.key === 'large_fern' || b.key === 'dead_bush' || b.key === 'glow_lichen')) {
+  if (tool?.type === 'shears' && (b.key.endsWith('_leaves') || b.key === 'short_grass' || b.key === 'fern' || b.key === 'tall_grass' || b.key === 'large_fern' || b.key === 'dead_bush' || b.key === 'glow_lichen' || b.key === 'cobweb' || b.key === 'vine' || b.key === 'seagrass' || b.key === 'hanging_roots')) {
     add(b.key, 1);
     return out;
   }
+  // cultures mûres : 1 + loi binomiale (3 + Fortune essais, p = 4/7), comme le jeu original
+  const cropFortune = Math.min(3, ench?.fortune ?? 0);
+  const binom = (n: number) => {
+    let k = 0;
+    for (let i = 0; i < n; i++) if (rng() < 4 / 7) k++;
+    return k;
+  };
   if (blockId === B.WHEAT) {
     if (meta >= 7) {
       add('wheat', 1);
-      add('wheat_seeds', 1 + Math.floor(rng() * 3));
+      add('wheat_seeds', 1 + binom(3 + cropFortune));
     } else add('wheat_seeds', 1);
     return out;
   }
   if (blockId === B.CARROTS || blockId === B.POTATOES) {
     const ripe = meta >= 3;
     const crop = blockId === B.CARROTS ? 'carrot' : 'potato';
-    add(crop, ripe ? 2 + Math.floor(rng() * 3) : 1);
+    add(crop, ripe ? 1 + binom(3 + cropFortune) : 1);
     if (ripe && crop === 'potato' && rng() < 0.02) add('poisonous_potato', 1);
     return out;
   }
@@ -82,28 +125,51 @@ export function getDrops(blockId: number, meta: number, itemId: string | undefin
     return out;
   }
   // Fortune : minerais qui lâchent un objet (charbon, diamant, lapis…) multipliés
-  const fortune = ench?.fortune ?? 0;
+  const fortune = Math.min(3, ench?.fortune ?? 0);
+  // feuilles : pousse, bâtons, pommes (chances augmentées par Fortune, comme le jeu original)
+  if (isLeaves(b.key)) {
+    for (const d of b.drops) {
+      let chance = d.chance ?? 1;
+      if (d.item.endsWith('_sapling') || d.item.endsWith('_propagule')) chance = (chance < 0.04 ? SAPLING_CHANCE_JUNGLE : SAPLING_CHANCE)[fortune];
+      else if (d.item === 'stick') chance = STICK_CHANCE[fortune];
+      else if (d.item === 'apple') chance = APPLE_CHANCE[fortune];
+      if (rng() >= chance) continue;
+      const min = d.min ?? 1, max = d.max ?? min;
+      add(d.item, min + Math.floor(rng() * (max - min + 1)));
+    }
+    return out;
+  }
+  // gravier : silex 10 % (14 %, 25 %, 100 % avec Fortune), sinon le gravier
+  if (blockId === B.GRAVEL) {
+    add(rng() < FLINT_CHANCE[fortune] ? 'flint' : 'gravel', 1);
+    return out;
+  }
   for (const d of b.drops) {
     if (d.chance !== undefined && rng() > d.chance) continue;
     const min = d.min ?? 1, max = d.max ?? min;
     let n = min + Math.floor(rng() * (max - min + 1));
-    if (fortune && b.key.includes('_ore') && d.item !== b.key) n *= Math.max(1, Math.floor(rng() * (fortune + 2)));
+    if (fortune && d.item !== b.key) {
+      const cap = UNIFORM_BONUS[b.key];
+      if (cap !== undefined) n = Math.min(cap, n + Math.floor(rng() * (fortune + 1)));
+      // minerais (charbon, cuivre, fer, or, diamant, émeraude, lapis, quartz) : ×max(1, aléa(0..niveau+1))
+      else if (b.key.includes('_ore')) n *= Math.max(1, Math.floor(rng() * (fortune + 2)));
+    }
     add(d.item, n);
   }
   return out;
 }
 
+/** XP donnée par les blocs du jeu original (minerais, générateur, sculk) : [min, max]. Les minerais bruts (fer, or, cuivre) n'en donnent pas. */
+const BLOCK_XP: Record<string, [number, number]> = {
+  coal_ore: [0, 2], deepslate_coal_ore: [0, 2], diamond_ore: [3, 7], deepslate_diamond_ore: [3, 7], emerald_ore: [3, 7], deepslate_emerald_ore: [3, 7],
+  lapis_ore: [2, 5], deepslate_lapis_ore: [2, 5], redstone_ore: [1, 5], deepslate_redstone_ore: [1, 5], nether_quartz_ore: [2, 5], nether_gold_ore: [0, 1],
+  spawner: [15, 43], sculk: [1, 1], sculk_catalyst: [5, 5], sculk_shrieker: [5, 5], sculk_sensor: [5, 5], calibrated_sculk_sensor: [5, 5],
+};
+
 /** XP donnée par certains blocs (minerais). */
-export function blockXp(blockId: number): number {
-  switch (blockId) {
-    case B.COAL_ORE: return 1;
-    case B.COPPER_ORE: return 1;
-    case B.IRON_ORE: return 2;
-    case B.GOLD_ORE: return 3;
-    case B.EMERALD_ORE: return 5;
-    case B.DIAMOND_ORE: return 8;
-    default: return 0;
-  }
+export function blockXp(blockId: number, rng: () => number = Math.random): number {
+  const r = BLOCK_XP[BlockRegistry.get(blockId).key];
+  return r ? r[0] + Math.floor(rng() * (r[1] - r[0] + 1)) : 0;
 }
 
 /** Vérifie qu'un bloc peut tenir à cet endroit (plantes, torches...). */
@@ -176,8 +242,58 @@ const LOOT_TABLES: Record<number, { rolls: [number, number]; entries: LootEntry[
   ...MORE_LOOT_TABLES,
 };
 
+/**
+ * Coffres dont la table officielle (plusieurs tirages indépendants) remplace la table simplifiée.
+ * Le donjon garde en plus le contenu propre à LeCraft (relique, boussole du golem).
+ */
+const OFFICIAL_CHESTS: Record<number, { table: string; extra?: LootPool[] }> = {
+  [LOOT.DUNGEON]: { table: 'simple_dungeon', extra: [[[0, 1], [['ancient_relic', 3, 1, 1], ['compass_golem', 3, 1, 1], ['', 4, 0, 0]]]] },
+  [LOOT.MINE]: { table: 'abandoned_mineshaft' },
+  [LOOT.FORTRESS]: { table: 'nether_bridge' },
+  [MORE_LOOT.DESERT_PYRAMID]: { table: 'desert_pyramid' },
+  [MORE_LOOT.JUNGLE_TEMPLE]: { table: 'jungle_temple' },
+  [MORE_LOOT.IGLOO]: { table: 'igloo_chest' },
+  [MORE_LOOT.SHIPWRECK_MAP]: { table: 'shipwreck' },
+  [MORE_LOOT.SHIPWRECK_SUPPLY]: { table: 'shipwrecksupply' },
+  [MORE_LOOT.SHIPWRECK_TREASURE]: { table: 'shipwrecktreasure' },
+  [MORE_LOOT.OCEAN_RUIN_SMALL]: { table: 'underwater_ruin_small' },
+  [MORE_LOOT.OCEAN_RUIN_BIG]: { table: 'underwater_ruin_big' },
+  [MORE_LOOT.RUINED_PORTAL]: { table: 'ruined_portal' },
+  [MORE_LOOT.OUTPOST]: { table: 'pillager_outpost' },
+};
+
+/** Tire les pools d'une table officielle (objets absents ignorés). */
+function rollPools(pools: LootPool[], rng: Rng): ItemStack[] {
+  const out: ItemStack[] = [];
+  for (const [[rmin, rmax], all] of pools) {
+    const entries = all.filter(([id, w]) => w > 0 && (id === '' || ItemRegistry.has(id)));
+    const total = entries.reduce((a, e) => a + e[1], 0);
+    const n = rng.int(rmin, rmax);
+    for (let i = 0; i < n && total > 0; i++) {
+      let r = rng.next() * total;
+      for (const [id, w, min, max, flags = 0] of entries) {
+        r -= w;
+        if (r >= 0) continue;
+        if (!id) break;
+        if (id === 'enchanted_book') out.push(randomEnchantedBook(true, () => rng.next()));
+        else {
+          let st = makeStack(id, rng.int(min, max));
+          const dur = ItemRegistry.maxDurability(id);
+          if (flags & 2 && dur > 0) st.durability = Math.max(1, Math.round(dur * (0.15 + rng.next() * 0.65)));
+          if (flags & 1) st = enchantRandomly(st, 30, () => rng.next());
+          out.push(st);
+        }
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 /** Génère le contenu d'un coffre de structure de façon déterministe (seed + position). */
 export function rollLoot(table: number, seed: number): ItemStack[] {
+  const off = OFFICIAL_CHESTS[table];
+  if (off && VANILLA_CHEST_LOOT[off.table]) return rollPools([...VANILLA_CHEST_LOOT[off.table], ...(off.extra ?? [])], new Rng(seed));
   const t = LOOT_TABLES[table];
   if (!t) return [];
   const rng = new Rng(seed);

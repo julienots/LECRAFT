@@ -10,7 +10,14 @@ export const TAGS: Record<string, string[]> = {
   logs: WOODS.map((w) => `${w}_log`),
   wool: WOOL_COLORS.map(([c]) => `${c}_wool`),
   coals: ['coal', 'charcoal'],
+  /** #stone_tool_materials / #stone_crafting_materials (pierre noire et pierre des abîmes ajoutées avec le contenu supplémentaire). */
   stone_tool: ['cobblestone'],
+  /** #wooden_slabs (tonneau, composteur, pupitre, capteur de lumière…). */
+  wooden_slabs: ['oak_slab'],
+  /** #soul_fire_base_blocks (torche et feu de camp des âmes). */
+  soul_fire_base_blocks: [],
+  /** #eggs (gâteau, tarte à la citrouille). */
+  eggs: ['egg'],
 };
 
 let n = 0;
@@ -29,7 +36,7 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
   shaped('stick', 4, ['#', '#'], { '#': 'tag:planks' }),
   shaped('crafting_table', 1, ['##', '##'], { '#': 'tag:planks' }),
   shaped('torch', 4, ['C', 'S'], { C: 'tag:coals', S: 'stick' }),
-  shaped('furnace', 1, ['###', '# #', '###'], { '#': 'cobblestone' }),
+  shaped('furnace', 1, ['###', '# #', '###'], { '#': 'tag:stone_tool' }),
   shaped('chest', 1, ['###', '# #', '###'], { '#': 'tag:planks' }),
   shaped('ladder', 3, ['S S', 'SSS', 'S S'], { S: 'stick' }),
   shaped('oak_door', 3, ['##', '##', '##'], { '#': 'oak_planks' }),

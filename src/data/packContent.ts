@@ -90,6 +90,6 @@ export const PACK_RECIPES = [
   .concat(
     (['wooden', 'stone', 'copper', 'iron', 'golden', 'diamond'] as const).map((m) => ({
       id: `pack:${m}_spear`, type: 'shaped' as const, result: { item: `${m}_spear`, count: 1 }, pattern: ['  X', ' S ', 'S  '],
-      key: { X: { wooden: 'tag:planks', stone: 'cobblestone', copper: 'copper_ingot', iron: 'iron_ingot', golden: 'gold_ingot', diamond: 'diamond' }[m], S: 'stick' }, width: 3, height: 3,
+      key: { X: { wooden: 'tag:planks', stone: 'tag:stone_tool', copper: 'copper_ingot', iron: 'iron_ingot', golden: 'gold_ingot', diamond: 'diamond' }[m], S: 'stick' }, width: 3, height: 3,
     })),
   );
