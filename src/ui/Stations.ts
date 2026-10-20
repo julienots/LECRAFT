@@ -16,9 +16,10 @@ import {
 } from '../inventory/Enchantments';
 import { isBrewIngredient, isBrewBottle } from '../inventory/Potions';
 import type { BrewingState } from '../crafting/Brewing';
-import type { ContainerKind } from './ContainerArt';
+import { packSprite, type ContainerKind } from './ContainerArt';
 import { el } from './dom';
 import { pixelText } from './PixelFont';
+import { t as tr } from './i18n';
 
 export interface StationSlot {
   x: number;
@@ -33,6 +34,8 @@ export interface StationSlot {
   canTake?(): boolean;
   big?: boolean;
   key: string;
+  /** Silhouette de la case vide (gui/sprites/container/slot/…). */
+  ph?: string;
 }
 
 export interface StationHost {
@@ -90,7 +93,7 @@ export class EnchantStation extends Station {
     this.shelves = countBookshelves((x, y, z) => BlockRegistry.get(w.getBlock(x, y, z)).key, pos.x, pos.y, pos.z);
     this.slots.push(
       { x: 15, y: 47, key: 'ench_item', max: 1, get: () => this.item, set: (v) => (this.item = v), accept: (st) => enchantable(st.id) && !isEnchanted(st) },
-      { x: 35, y: 47, key: 'ench_lapis', get: () => this.lapis, set: (v) => (this.lapis = v), accept: (st) => st.id === 'lapis_lazuli' },
+      { x: 35, y: 47, key: 'ench_lapis', ph: 'container/slot/lapis_lazuli', get: () => this.lapis, set: (v) => (this.lapis = v), accept: (st) => st.id === 'lapis_lazuli' },
     );
   }
 
@@ -122,25 +125,44 @@ export class EnchantStation extends Station {
 
   update() {
     const p = this.host.s.player;
+    const tex = this.host.game.textures;
     this.offers = this.item ? enchantOffers(this.item.id, this.shelves, p.enchantSeed) : [];
+    const spr = (n: string) => packSprite(tex, `container/enchanting_table/${n}`);
+    const slotOn = spr('enchantment_slot'), slotOff = spr('enchantment_slot_disabled'), slotHl = spr('enchantment_slot_highlighted');
     this.buttons.forEach((b, i) => {
       const o = this.offers[i];
       b.replaceChildren();
       const ok = !!o && (p.creative || (p.level >= o.level && (this.lapis?.count ?? 0) >= o.cost));
       b.classList.toggle('off', !ok);
+      // sprites du jeu original : case claire (disponible), sombre (indisponible), dorée au survol
+      b.classList.toggle('spr', !!slotOn);
+      if (slotOn) {
+        b.style.setProperty('--bg', `url(${ok ? slotOn : slotOff})`);
+        b.style.setProperty('--hl', `url(${slotHl ?? slotOn})`);
+      }
       if (!o) return;
       const first = Object.entries(o.ench)[0];
       const d = first && ENCHANT_BY_ID.get(first[0]);
       // comme le jeu original : un indice (un enchantement) et le niveau requis
       const hint = d ? `${d.name}${d.max > 1 ? ' ' + roman(first[1]) : ''}${Object.keys(o.ench).length > 1 ? ' . . . ?' : ''}` : '?';
-      const t1 = pixelText(hint, { color: ok ? '#685e4a' : '#342f25', cls: 'gui-abs' });
+      const t1 = pixelText(hint, { color: ok ? '#685e4a' : '#342f25', cls: 'gui-abs nm' });
       t1.style.left = '20px';
-      t1.style.top = '2px';
-      const t2 = pixelText(String(o.level), { color: ok ? '#80ff20' : '#407f10', shadow: '#000', cls: 'gui-abs' });
-      t2.style.right = '3px';
-      t2.style.top = '10px';
-      const gem = el('div', { class: 'gui-lapis', style: `left:2px;top:2px` }, pixelText(String(o.cost), { color: ok ? '#a0c8ff' : '#406080', shadow: '#000' }));
-      b.append(t1, t2, gem);
+      t1.style.top = '0px';
+      b.append(t1);
+      if (ok) {
+        const t1h = pixelText(hint, { color: '#ffff80', cls: 'gui-abs hl' });
+        t1h.style.left = '20px';
+        t1h.style.top = '0px';
+        b.append(t1h);
+      }
+      const t2 = pixelText(String(o.level), { color: ok ? '#80ff20' : '#407f10', shadow: ok ? '#203f08' : '#101f04', cls: 'gui-abs' });
+      t2.style.right = '1px';
+      t2.style.top = '7px';
+      const lvl = spr(`level_${Math.min(3, o.cost)}${ok ? '' : '_disabled'}`);
+      const gem = lvl
+        ? el('div', { class: 'gui-lapis spr', style: `left:1px;top:1px;background-image:url(${lvl})` })
+        : el('div', { class: 'gui-lapis', style: `left:2px;top:2px` }, pixelText(String(o.cost), { color: ok ? '#a0c8ff' : '#406080', shadow: '#000' }));
+      b.append(t2, gem);
     });
   }
 
@@ -196,6 +218,8 @@ export class AnvilStation extends Station {
   private name = '';
   private input: HTMLInputElement | null = null;
   private costEl: HTMLElement | null = null;
+  private field: HTMLElement | null = null;
+  private error: HTMLElement | null = null;
   private result: { stack: ItemStack; cost: number; useB: number } | null = null;
 
   constructor(host: StationHost, private pos: { x: number; y: number; z: number }) {
@@ -213,7 +237,11 @@ export class AnvilStation extends Station {
   }
 
   decorate(gui: HTMLElement) {
-    const input = el('input', { class: 'gui-name', maxlength: '35', placeholder: '', style: 'left:62px;top:24px;width:103px;height:12px' }) as HTMLInputElement;
+    // champ du jeu original : sprite 110 × 16 en (59, 20), texte en (62, 24)
+    this.field = el('div', { class: 'gui-layer', style: 'left:59px;top:20px;width:110px;height:16px;background-size:100% 100%' });
+    this.error = el('div', { class: 'gui-layer hidden', style: 'left:99px;top:45px;width:28px;height:21px;background-size:100% 100%' });
+    gui.append(this.field, this.error);
+    const input = el('input', { class: 'gui-name', maxlength: '50', placeholder: '', style: 'left:62px;top:24px;width:103px;height:12px' }) as HTMLInputElement;
     input.addEventListener('pointerdown', (e) => e.stopPropagation());
     input.addEventListener('pointerup', (e) => e.stopPropagation());
     input.addEventListener('keydown', (e) => e.stopPropagation());
@@ -223,7 +251,7 @@ export class AnvilStation extends Station {
     });
     input.dataset.anvilName = '1';
     this.input = input;
-    this.costEl = el('div', { class: 'gui-abs', style: 'right:8px;top:69px' });
+    this.costEl = el('div', { class: 'gui-abs anvil-cost', style: 'right:8px;top:67px' });
     gui.append(input, this.costEl);
   }
 
@@ -282,11 +310,28 @@ export class AnvilStation extends Station {
   update() {
     this.result = this.compute();
     const p = this.host.s.player;
+    const tex = this.host.game.textures;
+    if (this.field) {
+      const f = packSprite(tex, `container/anvil/${this.a ? 'text_field' : 'text_field_disabled'}`);
+      this.field.style.backgroundImage = f ? `url(${f})` : '';
+      if (this.input) {
+        this.input.classList.toggle('spr', !!f);
+        this.input.disabled = !this.a;
+      }
+    }
+    if (this.error) {
+      const e = packSprite(tex, 'container/anvil/error');
+      this.error.style.backgroundImage = e ? `url(${e})` : '';
+      this.error.classList.toggle('hidden', !e || !(this.a || this.b) || !!this.result);
+    }
     if (!this.costEl) return;
     this.costEl.replaceChildren();
+    this.costEl.style.display = this.result ? '' : 'none';
     if (!this.result) return;
     const ok = p.creative || p.level >= this.result.cost;
-    this.costEl.append(pixelText(`Coût : ${this.result.cost} niveau${this.result.cost > 1 ? 'x' : ''}`, { color: ok ? '#80ff20' : '#ff6060', shadow: '#3f3f3f' }));
+    // « Coût d'enchantement : N » sur fond sombre, vert ou rouge (comme le jeu original)
+    const txt = this.result.cost >= 40 && !p.creative ? tr('Trop cher !') : `${tr("Coût d'enchantement : ")}${this.result.cost}`;
+    this.costEl.append(pixelText(txt, { color: ok ? '#80ff20' : '#ff6060', shadow: ok ? '#203f08' : '#3f1818' }));
   }
 
   private takeResult() {
@@ -343,13 +388,13 @@ export class BrewingStation extends Station {
     super(host);
     const st = state;
     const bottle = (i: number, x: number, y: number) =>
-      this.slots.push({ x, y, key: `brew_${i}`, max: 1, get: () => st.bottles[i], set: (v) => (st.bottles[i] = v), accept: (s) => isBrewBottle(s) });
+      this.slots.push({ x, y, key: `brew_${i}`, max: 1, ph: 'container/slot/potion', get: () => st.bottles[i], set: (v) => (st.bottles[i] = v), accept: (s) => isBrewBottle(s) });
     bottle(0, 56, 51);
     bottle(1, 79, 58);
     bottle(2, 102, 51);
     this.slots.push(
       { x: 79, y: 17, key: 'brew_ingredient', get: () => st.ingredient, set: (v) => (st.ingredient = v), accept: (s) => isBrewIngredient(s.id) },
-      { x: 17, y: 17, key: 'brew_fuel', get: () => st.fuelItem, set: (v) => (st.fuelItem = v), accept: (s) => s.id === 'blaze_powder' },
+      { x: 17, y: 17, key: 'brew_fuel', ph: 'container/slot/brewing_fuel', get: () => st.fuelItem, set: (v) => (st.fuelItem = v), accept: (s) => s.id === 'blaze_powder' },
     );
   }
 
@@ -374,6 +419,24 @@ export class BrewingStation extends Station {
     a.clearRect(0, 0, 9, 28);
     f.clearRect(0, 0, 18, 4);
     b.clearRect(0, 0, 12, 29);
+    // sprites du pack : flèche qui descend, jauge de poudre de blaze, bulles (longueurs du jeu original)
+    const tex = this.host.game.textures;
+    const prog0 = st.time > 0 ? 1 - st.time / 20 : 0;
+    const arrowImg = tex.packImage('gui/sprites/container/brewing_stand/brew_progress.png');
+    const fuelImg = tex.packImage('gui/sprites/container/brewing_stand/fuel_length.png');
+    const bubImg = tex.packImage('gui/sprites/container/brewing_stand/bubbles.png');
+    if (arrowImg && fuelImg && bubImg) {
+      for (const c of [a, f, b]) c.imageSmoothingEnabled = false;
+      const l = Math.floor(28 * prog0);
+      if (st.time > 0 && l > 0) a.drawImage(arrowImg, 0, 0, arrowImg.width, (arrowImg.height * l) / 28, 0, 0, 9, l);
+      const k = Math.max(0, Math.min(18, Math.floor((18 * st.fuel + 19) / 20)));
+      if (k > 0) f.drawImage(fuelImg, 0, 0, (fuelImg.width * k) / 18, fuelImg.height, 0, 0, k, 4);
+      if (st.time > 0) {
+        const j = [29, 24, 20, 16, 11, 6, 0][Math.floor((st.time * 20) / 2) % 7];
+        if (j > 0) b.drawImage(bubImg, 0, (bubImg.height * (29 - j)) / 29, bubImg.width, (bubImg.height * j) / 29, 0, 29 - j, 12, j);
+      }
+      return;
+    }
     // flèche de progression (descend), jauge de poudre de blaze, bulles
     const prog = st.time > 0 ? 1 - st.time / 20 : 0;
     a.fillStyle = '#3b3b3b';

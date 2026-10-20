@@ -273,6 +273,46 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **Audit complet face à Minecraft Java 1.21 (v2.31)**
+  - **Joueur** :
+    - déplacements calculés par tick comme le jeu Java : marche 4,317 m/s, sprint
+      5,612, saut 1,25 bloc quelle que soit la fréquence d'images, vol, échelles ;
+    - glace et slime glissants, sable des âmes et miel qui ralentissent ;
+    - chute amortie par le foin, le miel, le lit et le slime ;
+    - dégâts de chute, armure avec robustesse, invulnérabilité, recul, régénération
+      rapide et lente, feu, courbe d'XP : formules du jeu Java ;
+    - attaque selon la charge, critiques et balayage comme le jeu Java ;
+    - la vie max est de 20 (plus de cœur bonus par niveau).
+  - **Créatures** :
+    - dégâts, vitesses et butins du jeu original ;
+    - apparition dans le noir complet (règle 1.18), brûlure au soleil (8 s de feu) ;
+    - slimes en 3 tailles qui se divisent ;
+    - squelettes qui tournent autour du joueur, blaze, enderman, piglins et troc d'or,
+      phantoms après 3 nuits sans dormir, apprivoisement ;
+    - la foudre charge les creepers et transforme cochons et villageois.
+  - **Blocs, objets et recettes** :
+    - 881 recettes officielles (avant 492) et 155 cuissons avec l'XP du jeu Java ;
+    - dureté et outil requis corrigés (~150 blocs) ;
+    - temps de minage du jeu Java (×5 sous l'eau ou en l'air, Célérité) ;
+    - Fortune, toucher de soie, tailles de pile, durabilités, combustibles ;
+    - tables de butin officielles des coffres ;
+    - haut fourneau et fumoir deux fois plus rapides.
+  - **Interface** :
+    - le HUD utilise enfin les vraies textures du pack ;
+    - cœurs qui clignotent, tremblent et sautent (Régénération), absorption ;
+      faim qui tremble ; bulles d'air qui éclatent ; indicateur de recharge d'attaque ;
+    - barre de boss, notifications de progrès, infobulles (rareté, attributs « Dans la
+      main principale : ») ;
+    - écrans du haut fourneau, du fumoir, de la boîte de shulker, de la table
+      d'enchantement, de l'enclume et de l'alambic avec les sprites du jeu ;
+    - accents corrigés (« Réapparaître »).
+  - **Pas encore fait** :
+    - seconde main ;
+    - grands coffres ;
+    - écrans du tailleur de pierre, de la table de forgeron et du métier à tisser ;
+    - écran d'échange des villageois du jeu original ;
+    - physique de nage du jeu Java.
+
 - **Villages, structures du jeu original, hub HypXL et mini-jeux (v2.30)**
   - **Villages proches de la 1.21** :
     - chaque maison a une vraie porte (deux moitiés, tournée vers la rue) avec une marche et

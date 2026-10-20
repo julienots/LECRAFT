@@ -166,11 +166,14 @@ function glyph(ch: string): Glyph {
     const b = glyph(base);
     const upper = base === base.toUpperCase();
     // minuscules : on retire le point du i et on place l'accent juste au-dessus du corps
-    const px = b.px.filter(([, y]) => !(base === 'i' && y === TOP + 0));
+    let px = b.px.filter(([, y]) => !(base === 'i' && y === TOP + 0));
     const dy = upper ? 0 : TOP;
-    const off = Math.floor((b.w - 5) / 2);
-    for (const [x, y] of ACCENT_PIX[kind]) px.push([Math.max(0, Math.min(b.w - 1, x + off)), y + dy]);
-    g = { w: b.w, px };
+    // lettre étroite (i) : élargie à 3 colonnes pour que l'accent reste lisible (î, ï)
+    const w = Math.max(b.w, 3);
+    if (w > b.w) px = px.map(([x, y]) => [x + Math.floor((w - b.w) / 2), y] as [number, number]);
+    const off = Math.floor((w - 5) / 2);
+    for (const [x, y] of ACCENT_PIX[kind]) px.push([Math.max(0, Math.min(w - 1, x + off)), y + dy]);
+    g = { w, px };
   } else if (ch === 'ç' || ch === 'Ç') {
     const b = glyph(ch === 'ç' ? 'c' : 'C');
     g = { w: b.w, px: [...b.px, [2, TOP + 7], [1, TOP + 8]] };

@@ -118,6 +118,8 @@ try {
   const spot = await G(() => { const t = window.__lecraft.session.interaction.target; return t && { x: t.x + t.nx, y: t.y + t.ny, z: t.z + t.nz }; });
   const before = spot && (await G((q) => window.__lecraft.session.world.getBlock(q.x, q.y, q.z), spot));
   await tap(LT, 200);
+  // la pose a lieu à la mise à jour suivante (une image peut être longue avec le rendu logiciel)
+  for (let i = 0; i < 15 && spot && (await G((q) => window.__lecraft.session.world.getBlock(q.x, q.y, q.z), spot)) === 0; i++) await wait(100);
   const placed = spot && (await G((q) => window.__lecraft.session.world.getBlock(q.x, q.y, q.z), spot));
   check('LT : poser un bloc', !!spot && before === 0 && placed === (await G(() => window.I?.('stone') ?? window.__lecraft.debug.blockId('stone'))), `${JSON.stringify(spot)} : ${before} → ${placed}`);
   const tg = await G(() => { const t = window.__lecraft.session.interaction.target; return t && { x: t.x, y: t.y, z: t.z, b: t.block }; });

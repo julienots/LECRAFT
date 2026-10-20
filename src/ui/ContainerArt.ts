@@ -157,14 +157,15 @@ export function playerInvY(kind: ContainerKind, rows = 3) {
 }
 
 /** Construit l'image de fond d'une interface (canvas 1:1 en pixels d'interface). */
-export function containerBackground(kind: ContainerKind, title: string, tex: TextureManager, rows = 3, skinKey = 'player', extraSlots: [number, number, number][] = []): HTMLCanvasElement {
+export function containerBackground(kind: ContainerKind, title: string, tex: TextureManager, rows = 3, skinKey = 'player', extraSlots: [number, number, number][] = [], file?: string): HTMLCanvasElement {
   const h = guiHeight(kind, rows);
   const c = document.createElement('canvas');
   c.width = GUI_W;
   c.height = h;
   const ctx = c.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
-  const img = tex.packImage(PACK_FILES[kind]);
+  // variantes du jeu original (haut fourneau, fumoir, boîte de shulker) : leur propre fond
+  const img = (file ? tex.packImage(file) : undefined) ?? tex.packImage(PACK_FILES[kind]);
   const py = playerInvY(kind, rows);
   if (img) {
     const k = img.width / 256;
@@ -206,7 +207,7 @@ export function containerBackground(kind: ContainerKind, title: string, tex: Tex
   }
   // libellés
   const label = (s: string, x: number, y: number) => drawText(ctx, tr(s), x, y - 2, C.label);
-  if (kind === 'inventory') label('Fabrication', 97, 8);
+  if (kind === 'inventory') label('Artisanat', 97, 8);
   else {
     if (kind === 'furnace' || kind === 'brewing' || kind === 'dispenser') label(title, Math.round((GUI_W - textWidth(tr(title))) / 2), 6);
     else if (kind === 'anvil') label(title, 60, 6);
@@ -214,4 +215,21 @@ export function containerBackground(kind: ContainerKind, title: string, tex: Tex
     label('Inventaire', 8, py - 12);
   }
   return c;
+}
+
+const spriteCache = new WeakMap<ImageBitmap, string>();
+/** Sprite d'interface du pack (gui/sprites/…) en data URL, pour un fond CSS ; null sans pack. */
+export function packSprite(tex: TextureManager, path: string): string | null {
+  const img = tex.packImage(`gui/sprites/${path}.png`);
+  if (!img) return null;
+  let url = spriteCache.get(img);
+  if (!url) {
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    c.getContext('2d')!.drawImage(img, 0, 0);
+    url = c.toDataURL();
+    spriteCache.set(img, url);
+  }
+  return url;
 }

@@ -52,7 +52,8 @@ const EN: Record<string, string> = {
   'Rejoindre le serveur': 'Join Server', Actualiser: 'Refresh', 'Serveurs intégrés : fonctionnent hors ligne, les autres joueurs sont des bots.': 'Built-in servers: they work offline, other players are bots.',
   Boutique: 'Shop',
   // interfaces de conteneurs
-  Inventaire: 'Inventory', Fabrication: 'Crafting', Coffre: 'Chest', Fourneau: 'Furnace', "Coffre de l'Ender": 'Ender Chest', Enchanter: 'Enchant',
+  Inventaire: 'Inventory', Fabrication: 'Crafting', Artisanat: 'Crafting', 'Haut fourneau': 'Blast Furnace', Fumoir: 'Smoker', 'Boîte de shulker': 'Shulker Box', 'Progrès réalisé !': 'Advancement Made!',
+  "Coût d'enchantement : ": 'Enchantment Cost: ', 'Trop cher !': 'Too Expensive!', 'Dans la main principale :': 'When in Main Hand:', 'Sur la tête :': 'When on Head:', 'Sur le corps :': 'When on Body:', 'Sur les jambes :': 'When on Legs:', 'Sur les pieds :': 'When on Feet:', Coffre: 'Chest', Fourneau: 'Furnace', "Coffre de l'Ender": 'Ender Chest', Enchanter: 'Enchant',
   'Réparer et nommer': 'Repair & Name', Alambic: 'Brewing Stand', Distributeur: 'Dispenser', Dropper: 'Dropper', Entonnoir: 'Hopper', Tonneau: 'Barrel',
   'Blocs de construction': 'Building Blocks', 'Blocs naturels': 'Natural Blocks', 'Blocs fonctionnels': 'Functional Blocks', 'Outils et utilitaires': 'Tools & Utilities',
   Combat: 'Combat', 'Blocs colorés': 'Colored Blocks', 'Blocs de redstone': 'Redstone Blocks', Rechercher: 'Search', "Œufs d'apparition": 'Spawn Eggs', 'Inventaire de survie': 'Survival Inventory', 'Nourriture et boissons': 'Food & Drinks', Ingrédients: 'Ingredients', 'Aucune recette': 'No recipes', 'Ingrédients manquants': 'Missing ingredients',

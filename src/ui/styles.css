@@ -86,10 +86,10 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 
 /* ---------- HUD ---------- */
 #hud { font-weight: 700; }
-.crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); }
-.crosshair::before, .crosshair::after { content: ''; position: absolute; background: #fff; mix-blend-mode: difference; }
-.crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
-.crosshair::after { top: 10px; left: 0; width: 22px; height: 2px; }
+.crosshair { position: absolute; left: 50%; top: 50%; width: calc(var(--gs) * 15px); height: calc(var(--gs) * 15px); transform: translate(-50%, -50%); background-size: 100% 100%; image-rendering: pixelated; mix-blend-mode: difference; }
+/* recharge de l'attaque (jeu original : 16 × 4 sous le réticule) */
+.mc-attack { position: absolute; left: calc(50% - var(--gs) * 8px); top: calc(50% + var(--gs) * 9px); width: calc(var(--gs) * 16px); height: calc(var(--gs) * 4px); background-size: 100% 100%; image-rendering: pixelated; pointer-events: none; overflow: hidden; }
+.mc-attack-fill { height: 100%; max-width: 100%; background-size: calc(var(--gs) * 16px) 100%; background-repeat: no-repeat; image-rendering: pixelated; }
 .hint { position: absolute; left: 50%; top: calc(50% + 22px); transform: translateX(-50%); font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #0007; color: #fff; white-space: nowrap; }
 .mining-ring { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; transform: translate(-50%, -50%); }
 .hud-bottom { position: absolute; left: 50%; bottom: calc(6px + var(--safe-bottom)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
@@ -109,20 +109,28 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .slot.picked { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
 .item-name { font-size: 14px; text-shadow: 0 0 4px #000, 0 0 4px #000; min-height: 18px; transition: opacity .4s; }
 .btn-pause { position: absolute; top: calc(10px + var(--safe-top)); right: calc(12px + var(--safe-right)); width: 44px; height: 44px; pointer-events: auto; }
-.boss-bar { position: absolute; top: calc(12px + var(--safe-top)); left: 50%; transform: translateX(-50%); width: min(420px, 60vw); text-align: center; text-shadow: 0 0 4px #000; }
-.boss-bar .bar { height: 12px; background: #000b; border: 2px solid #000; border-radius: 6px; overflow: hidden; margin-top: 4px; }
-.boss-bar .bar > div { height: 100%; background: linear-gradient(#d84aff, #8a20c0); transition: width .2s; }
-.debug { position: absolute; left: calc(8px + var(--safe-left)); top: calc(8px + var(--safe-top)); font: 12px/1.35 monospace; background: #0008; padding: 6px 8px; border-radius: 6px; white-space: pre; }
+/* barre de boss du jeu original : nom blanc à y = 3, barre 182 × 5 à y = 12 */
+.boss-bar { position: absolute; top: calc(var(--safe-top) + var(--gs) * 2px); left: 50%; transform: translateX(-50%); width: calc(var(--gs) * 182px); text-align: center; color: #fff; font-size: calc(var(--gs) * 8px); line-height: calc(var(--gs) * 10px); font-weight: normal; text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f; pointer-events: none; white-space: nowrap; }
+.boss-bar .bar { height: calc(var(--gs) * 5px); background-size: 100% 100%; image-rendering: pixelated; margin-top: 0; }
+.boss-bar .bar > div { height: 100%; background-size: calc(var(--gs) * 182px) 100%; background-repeat: no-repeat; image-rendering: pixelated; }
+/* écran de débogage (F3) : lignes grises translucides, texte gris clair sans ombre */
+.debug { position: absolute; left: calc(var(--safe-left) + var(--gs) * 2px); top: calc(var(--safe-top) + var(--gs) * 2px); font-size: calc(var(--gs) * 8px); line-height: calc(var(--gs) * 9px); font-weight: normal; color: #e0e0e0; white-space: pre; display: flex; flex-direction: column; align-items: flex-start; pointer-events: none; }
+.debug > div { background: rgba(80, 80, 80, 0.56); padding: 0 calc(var(--gs) * 1px); }
 .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(200, 0, 0, .55)); opacity: 0; transition: opacity .1s; }
 .underwater { position: absolute; inset: 0; pointer-events: none; background: rgba(30, 70, 160, .35); }
 .portal-fx { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(160, 60, 255, .35), rgba(90, 10, 180, .85)); animation: portal-wave 1.6s ease-in-out infinite alternate; }
 @keyframes portal-wave { from { filter: hue-rotate(-12deg); transform: scale(1.04) rotate(-0.6deg); } to { filter: hue-rotate(12deg); transform: scale(1.08) rotate(0.6deg); } }
 .inlava { position: absolute; inset: 0; pointer-events: none; background: rgba(255, 90, 10, .55); }
-.toasts { position: absolute; top: calc(44px + var(--safe-top)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(560px, 70vw); }
-.toast { background: #111a; border: 2px solid #fff3; padding: 8px 12px; border-radius: 10px; font-size: 14px; animation: toastIn .25s ease-out; max-width: 70vw; }
-.toast.achievement { border-color: var(--gold); background: #2a2410e6; }
-.toast.warn { border-color: #d84aff; background: #2a1030e6; }
-@keyframes toastIn { from { transform: translateY(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* notifications du jeu original : coin supérieur droit, 160 × 32, entrée par la droite */
+.toasts { position: absolute; top: var(--safe-top); right: var(--safe-right); display: flex; flex-direction: column; gap: 0; align-items: flex-end; pointer-events: none; }
+.toast { box-sizing: border-box; width: calc(var(--gs) * 160px); max-width: 60vw; min-height: calc(var(--gs) * 32px); padding: calc(var(--gs) * 7px) calc(var(--gs) * 8px); display: flex; flex-direction: column; justify-content: center; gap: calc(var(--gs) * 2px);
+  background: #212121; border: calc(var(--gs) * 1px) solid #000; box-shadow: inset calc(var(--gs) * 1px) calc(var(--gs) * 1px) #555, inset calc(var(--gs) * -1px) calc(var(--gs) * -1px) #111; border-radius: 0;
+  color: #fff; font-size: calc(var(--gs) * 8px); line-height: calc(var(--gs) * 10px); font-weight: normal; animation: toastIn .5s ease-out; }
+.toast .toast-title { color: #ffff00; }
+.toast.warn .toast-text { color: #ff5555; }
+@keyframes toastIn { from { transform: translateX(100%); } to { transform: none; } }
+/* écran tactile : sous les boutons Chat / Pause pour ne pas les masquer */
+@media (pointer: coarse) { .toasts { top: calc(var(--safe-top) + 58px); } }
 .compass { position: absolute; top: calc(70px + var(--safe-top)); left: 50%; transform: translateX(-50%); background: #000a; border-radius: 12px; padding: 8px 14px; display: flex; align-items: center; gap: 10px; }
 .compass .arrow { font-size: 28px; display: inline-block; transition: transform .1s linear; }
 
@@ -232,8 +240,13 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .gdur > div { height: 1px; }
 .gui-cursor { position: fixed; left: 0; top: 0; width: 16px; height: 16px; transform-origin: 0 0; pointer-events: none; z-index: 10; display: none; }
 .gui-cursor .gcount { right: -1px; bottom: -3px; }
-.gui-tooltip { position: fixed; z-index: 11; display: none; pointer-events: none; background: rgba(16, 0, 16, 0.94); border: 2px solid #28007f; outline: 2px solid rgba(16, 0, 16, 0.94); padding: 4px 6px; }
-.gui-tooltip > div { margin: 1px 0; }
+/* info-bulle du jeu original : fond violet très sombre, liseré dégradé violet, lignes de 10 px */
+.gui-tooltip { --k: 2; position: fixed; z-index: 11; display: none; pointer-events: none; background: rgba(16, 0, 16, 0.94); border: calc(var(--k) * 1px) solid #28007f;
+  border-image: linear-gradient(rgba(80, 0, 255, 0.5), rgba(40, 0, 127, 0.5)) 1; outline: calc(var(--k) * 1px) solid rgba(16, 0, 16, 0.94); padding: calc(var(--k) * 2px) calc(var(--k) * 2px) 0; }
+.gui-tooltip > div { height: calc(var(--k) * 10px); white-space: nowrap; }
+.gui-tooltip > div > img { margin-top: calc(var(--k) * -2px); }
+.gui-tooltip > .tt-first { margin-bottom: calc(var(--k) * 2px); }
+.gslot.ph { background-repeat: no-repeat; background-size: 16px 16px; background-origin: content-box; image-rendering: pixelated; }
 .gui-tabs { position: absolute; display: flex; gap: 1px; }
 .gui-tab { width: 21px; height: 20px; background: #a0a0a0; border: 1px solid #000; box-shadow: inset 1px 1px #dcdcdc, inset -1px -1px #555; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .gui-tab.on { background: #c6c6c6; box-shadow: inset 1px 1px #fff, inset -1px -1px #8b8b8b; }
@@ -271,7 +284,7 @@ html.pixel-font .mc-screen *, html.pixel-font #hud .toast, html.pixel-font .dial
 .mc-grid { display: grid; grid-template-columns: repeat(2, auto); gap: calc(var(--gs) * 4px) calc(var(--gs) * 10px); justify-content: center; }
 @media (max-width: 520px) { .mc-grid { grid-template-columns: auto; } }
 .mc-btn, .mc-slider { position: relative; width: calc(var(--gs) * var(--w) * 1px); max-width: calc(100vw - 20px); height: calc(var(--gs) * 20px); padding: 0 calc(var(--gs) * 4px); box-sizing: border-box; border-style: solid; border-width: calc(var(--gs) * 3px); border-image: var(--mc-btn) 3 fill stretch; background: transparent; image-rendering: pixelated; color: #fff; font-size: calc(var(--gs) * 8px); line-height: 1; text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f; display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; white-space: nowrap; overflow: hidden; touch-action: manipulation; -webkit-tap-highlight-color: transparent; border-radius: 0; box-shadow: none; min-height: 0; }
-.mc-btn > span, .mc-slider > span { position: relative; z-index: 1; pointer-events: none; overflow: hidden; text-overflow: ellipsis; }
+.mc-btn > span, .mc-slider > span { position: relative; z-index: 1; pointer-events: none; overflow: hidden; text-overflow: ellipsis; line-height: 1.375; }
 .mc-btn:hover:not(:disabled), .mc-btn:focus-visible, .mc-btn:active:not(:disabled) { border-image-source: var(--mc-btn-hover); color: #ffffa0; }
 .mc-btn:disabled { border-image-source: var(--mc-btn-off); color: #a0a0a0; text-shadow: none; cursor: default; }
 .mc-slider { border-image-source: var(--mc-slider); cursor: ew-resize; }
@@ -310,28 +323,25 @@ input.mc-input:focus { border-color: #fff; }
 .stat-row { display: flex; justify-content: space-between; width: calc(var(--gs) * 220px); max-width: calc(100vw - 24px); }
 .stat-row:nth-child(odd) { background: rgba(255, 255, 255, 0.06); }
 /* ---------- HUD classique ---------- */
-.mc-hud { position: absolute; left: 50%; bottom: calc(var(--safe-bottom) + var(--gs) * 1px); width: calc(var(--gs) * 182px); height: calc(var(--gs) * 49px); transform: translateX(-50%); pointer-events: none; color: #fff; }
+.mc-hud { position: absolute; left: 50%; bottom: var(--safe-bottom); width: calc(var(--gs) * 182px); height: calc(var(--gs) * 49px); transform: translateX(-50%); pointer-events: none; color: #fff; }
 .gp { position: absolute; left: calc(var(--gs) * var(--x) * 1px); top: calc(var(--gs) * var(--y) * 1px); }
 .gp[style*='--w'] { width: calc(var(--gs) * var(--w) * 1px); height: calc(var(--gs) * var(--h) * 1px); }
-.mc-icons { display: flex; flex-wrap: wrap-reverse; width: calc(var(--gs) * 81px); align-content: flex-start; }
-.mc-icons.rev { flex-direction: row-reverse; }
-.mc-icons i { width: calc(var(--gs) * 9px); height: calc(var(--gs) * 9px); margin-right: calc(var(--gs) * -1px); background-size: 100% 100%; image-rendering: pixelated; flex: none; }
-.mc-icons.rev i { margin-right: 0; margin-left: calc(var(--gs) * -1px); }
+.mc-icons { width: calc(var(--gs) * 81px); height: calc(var(--gs) * 9px); }
+.mc-icons i { position: absolute; width: calc(var(--gs) * 9px); height: calc(var(--gs) * 9px); background-size: 100% 100%; image-rendering: pixelated; }
 .mc-xp { background-size: 100% 100%; image-rendering: pixelated; }
 .mc-xpfill { height: 100%; background-size: calc(var(--gs) * 182px) 100%; background-repeat: no-repeat; image-rendering: pixelated; width: 0; }
-.mc-level { position: absolute; left: 0; right: 0; top: calc(var(--gs) * 11px); text-align: center; color: #80ff20; font-size: calc(var(--gs) * 8px); line-height: 1; text-shadow: calc(var(--gs) * 1px) 0 #000, calc(var(--gs) * -1px) 0 #000, 0 calc(var(--gs) * 1px) #000, 0 calc(var(--gs) * -1px) #000; }
+.mc-level { position: absolute; left: 0; right: 0; top: calc(var(--gs) * 14px); text-align: center; color: #80ff20; font-size: calc(var(--gs) * 8px); line-height: 1; text-shadow: calc(var(--gs) * 1px) 0 #000, calc(var(--gs) * -1px) 0 #000, 0 calc(var(--gs) * 1px) #000, 0 calc(var(--gs) * -1px) #000; }
 .mc-hotbar { background-size: 100% 100%; image-rendering: pixelated; pointer-events: auto; }
 .mc-hslot { position: absolute; left: calc(var(--gs) * (3px + var(--i) * 20px)); top: calc(var(--gs) * 3px); width: calc(var(--gs) * 16px); height: calc(var(--gs) * 16px); }
 .mc-hslot::before { content: ''; position: absolute; inset: calc(var(--gs) * -2px); }
 .mc-hslot img { width: 100%; height: 100%; image-rendering: pixelated; display: block; pointer-events: none; }
-.mc-hsel { position: absolute; left: calc(var(--gs) * (-1px + var(--i) * 20px)); top: calc(var(--gs) * -1px); width: calc(var(--gs) * 24px); height: calc(var(--gs) * 24px); background-size: 100% 100%; image-rendering: pixelated; pointer-events: none; z-index: 1; }
+.mc-hsel { position: absolute; left: calc(var(--gs) * (-1px + var(--i) * 20px)); top: calc(var(--gs) * -1px); width: calc(var(--gs) * 24px); height: calc(var(--gs) * 23px); background-size: 100% 100%; image-rendering: pixelated; pointer-events: none; z-index: 1; }
 .mc-count { position: absolute; right: calc(var(--gs) * -1px); bottom: calc(var(--gs) * -2px); font-size: calc(var(--gs) * 8px); line-height: 1; color: #fff; text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f; pointer-events: none; }
 .mc-dur { position: absolute; left: calc(var(--gs) * 2px); bottom: calc(var(--gs) * 2px); width: calc(var(--gs) * 13px); height: calc(var(--gs) * 2px); background: #000; pointer-events: none; }
 .mc-dur > div { height: 50%; }
 .mc-invbtn { pointer-events: auto; background: rgba(20, 20, 20, 0.75); border: calc(var(--gs) * 1px) solid #000; box-shadow: inset calc(var(--gs) * 1px) calc(var(--gs) * 1px) #9a9a9a, inset calc(var(--gs) * -1px) calc(var(--gs) * -1px) #3c3c3c; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: calc(var(--gs) * 8px); color: #fff; cursor: pointer; }
 .mc-itemname { position: absolute; left: -50%; right: -50%; top: calc(var(--gs) * -12px); text-align: center; font-size: calc(var(--gs) * 8px); line-height: 1; color: #fff; text-shadow: calc(var(--gs) * 1px) calc(var(--gs) * 1px) 0 #3f3f3f; transition: opacity 0.4s; }
-html.pixel-font .toast { font-size: 16px; }
-.toast.achievement { background: #212121; border: 2px solid #000; box-shadow: inset 2px 2px #555, inset -2px -2px #111; color: #fff; border-radius: 0; }
+
 @media (max-width: 900px) and (orientation: landscape) { .mc-hud { transform: translateX(calc(-50% - 40px)); } }
 @media (orientation: portrait) { .mc-hud { bottom: calc(150px + var(--safe-bottom)); } }
 
@@ -417,3 +427,16 @@ html.shaders-on #app::after { content: ''; position: absolute; inset: 0; pointer
 }
 .mc-sidebar.hidden { display: none; }
 .mc-sidebar .sb-title { text-align: center; margin-bottom: calc(var(--gs) * 1px); background: rgba(0, 0, 0, 0.15); }
+
+/* table d'enchantement avec les sprites du pack (case claire / sombre / dorée au survol) */
+.gui-optbtn.spr { background: var(--bg) 0 0 / 100% 100% no-repeat; border: 0; box-shadow: none; image-rendering: pixelated; }
+.gui-optbtn.spr:hover:not(.off) { background-image: var(--hl); }
+.gui-optbtn.off.spr { background-image: var(--bg); }
+.gui-optbtn .hl { display: none; }
+.gui-optbtn:hover:not(.off) .hl { display: block; }
+.gui-optbtn:hover:not(.off) .nm { display: none; }
+.gui-lapis.spr { width: 16px; height: 16px; border: 0; background: transparent 0 0 / 100% 100% no-repeat; image-rendering: pixelated; }
+/* enclume : texte posé sur le sprite du champ, coût sur fond sombre */
+.gui-name.spr { background: transparent; border: 0; color: #e0e0e0; font-family: 'LeCraftPixel', monospace; font-size: 8px; line-height: 12px; padding: 0; }
+.gui-name:disabled { pointer-events: none; }
+.anvil-cost { background: rgba(0, 0, 0, 0.31); padding: 0 2px; height: 12px; overflow: hidden; }

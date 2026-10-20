@@ -7,6 +7,8 @@ import { ItemRegistry } from '../inventory/ItemRegistry';
 import { el } from './dom';
 import { touchIcon } from './TouchIcons';
 import { buildHudSprites, type HudSprites } from './HudArt';
+import { rarityColor } from './Rarity';
+import { customName } from '../inventory/Enchantments';
 
 /**
  * Affichage tête haute : réticule, indice d'interaction, progression du minage, santé, faim,
@@ -41,7 +43,23 @@ export class HUD implements HudApi {
   private compassArrow: HTMLElement;
   private compassText: HTMLElement;
   private compassTarget: { x: number; z: number; until: number; name: string; autoHide?: boolean } | null = null;
-  private last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1, hv: '', abs: -1 };
+  private last = { xp: -1, lvl: -1 };
+  /** Signatures des rangées d'icônes (évite de reconstruire le DOM à chaque image). */
+  private sig = { hearts: '', food: '', armor: '', air: '' };
+  /** Horloge du HUD à 20 tics/s (clignotement des cœurs, tremblements, régénération). */
+  private tick = 0;
+  private tickAcc = 0;
+  /** Clignotement des cœurs après une blessure / un soin (comme le jeu original). */
+  private hp = { last: -1, display: 0, changedAt: 0, blinkUntil: 0 };
+  /** Décalages aléatoires tirés à chaque tic (cœurs : santé basse, faim : saturation nulle). */
+  private shakeH: number[] = [];
+  private shakeF: number[] = [];
+  private underwaterNow = false;
+  private crosshair: HTMLElement;
+  private attackBg: HTMLElement;
+  private attackFill: HTMLElement;
+  private attackMax = 0.4;
+  private packKey: unknown = undefined;
   private hotbarDirty = true;
   private nameTimer = 0;
   private lastSelected = -1;
@@ -68,9 +86,13 @@ export class HUD implements HudApi {
     this.hint = el('div', { class: 'hint hidden' });
     this.ring = el('canvas', { class: 'mining-ring', width: '46', height: '46' });
     this.hearts = el('div', { class: 'mc-icons gp', style: '--x:0;--y:10' });
-    this.food = el('div', { class: 'mc-icons gp rev', style: '--x:101;--y:10' });
+    this.food = el('div', { class: 'mc-icons gp', style: '--x:101;--y:10' });
     this.armor = el('div', { class: 'mc-icons gp', style: '--x:0;--y:0' });
-    this.air = el('div', { class: 'mc-icons gp rev', style: '--x:101;--y:0' });
+    this.air = el('div', { class: 'mc-icons gp', style: '--x:101;--y:0' });
+    // réticule (sprite inversant les couleurs) et indicateur de recharge d'attaque en dessous
+    this.attackFill = el('div', { class: 'mc-attack-fill' });
+    this.attackBg = el('div', { class: 'mc-attack hidden' }, this.attackFill);
+    this.crosshair = el('div', { class: 'crosshair' });
     this.xpFill = el('div', { class: 'mc-xpfill' });
     this.xpBg = el('div', { class: 'mc-xp gp', style: '--x:0;--y:20;--w:182;--h:5' }, this.xpFill);
     this.xpLevel = el('div', { class: 'mc-level' });
@@ -94,10 +116,10 @@ export class HUD implements HudApi {
       e.preventDefault();
       this.onInventory();
     });
-    this.applySprites();
     this.bossName = el('div');
     this.bossFill = el('div');
     this.boss = el('div', { class: 'boss-bar hidden' }, this.bossName, el('div', { class: 'bar' }, this.bossFill));
+    this.bossBar = this.boss.querySelector('.bar') as HTMLElement;
     this.toasts = el('div', { class: 'toasts' });
     this.debug = el('div', { class: 'debug hidden' });
     this.vignette = el('div', { class: 'vignette' });
@@ -131,7 +153,8 @@ export class HUD implements HudApi {
       this.inlava,
       this.portalFx,
       this.vignette,
-      el('div', { class: 'crosshair' }),
+      this.crosshair,
+      this.attackBg,
       this.ring,
       this.hint,
       this.boss,
@@ -147,6 +170,7 @@ export class HUD implements HudApi {
       el('div', { class: 'mc-hud' }, this.itemName, this.armor, this.hearts, this.air, this.food, this.xpBg, this.xpLevel, this.hotbar, invBtn),
     );
     parent.append(this.root);
+    this.applySprites();
   }
 
   private applySprites() {
@@ -154,13 +178,18 @@ export class HUD implements HudApi {
     this.selEl.style.backgroundImage = `url(${this.icons.selection})`;
     this.xpBg.style.backgroundImage = `url(${this.icons.xp_bg})`;
     this.xpFill.style.backgroundImage = `url(${this.icons.xp_fill})`;
+    this.crosshair.style.backgroundImage = `url(${this.icons.crosshair})`;
+    this.attackBg.style.backgroundImage = `url(${this.icons.attack_bg})`;
+    this.attackFill.style.backgroundImage = `url(${this.icons.attack_progress})`;
+    this.paintBoss();
   }
 
   /** Recharge les sprites (changement de pack de ressources). */
   refreshTheme() {
     this.icons = buildHudSprites(this.textures);
     this.applySprites();
-    this.last = { h: -1, f: -1, a: -1, air: -1, maxH: -1, xp: -1, lvl: -1, hv: '', abs: -1 };
+    this.last = { xp: -1, lvl: -1 };
+    this.sig = { hearts: '', food: '', armor: '', air: '' };
     this.hotbarDirty = true;
   }
 
@@ -215,20 +244,40 @@ export class HUD implements HudApi {
   }
 
   toast(text: string, kind: 'info' | 'achievement' | 'warn' = 'info') {
-    const t = el('div', { class: `toast ${kind}` }, text);
+    // notification du jeu original (coin supérieur droit) : progrès = titre jaune + nom en blanc
+    const m = /^🏆\s*(.+?)(?:\s+[—–-]\s+(.*))?$/u.exec(text);
+    const t = m
+      ? el('div', { class: `toast ${kind}`, title: m[2] ?? '' }, el('div', { class: 'toast-title' }, 'Progrès réalisé !'), el('div', { class: 'toast-text' }, m[1]))
+      : el('div', { class: `toast ${kind}` }, el('div', { class: 'toast-text' }, text));
     this.toasts.append(t);
     while (this.toasts.children.length > 4) this.toasts.firstChild?.remove();
     setTimeout(() => t.remove(), kind === 'achievement' ? 5000 : 3500);
   }
 
+  private bossBar: HTMLElement;
+  private bossColor: 'pink' | 'purple' = 'pink';
+  /** Barre de boss du jeu original : nom blanc centré, barre 182 × 5 (rose ; violette pour le Wither). */
   setBoss(name: string | null, frac = 1, phase = 1) {
     if (!name) {
       this.boss.classList.add('hidden');
       return;
     }
     this.boss.classList.remove('hidden');
-    this.bossName.textContent = `${name} — phase ${phase}`;
-    this.bossFill.style.width = `${Math.round(frac * 100)}%`;
+    const color = /wither/i.test(name) ? 'purple' : 'pink';
+    if (color !== this.bossColor) {
+      this.bossColor = color;
+      this.paintBoss();
+    }
+    const label = phase > 1 ? `${name} (${phase})` : name;
+    if (this.bossName.textContent !== label) this.bossName.textContent = label;
+    // largeur en pixels d'interface entiers, comme le jeu original
+    this.bossFill.style.width = `${(Math.floor(Math.max(0, Math.min(1, frac)) * 183) / 182) * 100}%`;
+  }
+
+  private paintBoss() {
+    const c = this.bossColor;
+    this.bossBar.style.backgroundImage = `url(${this.icons[`boss_${c}_bg`]})`;
+    this.bossFill.style.backgroundImage = `url(${this.icons[`boss_${c}`]})`;
   }
 
   showCompass(x: number, z: number, target: string, seconds = 45) {
@@ -249,40 +298,106 @@ export class HUD implements HudApi {
   }
 
   setOverlays(underwater: boolean, lava: boolean) {
+    this.underwaterNow = underwater;
     this.underwater.classList.toggle('hidden', !underwater);
     this.inlava.classList.toggle('hidden', !lava);
   }
 
-  /** Rangée d'icônes 9x9 (2 points par icône) : pleine / moitié / vide. */
-  private renderHearts(hp: number, max: number, variant: string, absorption: number) {
-    const ic = this.icons;
-    let html = '';
-    for (let i = 0; i < Math.ceil(max / 2); i++) {
-      const v = hp - i * 2;
-      const kind = v >= 2 ? 'full' : v === 1 ? 'half' : 'empty';
-      const url = kind === 'empty' ? ic.heart_empty : ic[`${variant}_${kind}`] ?? ic[`heart_${kind}`];
-      html += `<i style="background-image:url(${url})"></i>`;
-    }
-    for (let i = 0; i < Math.ceil(absorption / 2); i++) {
-      const kind = absorption - i * 2 >= 2 ? 'full' : 'half';
-      html += `<i style="background-image:url(${ic[`heart_absorbing_${kind}`] ?? ic[`heart_${kind}`]})"></i>`;
-    }
-    this.hearts.innerHTML = html;
+  /** Icône 9 × 9 placée en pixels d'interface ; `layers` : du dessus vers le dessous. */
+  private ico(x: number, y: number, ...layers: (string | undefined)[]) {
+    const bg = layers.filter(Boolean).map((u) => `url(${u})`).join(',');
+    return `<i style="left:calc(var(--gs)*${x}px);top:calc(var(--gs)*${y}px);background-image:${bg}"></i>`;
   }
 
-  private renderIcons(container: HTMLElement, value: number, max: number, prefix: string, hideEmpty = false) {
-    const n = Math.ceil(max / 2);
-    let html = '';
-    for (let i = 0; i < n; i++) {
-      const v = value - i * 2;
-      const kind = v >= 2 ? 'full' : v === 1 ? 'half' : 'empty';
-      if (hideEmpty && kind === 'empty') {
-        html += '<i style="visibility:hidden"></i>';
-        continue;
+  private setRow(row: HTMLElement, key: 'hearts' | 'food' | 'armor' | 'air', sig: string, build: () => string) {
+    if (this.sig[key] === sig) return;
+    this.sig[key] = sig;
+    row.innerHTML = build();
+  }
+
+  /**
+   * Cœurs du jeu original : conteneurs, cœurs clignotants après une blessure (ancienne santé en
+   * blanc pendant 1 s), cœur qui saute avec Régénération, tremblement quand la santé est basse,
+   * rangées supplémentaires (absorption) qui se resserrent. Retourne le nombre de rangées.
+   */
+  private renderHearts(p: Session['player'], hp: number, regen: boolean) {
+    const ic = this.icons;
+    const max = p.maxHealth;
+    const abs = Math.ceil(p.absorption);
+    const maxH = Math.ceil(max / 2), absH = Math.ceil(abs / 2);
+    const rows = Math.ceil((max + abs) / 2 / 10);
+    const rowH = Math.max(10 - (rows - 2), 3);
+    const variant = p.effects.level('wither') ? 'withered_' : p.effects.level('poison') || p.effects.level('fatal_poison') ? 'poisoned_' : '';
+    const H = this.hp;
+    const blink = H.blinkUntil > this.tick && Math.floor((H.blinkUntil - this.tick) / 3) % 2 === 1;
+    const regenIdx = regen ? this.tick % Math.ceil(max + 5) : -1;
+    const low = hp + abs <= 4;
+    const items: [number, number, string[]][] = [];
+    for (let i = maxH + absH - 1; i >= 0; i--) {
+      const x = (i % 10) * 8;
+      let y = -Math.floor(i / 10) * rowH;
+      if (low) y += this.shakeH[i] ?? 0;
+      if (i < maxH && i === regenIdx) y -= 2;
+      const layers: string[] = [];
+      if (i >= maxH) {
+        const a = i * 2 - maxH * 2;
+        if (a < abs) layers.push(a + 1 === abs ? 'heart_absorbing_half' : 'heart_absorbing_full');
+      } else {
+        if (i * 2 < hp) layers.push(`heart_${variant}${i * 2 + 1 === hp ? 'half' : 'full'}`);
+        if (blink && i * 2 < H.display) layers.push(`heart_${variant}${i * 2 + 1 === H.display ? 'half' : 'full'}_blinking`);
       }
-      html += `<i style="background-image:url(${this.icons[`${prefix}_${kind}`]})"></i>`;
+      layers.push(blink ? 'heart_container_blinking' : 'heart_container');
+      items.push([x, y, layers]);
     }
-    container.innerHTML = html;
+    const sig = items.map(([x, y, l]) => `${x},${y},${l.join('+')}`).join(';');
+    this.setRow(this.hearts, 'hearts', sig, () => items.map(([x, y, l]) => this.ico(x, y, ...l.map((k) => ic[k] ?? ic[k.replace(/(poisoned|withered|absorbing)_/, '')] ?? ic[k.replace('_blinking', '')]))).join(''));
+    return { rows, rowH };
+  }
+
+  /** Faim (de droite à gauche), avec tremblement quand la saturation est nulle et effet Faim (vert). */
+  private renderFood(p: Session['player']) {
+    const food = Math.ceil(p.hunger);
+    const hunger = p.effects.level('hunger') ? '_hunger' : '';
+    const shake = p.saturation <= 0 && this.tick % (food * 3 + 1) === 0;
+    const items: [number, number, string[]][] = [];
+    for (let i = 0; i < 10; i++) {
+      const x = 81 - i * 8 - 9;
+      const y = shake ? this.shakeF[i] ?? 0 : 0;
+      const l: string[] = [];
+      if (i * 2 + 1 < food) l.push(`food_full${hunger}`);
+      else if (i * 2 + 1 === food) l.push(`food_half${hunger}`);
+      l.push(`food_empty${hunger}`);
+      items.push([x, y, l]);
+    }
+    const sig = items.map(([x, y, l]) => `${x},${y},${l.join('+')}`).join(';');
+    this.setRow(this.food, 'food', sig, () => items.map(([x, y, l]) => this.ico(x, y, ...l.map((k) => this.icons[k] ?? this.icons[k.replace('_hunger', '')]))).join(''));
+  }
+
+  private renderArmor(def: number, y: number) {
+    this.armor.style.setProperty('--y', String(y));
+    this.setRow(this.armor, 'armor', `${def}`, () => {
+      if (def <= 0) return '';
+      let html = '';
+      for (let i = 0; i < 10; i++) html += this.ico(i * 8, 0, this.icons[i * 2 + 1 < def ? 'armor_full' : i * 2 + 1 === def ? 'armor_half' : 'armor_empty']);
+      return html;
+    });
+  }
+
+  /** Bulles d'air (1.21) : pleines, la bulle qui éclate, puis bulles vides sous l'eau. */
+  private renderAir(air: number, show: boolean) {
+    const full = show ? Math.max(0, Math.ceil(((air - 2) * 10) / 300)) : 0;
+    const pop = show ? Math.max(0, Math.ceil((air * 10) / 300)) : 0;
+    this.setRow(this.air, 'air', show ? `${full},${pop},${this.underwaterNow}` : '', () => {
+      if (!show) return '';
+      let html = '';
+      for (let i = 1; i <= 10; i++) {
+        const x = 81 - (i - 1) * 8 - 9;
+        if (i <= full) html += this.ico(x, 0, this.icons.air);
+        else if (i === pop && pop !== full) html += this.ico(x, 0, this.icons.air_bursting ?? this.icons.air);
+        else if (this.icons.air_empty) html += this.ico(x, 0, this.icons.air_empty);
+      }
+      return html;
+    });
   }
 
   private renderHotbar(s: Session) {
@@ -317,7 +432,9 @@ export class HUD implements HudApi {
       this.fpsTime = 0;
       if (this.debugOn || s.settings.showFps) {
         this.debug.classList.remove('hidden');
-        this.debug.textContent = this.debugOn ? this.stats() : `${this.fps} FPS`;
+        // écran de débogage : une ligne par fond gris translucide, comme F3
+        const lines = (this.debugOn ? this.stats() : `${this.fps} FPS`).split('\n');
+        this.debug.replaceChildren(...lines.map((l) => el('div', {}, l || '\u00a0')));
       } else this.debug.classList.add('hidden');
     }
     const L = this.last;
@@ -327,35 +444,58 @@ export class HUD implements HudApi {
     const showC = s.gamerules.showCoordinates;
     this.coordsEl.classList.toggle('hidden', !showC);
     if (showC) this.coordsEl.textContent = `Position : ${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)}`;
+    // sprites du pack de ressources chargé après la création du HUD (démarrage) : on les reprend
+    const pk = this.textures.packImage('gui/sprites/hud/hotbar.png', 'gui/widgets.png', 'gui/icons.png') ?? null;
+    if (pk !== this.packKey) {
+      if (this.packKey !== undefined) this.refreshTheme();
+      else {
+        this.icons = buildHudSprites(this.textures);
+        this.applySprites();
+      }
+      this.packKey = pk;
+    }
+    // horloge à 20 tics/s
+    this.tickAcc += dt;
+    let ticked = false;
+    while (this.tickAcc >= 0.05) {
+      this.tickAcc -= 0.05;
+      this.tick++;
+      ticked = true;
+    }
+    if (this.tickAcc > 1) this.tickAcc = 0;
+    if (ticked) {
+      for (let i = 0; i < 40; i++) this.shakeH[i] = Math.floor(Math.random() * 2);
+      for (let i = 0; i < 10; i++) this.shakeF[i] = Math.floor(Math.random() * 3) - 1;
+    }
     const hp = Math.ceil(p.health);
-    // cœurs verts (poison), noirs (Wither) et dorés (absorption), comme le jeu original
-    const variant = p.effects.level('wither') ? 'heart_withered' : p.effects.level('poison') || p.effects.level('fatal_poison') ? 'heart_poisoned' : 'heart';
-    const abs = Math.ceil(p.absorption);
-    if (hp !== L.h || p.maxHealth !== L.maxH || variant !== L.hv || abs !== L.abs) {
-      L.h = hp;
-      L.maxH = p.maxHealth;
-      L.hv = variant;
-      L.abs = abs;
-      this.renderHearts(hp, p.maxHealth, variant, abs);
+    const H = this.hp;
+    const now = performance.now();
+    if (H.last < 0) H.last = H.display = hp;
+    if (hp < H.last && p.invulnerable > 0) H.blinkUntil = this.tick + 20;
+    else if (hp > H.last && p.invulnerable > 0) H.blinkUntil = this.tick + 10;
+    if (hp !== H.last) {
+      H.changedAt = now;
+      H.last = hp;
+    }
+    if (now - H.changedAt > 1000) {
+      H.display = hp;
+      H.changedAt = now;
     }
     const creative = p.creative;
-    this.hearts.style.visibility = this.food.style.visibility = this.xpBg.style.visibility = this.armor.style.visibility = creative ? 'hidden' : '';
+    this.hearts.style.visibility = this.food.style.visibility = this.xpBg.style.visibility = this.armor.style.visibility = this.air.style.visibility = creative ? 'hidden' : '';
     this.xpLevel.style.visibility = creative ? 'hidden' : '';
-    if (p.hunger !== L.f) {
-      L.f = p.hunger;
-      this.renderIcons(this.food, p.hunger, 20, 'food');
-    }
-    const def = p.inventory.defense();
-    if (def !== L.a) {
-      L.a = def;
-      if (def > 0) this.renderIcons(this.armor, def, 20, 'armor');
-      else this.armor.innerHTML = '';
-    }
-    const air = p.air < 300 ? Math.ceil(p.air / 30) : -1;
-    if (air !== L.air) {
-      L.air = air;
-      this.air.innerHTML = air >= 0 ? Array.from({ length: Math.max(0, air) }, () => `<i style="background-image:url(${this.icons.air})"></i>`).join('') : '';
-    }
+    // nom de l'objet : 59 px au-dessus du bas de l'écran (14 de moins en créatif, sans barres)
+    this.itemName.style.top = `calc(var(--gs) * ${creative ? 4 : -10}px)`;
+    const { rows, rowH } = this.renderHearts(p, hp, p.effects.level('regeneration') > 0);
+    this.renderFood(p);
+    this.renderArmor(p.inventory.defense(), 10 - (rows - 1) * rowH - 10);
+    this.renderAir(Math.max(0, p.air), p.air < 300 || this.underwaterNow);
+    // recharge de l'attaque : petite barre sous le réticule tant que l'attaque n'est pas prête
+    const cd = s.entities?.combat?.cooldown ?? 0;
+    if (cd > this.attackMax || cd <= 0) this.attackMax = Math.max(0.05, cd);
+    const showAtk = cd > 0.05 && !creative;
+    this.attackBg.classList.toggle('hidden', !showAtk);
+    if (showAtk) this.attackFill.style.width = `${Math.floor((1 - cd / this.attackMax) * 17) / 16 * 100}%`;
     if (p.xp !== L.xp || p.level !== L.lvl) {
       L.xp = p.xp;
       L.lvl = p.level;
@@ -372,6 +512,9 @@ export class HUD implements HudApi {
       this.lastSelected = sel;
       const st = p.inventory.slots[sel];
       this.itemName.textContent = st ? stackName(st) : '';
+      // couleur de rareté, nom personnalisé en italique (comme le jeu original)
+      this.itemName.style.color = st ? rarityColor(st) : '';
+      this.itemName.style.fontStyle = st && customName(st) ? 'italic' : '';
       this.itemName.style.opacity = '1';
       this.nameTimer = 2;
     }

@@ -235,6 +235,18 @@ const CAUSES: Record<string, string> = {
   explosion: 'a explosé',
 };
 
+/** Message de mort du jeu original : « Joueur a été tué par Zombie », « Joueur s'est noyé »… */
+function deathMessage(s: Session): string {
+  const p = s.player;
+  const cause = p.deathCause ?? 'mob';
+  const who = p.name || 'Joueur';
+  const att = p.lastAttacker as { def?: { name?: string }; name?: string } | null;
+  const by = att && att !== (p as unknown) ? att.def?.name ?? att.name : undefined;
+  if (by && (cause === 'mob' || cause === 'boss' || cause === 'player')) return `${who} a été tué par ${by}`;
+  if (by && cause === 'projectile') return `${who} a été abattu par ${by}`;
+  return `${who} ${CAUSES[cause] ?? 'est mort'}`;
+}
+
 export function deathScreen(game: Game, s: Session): Screen {
   const respawn = mcButton('Réapparaître', () => game.respawn(), { disabled: true });
   const title = mcButton("Écran titre", () => game.quitToMenu(), { disabled: true });
@@ -249,7 +261,7 @@ export function deathScreen(game: Game, s: Session): Screen {
     bg: 'death',
     body: [
       el('div', { class: 'mc-big' }, 'Vous êtes mort !'),
-      mcLabel(`Joueur ${CAUSES[s.player.deathCause ?? 'mob'] ?? 'est mort'}`, 'white'),
+      mcLabel(deathMessage(s), 'white'),
       el('div', { class: 'mc-label white' }, 'Score : ', el('span', { style: 'color:#ffff55' }, String(Math.floor(score)))),
       ...(s.lastDeath ? [mcLabel(`Position : ${s.lastDeath.x}, ${s.lastDeath.y}, ${s.lastDeath.z}`)] : []),
       el('div', { style: 'height:calc(var(--gs) * 24px)' }),

@@ -1,7 +1,7 @@
 import type { Game } from '../core/Game';
 import { language, t as tr } from './i18n';
 import { hasGlint, iconKey, stackName } from '../inventory/StackInfo';
-import { customName, enchLevel, enchantLines, isEnchanted } from '../inventory/Enchantments';
+import { customName, enchLevel, enchantLines } from '../inventory/Enchantments';
 import { potionLine, potionOf } from '../inventory/Potions';
 import { AnvilStation, BrewingStation, DispenserStation, EnchantStation, type Station, type StationHost } from './Stations';
 import { BlockRegistry } from '../blocks/BlockRegistry';
@@ -14,7 +14,8 @@ import { CraftingGrid, type FurnaceState } from '../crafting/CraftingSystem';
 import { RecipeRegistry } from '../crafting/RecipeRegistry';
 import type { Screen } from './UIManager';
 import { el } from './dom';
-import { GUI_W, LAYOUT, containerBackground, drawFigure, drawArrow, drawFlame, drawPanel, drawSlot, guiHeight, playerInvY, type ContainerKind } from './ContainerArt';
+import { rarityColor } from './Rarity';
+import { GUI_W, LAYOUT, containerBackground, packSprite, drawFigure, drawArrow, drawFlame, drawPanel, drawSlot, guiHeight, playerInvY, type ContainerKind } from './ContainerArt';
 import { pixelText } from './PixelFont';
 import { CREATIVE_TABS, creativeItems, tabIcon, type CreativeTabKey } from './CreativeTabs';
 
@@ -36,6 +37,8 @@ interface GuiSlot {
   big?: boolean;
   el?: HTMLElement;
   key?: string;
+  /** Silhouette affichée dans la case vide (sprite gui/sprites/container/slot/…). */
+  ph?: string;
 }
 
 const LONG_MS = 380;
@@ -90,6 +93,8 @@ export class InventoryUI {
   private guiH = 0;
   private crList: HTMLElement | null = null;
   private crThumb: HTMLCanvasElement | null = null;
+  private furnaceKind: 'furnace' | 'blast_furnace' | 'smoker' = 'furnace';
+  private bgFile: string | undefined;
 
   constructor(private game: Game, private s: Session, private mode: InventoryMode, pos?: { x: number; y: number; z: number }) {
     const pinv = s.player.inventory;
@@ -101,8 +106,14 @@ export class InventoryUI {
     this.creative = mode === 'hand' && s.player.creative;
     if (mode === 'hand' && !this.creative) this.grid = new CraftingGrid(2);
     if (mode === 'table') this.grid = new CraftingGrid(3);
-    const blockName = pos ? BlockRegistry.get(s.world.getBlock(pos.x, pos.y, pos.z)).name : '';
-    const title = this.station?.title ?? (mode === 'ender' ? "Coffre de l'Ender" : mode === 'chest' ? (blockName && !/^Coffre/.test(blockName) ? blockName : 'Coffre') : mode === 'table' ? 'Fabrication' : mode === 'furnace' ? 'Fourneau' : '');
+    const blockDef = pos ? BlockRegistry.get(s.world.getBlock(pos.x, pos.y, pos.z)) : null;
+    const blockName = blockDef?.name ?? '';
+    const blockKey = blockDef?.key ?? '';
+    // haut fourneau et fumoir : titre, fond et jauges propres (comme le jeu original)
+    this.furnaceKind = blockKey === 'blast_furnace' ? 'blast_furnace' : blockKey === 'smoker' ? 'smoker' : 'furnace';
+    const furnaceTitle = { furnace: 'Fourneau', blast_furnace: 'Haut fourneau', smoker: 'Fumoir' }[this.furnaceKind];
+    this.bgFile = mode === 'furnace' ? `gui/container/${this.furnaceKind}.png` : blockKey.endsWith('shulker_box') ? 'gui/container/shulker_box.png' : undefined;
+    const title = this.station?.title ?? (mode === 'ender' ? "Coffre de l'Ender" : mode === 'chest' ? (blockName && !/^Coffre/.test(blockName) ? blockName : 'Coffre') : mode === 'table' ? 'Artisanat' : mode === 'furnace' ? furnaceTitle : '');
     const h = guiHeight(this.kind);
 
     if (this.creative) {
@@ -154,7 +165,7 @@ export class InventoryUI {
 
   /** Interface d'un conteneur ordinaire (inventaire de survie, coffre, fourneau, stations…). */
   private buildContainer(pinv: Inventory, mode: InventoryMode, title: string) {
-    const bg = containerBackground(this.kind, title, this.game.textures, 3, `player_${this.game.settings.playerSkin ?? 'steve'}`, this.station?.artSlots ?? []);
+    const bg = containerBackground(this.kind, title, this.game.textures, 3, `player_${this.game.settings.playerSkin ?? 'steve'}`, this.station?.artSlots ?? [], this.bgFile);
     bg.className = 'gui-bg';
     this.gui.append(bg);
     this.buildSlots(pinv);
@@ -167,6 +178,11 @@ export class InventoryUI {
       this.flameCtx = fc.getContext('2d');
       this.arrowCtx = ac.getContext('2d');
       this.gui.append(fc, ac);
+    }
+    // case de la seconde main du fond original (bouclier en silhouette)
+    if (this.kind === 'inventory' && this.game.textures.packImage('gui/container/inventory.png')) {
+      const sh = packSprite(this.game.textures, 'container/slot/shield');
+      if (sh) this.gui.append(el('div', { class: 'gui-layer', style: `left:77px;top:62px;width:16px;height:16px;background:url(${sh}) 0 0 / 100% 100%` }));
     }
     if (this.grid) {
       const [ax, ay] = this.kind === 'inventory' ? LAYOUT.inventory.arrow : LAYOUT.table.arrow;
@@ -239,9 +255,10 @@ export class InventoryUI {
   private buildSlots(pinv: Inventory) {
     const s = this.slots;
     if (this.kind === 'inventory') {
+      const ph: Record<ArmorSlot, string> = { head: 'helmet', chest: 'chestplate', legs: 'leggings', feet: 'boots' };
       LAYOUT.inventory.armor.forEach(([x, y], i) => {
         const a: ArmorSlot = ARMOR_SLOTS[i];
-        s.push({ x, y, group: 'armor', max: 1, get: () => pinv.armor[a], set: (v) => (pinv.armor[a] = v), accept: (st) => ItemRegistry.get(st.id)?.armor?.slot === a, key: `armor_${a}` });
+        s.push({ x, y, group: 'armor', max: 1, ph: `container/slot/${ph[a]}`, get: () => pinv.armor[a], set: (v) => (pinv.armor[a] = v), accept: (st) => ItemRegistry.get(st.id)?.armor?.slot === a, key: `armor_${a}` });
       });
     }
     if (this.grid) {
@@ -272,7 +289,7 @@ export class InventoryUI {
     }
     if (this.station)
       for (const st of this.station.slots)
-        s.push({ x: st.x, y: st.y, group: st.take ? 'result' : 'container', big: st.big, max: st.max, get: st.get, set: st.set, accept: st.accept, take: st.take, canTake: st.canTake, key: st.key });
+        s.push({ x: st.x, y: st.y, group: st.take ? 'result' : 'container', big: st.big, max: st.max, get: st.get, set: st.set, accept: st.accept, take: st.take, canTake: st.canTake, key: st.key, ph: st.ph });
     if (this.chestInv) {
       const ci = this.chestInv;
       for (let i = 0; i < ci.size; i++) s.push({ x: 8 + (i % 9) * 18, y: 18 + Math.floor(i / 9) * 18, group: 'container', get: () => ci.slots[i], set: (v) => (ci.slots[i] = v), key: `chest${i}` });
@@ -578,7 +595,12 @@ export class InventoryUI {
     const g = this.grid!;
     const r = g.recipe;
     if (!r) return;
-    g.consume();
+    // contenants rendus (fiole de la bouteille de miel…) : dans l'inventaire, sinon au sol
+    const inv = this.s.player.inventory;
+    for (const st of g.consume()) {
+      const left = inv.add(st);
+      if (left > 0) this.s.entities.spawnItem(st.id, left, this.s.player.x, this.s.player.y + 1, this.s.player.z);
+    }
     this.s.progression.inc(`craft:${r.result.item}`, r.result.count);
     this.s.progression.check(this.s.player.level);
     this.game.audio.play('click', { volume: 0.5, pitch: 1.2 });
@@ -621,6 +643,10 @@ export class InventoryUI {
       if (sl.el!.dataset.sig !== sig) {
         sl.el!.dataset.sig = sig;
         this.stackHTML(sl.el!, st);
+        // silhouette de la case vide (casque, plastron, lapis, fiole…)
+        const ph = !st && sl.ph ? packSprite(this.game.textures, sl.ph) : null;
+        sl.el!.style.backgroundImage = ph ? `url(${ph})` : '';
+        sl.el!.classList.toggle('ph', !!ph);
       }
     }
     this.stackHTML(this.cursorEl, this.carried);
@@ -630,22 +656,22 @@ export class InventoryUI {
       const fc = this.flameCtx, ac = this.arrowCtx;
       fc.clearRect(0, 0, 14, 14);
       ac.clearRect(0, 0, 24, 17);
-      const flame = f.burnMax > 0 ? f.burn / f.burnMax : 0;
-      const prog = f.input ? f.cook / (RecipeRegistry.smeltingFor(f.input.id)?.time ?? 10) : 0;
+      const flame = f.burnMax > 0 && f.burn > 0 ? Math.min(1, f.burn / f.burnMax) : 0;
+      const prog = f.input ? Math.min(1, f.cook / (RecipeRegistry.smeltingFor(f.input.id)?.time ?? 10)) : 0;
       const sprites = this.game.textures;
-      const lit = sprites.packImage('gui/sprites/container/furnace/lit_progress.png');
-      const burn = sprites.packImage('gui/sprites/container/furnace/burn_progress.png');
-      const legacy = sprites.packImage('gui/container/furnace.png');
+      const fk = this.furnaceKind;
+      const lit = sprites.packImage(`gui/sprites/container/${fk}/lit_progress.png`, 'gui/sprites/container/furnace/lit_progress.png');
+      const burn = sprites.packImage(`gui/sprites/container/${fk}/burn_progress.png`, 'gui/sprites/container/furnace/burn_progress.png');
+      const legacy = sprites.packImage(`gui/container/${fk}.png`, 'gui/container/furnace.png');
+      // comme le jeu original : flamme de ceil(13 × reste) + 1 px, flèche de ceil(24 × progression) px (24 × 16)
+      const h = flame > 0 ? Math.ceil(13 * flame) + 1 : 0;
+      const w = Math.ceil(24 * prog);
       if (lit && burn) {
-        const h = Math.round(14 * flame);
         if (h > 0) fc.drawImage(lit, 0, (lit.height * (14 - h)) / 14, lit.width, (lit.height * h) / 14, 0, 14 - h, 14, h);
-        const w = Math.round(24 * prog);
-        if (w > 0) ac.drawImage(burn, 0, 0, (burn.width * w) / 24, burn.height, 0, 0, w, 17);
+        if (w > 0) ac.drawImage(burn, 0, 0, (burn.width * w) / 24, burn.height, 0, 0, w, 16);
       } else if (legacy) {
         const k = legacy.width / 256;
-        const h = Math.round(14 * flame);
         if (h > 0) fc.drawImage(legacy, 176 * k, (14 - h) * k, 14 * k, h * k, 0, 14 - h, 14, h);
-        const w = Math.round(24 * prog);
         if (w > 0) ac.drawImage(legacy, 176 * k, 14 * k, w * k, 17 * k, 0, 0, w, 17);
       } else {
         drawFlame(fc, 0, 0, flame);
@@ -673,29 +699,47 @@ export class InventoryUI {
     const def = ItemRegistry.get(st.id);
     if (!def) return;
     const named = !!customName(st);
-    const lines: [string, string][] = [[stackName(st), named ? '#55ffff' : def.rare || isEnchanted(st) ? '#ffff55' : '#ffffff']];
-    // malédictions en rouge, comme le jeu original
+    // nom coloré selon la rareté (enchanté : un cran au-dessus), comme le jeu original
+    const lines: [string, string][] = [[stackName(st), rarityColor(st)]];
+    // malédictions en rouge, autres enchantements en gris
     for (const t of enchantLines(st)) lines.push([t, /^Malédiction|Curse/.test(t) ? '#ff5555' : '#aaaaaa']);
     const pl = potionOf(st) ? potionLine(st) : null;
     if (pl) lines.push([pl, '#5555ff']);
     // boîte de shulker remplie : aperçu du contenu
     const inside = (st.meta?.items as (ItemStack | null)[] | undefined)?.filter((x): x is ItemStack => !!x) ?? [];
-    for (const it of inside.slice(0, 5)) lines.push([`${stackName(it)} x${it.count}`, '#aaaaaa']);
-    if (inside.length > 5) lines.push([`et ${inside.length - 5} autres…`, '#aaaaaa']);
+    for (const it of inside.slice(0, 5)) lines.push([`${stackName(it)} x${it.count}`, '#ffffff']);
+    if (inside.length > 5) lines.push([language() === 'en' ? `and ${inside.length - 5} more...` : `et ${inside.length - 5} de plus…`, '#ffffff']);
     const en = language() === 'en';
-    if (def.food) lines.push([en ? `Food: +${def.food.hunger}` : `Nourriture : +${def.food.hunger}`, '#aaaaaa']);
-    if (def.damage && def.tool) lines.push([en ? `${def.damage} Attack Damage` : `${def.damage} de dégâts d'attaque`, '#00aa00']);
-    if (def.armor) lines.push([en ? `+${def.armor.defense} Armor` : `+${def.armor.defense} d'armure`, '#5555ff']);
-    if (st.durability !== undefined) lines.push([en ? `Durability: ${st.durability} / ${ItemRegistry.maxDurability(st.id)}` : `Durabilité : ${st.durability} / ${ItemRegistry.maxDurability(st.id)}`, '#aaaaaa']);
     if (def.description && !en) lines.push([def.description, '#aaaaaa']);
-    for (const [t, c] of lines) this.tooltip.append(el('div', {}, pixelText(t, { color: c, shadow: '#3f3f3f', px: this.scale })));
+    const num = (n: number) => (Math.round(n * 10) / 10).toString().replace('.', en ? '.' : ',');
+    // attributs : ligne vide, « Dans la main principale : », puis valeurs en vert foncé
+    if (def.damage && def.tool) {
+      const speed = 1 / (def.attackCooldown ?? 0.4);
+      lines.push(['', '#aaaaaa'], [tr('Dans la main principale :'), '#aaaaaa']);
+      lines.push([en ? ` ${num(def.damage)} Attack Damage` : ` ${num(def.damage)} de dégâts d'attaque`, '#00aa00']);
+      lines.push([en ? ` ${num(speed)} Attack Speed` : ` ${num(speed)} de vitesse d'attaque`, '#00aa00']);
+    }
+    if (def.armor) {
+      const where = { head: 'Sur la tête :', chest: 'Sur le corps :', legs: 'Sur les jambes :', feet: 'Sur les pieds :' }[def.armor.slot];
+      lines.push(['', '#aaaaaa'], [tr(where), '#aaaaaa'], [en ? `+${def.armor.defense} Armor` : `+${def.armor.defense} d'armure`, '#5555ff']);
+    }
+    if (st.durability !== undefined && st.durability < ItemRegistry.maxDurability(st.id)) lines.push([en ? `Durability: ${st.durability} / ${ItemRegistry.maxDurability(st.id)}` : `Durabilité : ${st.durability} / ${ItemRegistry.maxDurability(st.id)}`, '#ffffff']);
+    const k = this.scale;
+    this.tooltip.style.setProperty('--k', String(k));
+    lines.forEach(([t, c], i) => {
+      const line = el('div', { class: i === 0 ? 'tt-first' : '' }, t ? pixelText(t, { color: c, shadow: shadowOf(c), px: k }) : '');
+      // nom personnalisé en italique
+      if (i === 0 && named && line.firstElementChild) (line.firstElementChild as HTMLElement).style.transform = 'skewX(-12deg)';
+      this.tooltip.append(line);
+    });
     const r = sl.el!.getBoundingClientRect();
     this.tooltip.style.display = 'block';
-    this.tooltip.style.left = `${Math.min(window.innerWidth - 10, r.right + 4)}px`;
-    this.tooltip.style.top = `${Math.max(4, r.top - 12 * this.scale)}px`;
+    this.tooltip.style.left = `${Math.min(window.innerWidth - 10, r.right + 4 * k)}px`;
+    this.tooltip.style.top = `${Math.max(4, r.top - 12 * k)}px`;
     requestAnimationFrame(() => {
       const tr = this.tooltip.getBoundingClientRect();
       if (tr.right > window.innerWidth - 4) this.tooltip.style.left = `${Math.max(4, r.left - tr.width - 4)}px`;
+      if (tr.bottom > window.innerHeight - 4) this.tooltip.style.top = `${Math.max(4, window.innerHeight - tr.height - 4)}px`;
     });
     this.tooltipTimer = window.setTimeout(() => (this.tooltip.style.display = 'none'), 2200);
   }
@@ -1053,6 +1097,13 @@ export class InventoryUI {
     }
     inv.changed();
   }
+}
+
+/** Ombre portée du texte : couleur divisée par 4, comme la police du jeu original. */
+function shadowOf(c: string): string {
+  const n = parseInt(c.slice(1), 16);
+  const f = (v: number) => ((v >> 2) & 0x3f).toString(16).padStart(2, '0');
+  return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`;
 }
 
 export { drawSlot };
