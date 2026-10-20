@@ -61,6 +61,18 @@ export function javaBurnTime(key: string): number | undefined {
   return undefined;
 }
 
+/** [dégâts, recharge d'attaque en s] des armes dont la vitesse diffère du cas général. */
+const JAVA_ATTACK: Record<string, [number | undefined, number]> = {
+  mace: [6, 1 / 0.6],
+  trident: [9, 1 / 1.1],
+  wooden_hoe: [undefined, 1],
+  golden_hoe: [undefined, 1],
+  stone_hoe: [undefined, 0.5],
+  iron_hoe: [undefined, 1 / 3],
+  diamond_hoe: [undefined, 0.25],
+  netherite_hoe: [undefined, 0.25],
+};
+
 /** Propriétés du jeu original à appliquer à un objet (seulement celles qui diffèrent). */
 export function javaItemProps(def: ItemDef): Partial<ItemDef> {
   const k = def.key;
@@ -79,5 +91,11 @@ export function javaItemProps(def: ItemDef): Partial<ItemDef> {
     o.food = { ...(def.food ?? {}), hunger: f[0], saturation: f[1], ...(k.endsWith('golden_apple') ? { effect: 'regen' as const } : {}) };
   const bt = javaBurnTime(k);
   if (bt !== undefined && def.burnTime !== bt) o.burnTime = bt;
+  // dégâts et recharge d'attaque du jeu original (1 / vitesse d'attaque)
+  const atk = JAVA_ATTACK[k];
+  if (atk) {
+    if (atk[0] !== undefined && def.damage !== atk[0]) o.damage = atk[0];
+    if (def.attackCooldown !== atk[1]) o.attackCooldown = atk[1];
+  }
   return o;
 }

@@ -82,6 +82,8 @@ export interface EffectTarget {
   /** Santé actuelle (le poison ne tue pas). */
   hp(): number;
   body: { vy: number };
+  /** Le corps applique lui-même la Chute lente (gravité réduite) : pas de vitesse plafonnée. */
+  ownFallPhysics?: boolean;
   feed?(hunger: number, saturation: number): void;
   exhaust?(n: number): void;
   /** Absorption : cœurs dorés (4 PV par niveau). */
@@ -180,7 +182,7 @@ export class EffectList {
           t.body.vy = 0.9 * (lvl + 1);
           break;
         case 'slow_falling':
-          if (t.body.vy < -1.6) t.body.vy = -1.6;
+          if (!t.ownFallPhysics && t.body.vy < -1.6) t.body.vy = -1.6;
           break;
       }
       if (e.duration > 0) e.duration--;

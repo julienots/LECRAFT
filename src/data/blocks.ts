@@ -138,7 +138,7 @@ export const BLOCK_DEFS: BlockDef[] = [
   { key: 'spawner', name: 'Générateur de monstres', textures: { all: 'spawner' }, hardness: 5, tool: 'pickaxe', minTier: 1, render: 'cutout', light: 0, sound: 'metal', drops: [], color: '#1d2b39' },
   { key: 'hay_block', name: 'Botte de foin', textures: { top: 'hay_block_top', bottom: 'hay_block_top', side: 'hay_block_side' }, hardness: 0.5, tool: 'hoe', flammable: true, sound: 'grass', color: '#c4a51a' },
   { key: 'lantern', name: 'Lanterne', textures: { all: 'lantern' }, hardness: 3.5, tool: 'pickaxe', render: 'model', shape: 'lantern', light: 15, sound: 'metal', color: '#ffd070' },
-  { key: 'mud', name: 'Boue', textures: { all: 'mud' }, hardness: 0.5, tool: 'shovel', sound: 'dirt', friction: 0.4, color: '#3c3837' },
+  { key: 'mud', name: 'Boue', textures: { all: 'mud' }, hardness: 0.5, tool: 'shovel', sound: 'dirt', color: '#3c3837' },
   { key: 'moss_block', name: 'Bloc de mousse', textures: { all: 'moss_block' }, hardness: 0.1, tool: 'hoe', sound: 'grass', color: '#596d2d' },
   { key: 'glow_lichen', name: 'Lichen luisant', textures: { all: 'glow_lichen' }, hardness: 0.2, render: 'cross', solid: false, light: 7, sound: 'grass', needsSupport: true, drops: [], color: '#7f9c8a' },
   { key: 'amethyst_block', name: "Bloc d'améthyste", textures: { all: 'amethyst_block' }, hardness: 1.5, tool: 'pickaxe', minTier: 1, sound: 'glass', drops: [], color: '#8662bf' },

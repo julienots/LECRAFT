@@ -140,7 +140,7 @@ const plant = (key: string, name: string, colors: string[], shape: 'grass' | 'st
 plant('seagrass', 'Herbe marine', ['#2a8a3a', '#3a9a4a', '#1e7a2e'], 'grass', { drops: [] });
 plant('kelp_plant', 'Algue', ['#4a8a2a', '#3a7a1e', '#5a9a3a'], 'vine', { drops: [{ item: 'kelp' }] });
 plant('bamboo_plant', 'Bambou', ['#6aa030', '#5a9020', '#7ab040'], 'stalk', { hardness: 1, tool: 'axe', drops: [{ item: 'bamboo' }] });
-plant('sweet_berry_bush', 'Buisson à baies sucrées', ['#2a6a3a', '#3a7a4a', '#1e5a2e', '#c02040'], 'bush', { contactDamage: 0.5, drops: [{ item: 'sweet_berries', min: 1, max: 3 }] });
+plant('sweet_berry_bush', 'Buisson à baies sucrées', ['#2a6a3a', '#3a7a4a', '#1e5a2e', '#c02040'], 'bush', { contactDamage: 1, drops: [{ item: 'sweet_berries', min: 1, max: 3 }] });
 plant('nether_sprouts', 'Pousses du Nether', ['#16a098', '#108a80', '#20b0a8'], 'grass', { drops: [] });
 plant('weeping_vines', 'Lianes pleureuses', ['#a01818', '#8a1010', '#c02828'], 'vine', { drops: [] });
 plant('twisting_vines', 'Lianes tordues', ['#14a090', '#108a7a', '#20b8a8'], 'vine', { drops: [] });
