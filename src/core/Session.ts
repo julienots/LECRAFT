@@ -514,7 +514,22 @@ export class Session implements GameContext {
     this.weather.flash = 1;
     const p = this.player;
     if (Math.hypot(p.x - x, p.y - y, p.z - z) < 3) p.damage(5, 'fire');
-    for (const e of this.entities.entities) if (e instanceof Mob && !e.dead && Math.hypot(e.x - x, e.y - y, e.z - z) < 3) this.combat.damageMob(e, 5, { kind: 'environment', fire: true });
+    for (const e of [...this.entities.entities]) {
+      if (!(e instanceof Mob) || e.dead || e.removed || Math.hypot(e.x - x, e.y - y, e.z - z) >= 3) continue;
+      // comme le jeu original : creeper chargé, cochon → piglin zombifié, villageois → sorcière
+      const key = e.def.key;
+      if (key === 'creeper') {
+        (e as Mob & { charged: boolean }).charged = true;
+        continue;
+      }
+      const into = key === 'pig' ? 'zombified_piglin' : key === 'villager' ? 'witch' : null;
+      if (into) {
+        e.removed = true;
+        this.entities.spawnMob(into, e.x, e.y, e.z, { persistent: true });
+        continue;
+      }
+      this.combat.damageMob(e, 5, { kind: 'environment', fire: true });
+    }
   }
 
   get skins() {
