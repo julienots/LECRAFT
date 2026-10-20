@@ -203,6 +203,7 @@ try {
       if (!v) break;
       p.body.setPos(v.bot.x + 1.4, v.bot.y, v.bot.z);
       s.combat.cooldown = 0;
+      s.combat.sinceAttack = 99;
       s.combat.playerAttack(s, v.bot);
       await sleep(250);
     }

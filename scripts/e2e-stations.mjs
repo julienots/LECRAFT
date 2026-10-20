@@ -74,6 +74,7 @@ try {
     st.meta = { ench: { sharpness: 5, fire_aspect: 2 } };
     const m = s.entities.spawnMob('cow', x + 0.5, y, z + 2.5, { persistent: true });
     s.entities.combat.cooldown = 0;
+    s.entities.combat.sinceAttack = 99;
     const h0 = m.health;
     s.entities.combat.playerAttack(s, m);
     return { lost: h0 - m.health, fire: m.fireTime };

@@ -170,7 +170,9 @@ try {
     for (let i = 0; i < 120 && !bot.dead; i++) {
       p.health = 20; p.invulnerable = 1;
       p.body.setPos(bot.x + 1.5, bot.y, bot.z);
+      // coup chargé à fond (dégâts selon la charge, comme le jeu Java)
       s.combat.cooldown = 0;
+      s.combat.sinceAttack = 99;
       s.combat.playerAttack(s, bot);
       await sleep(120);
     }
