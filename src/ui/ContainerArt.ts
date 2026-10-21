@@ -121,6 +121,62 @@ export function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number, 
   }
 }
 
+/** Matériau d'une pièce d'armure portée (nom des textures entity/equipment/…). */
+function armorMaterial(item: string): string | null {
+  if (item === 'turtle_helmet') return 'turtle_scute';
+  const m = /^(.+?)_(helmet|chestplate|leggings|boots)$/.exec(item);
+  if (!m) return null;
+  return m[1] === 'golden' ? 'gold' : m[1];
+}
+
+const tinted = new Map<string, HTMLCanvasElement>();
+/** Texture d'armure du pack (le cuir est teint en brun, comme la couleur par défaut du jeu). */
+function armorTexture(tex: TextureManager, layer: 'humanoid' | 'humanoid_leggings', mat: string): (CanvasImageSource & { width: number; height: number }) | null {
+  const img = tex.packImage(`entity/equipment/${layer}/${mat}.png`);
+  if (!img || mat !== 'leather') return img ?? null;
+  const key = `${layer}/${mat}`;
+  let c = tinted.get(key);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext('2d')!;
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'multiply';
+    g.fillStyle = '#a06540';
+    g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(img, 0, 0);
+    tinted.set(key, c);
+  }
+  return c;
+}
+
+/**
+ * Armure portée par-dessus le personnage de l'inventaire (même repère que drawFigure), comme le jeu
+ * original : casque, plastron et bottes (texture humanoid), jambières (humanoid_leggings), un peu
+ * plus grandes que le corps.
+ */
+export function drawArmor(ctx: CanvasRenderingContext2D, x: number, y: number, tex: TextureManager, armor: { head?: string; chest?: string; legs?: string; feet?: string }, k = 2) {
+  ctx.imageSmoothingEnabled = false;
+  const layer = (img: CanvasImageSource & { width: number }, grow: number, parts: [number, number, number, number, number, number][]) => {
+    const s = img.width / 64;
+    for (const [u, v, w, h, dx, dy] of parts) ctx.drawImage(img, u * s, v * s, w * s, h * s, x + (dx - grow) * k, y + (dy - grow) * k, (w + grow * 2) * k, (h + grow * 2) * k);
+  };
+  const piece = (item: string | undefined, file: 'humanoid' | 'humanoid_leggings') => {
+    const mat = item ? armorMaterial(item) : null;
+    return mat ? armorTexture(tex, file, mat) : null;
+  };
+  const legs = piece(armor.legs, 'humanoid_leggings');
+  if (legs) layer(legs, 0.5, [[20, 20, 8, 12, 4, 8], [4, 20, 4, 12, 4, 20], [4, 20, 4, 12, 8, 20]]);
+  const feet = piece(armor.feet, 'humanoid');
+  if (feet) layer(feet, 0.5, [[4, 20, 4, 12, 4, 20], [4, 20, 4, 12, 8, 20]]);
+  const chest = piece(armor.chest, 'humanoid');
+  if (chest) layer(chest, 0.5, [[20, 20, 8, 12, 4, 8], [44, 20, 4, 12, 0, 8], [44, 20, 4, 12, 12, 8]]);
+  const head = piece(armor.head, 'humanoid');
+  if (head) layer(head, 0.5, [[8, 8, 8, 8, 4, 0]]);
+}
+
 const PACK_FILES: Record<ContainerKind, string> = {
   inventory: 'gui/container/inventory.png',
   table: 'gui/container/crafting_table.png',

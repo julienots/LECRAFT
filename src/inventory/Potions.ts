@@ -110,13 +110,16 @@ export function potionEffect(p: string): { id: string; seconds: number; amp: num
 const ROMAN = ['', 'II', 'III', 'IV', 'V', 'VI'];
 /** Ligne d'infobulle (« Rapidité (3:00) » ; une ligne par effet, séparées par « , »). */
 export function potionLine(st: ItemStack): string | null {
-  const list = potionEffects(potionOf(st) ?? '');
+  const list = potionEffects(potionOf(st) ?? (st.id === 'tipped_arrow' ? ((st.meta?.potion as string | undefined) ?? '') : ''));
   if (!list.length) return null;
+  // durée affichée comme le jeu original : ¼ pour les potions persistantes, ⅛ pour les flèches à effet
+  const div = st.id === 'lingering_potion' ? 4 : st.id === 'tipped_arrow' ? 8 : 1;
   return list
     .map((e) => {
       const name = EFFECT_NAMES[e.id] ?? e.id;
       const label = name + (e.amp ? ` ${ROMAN[e.amp] ?? e.amp + 1}` : '');
-      return e.seconds > 0 ? `${label} (${Math.floor(e.seconds / 60)}:${String(e.seconds % 60).padStart(2, '0')})` : label;
+      const sec = Math.floor(e.seconds / div);
+      return sec > 0 ? `${label} (${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')})` : label;
     })
     .join(', ');
 }

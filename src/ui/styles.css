@@ -255,7 +255,7 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600;
 .gui-scroll::-webkit-scrollbar { display: none; }
 .gui-scroll.cr-grid { background: transparent; box-shadow: none; scroll-snap-type: y mandatory; }
 /* défilement rangée par rangée, comme le jeu original : les objets restent dans les cases */
-.gui-scroll.cr-grid > .gslot { scroll-snap-align: start; }
+.gui-scroll.cr-grid > .gslot { scroll-snap-align: start; background: #8b8b8b; box-shadow: inset 1px 1px #373737, inset -1px -1px #ffffff; }
 .cr-track { cursor: pointer; touch-action: none; }
 .gui input.cr-search { all: unset; position: absolute; box-sizing: border-box; min-height: 0; width: 89px; height: 9px; border: none; border-radius: 0; outline: none; background: transparent; color: #fff; font-family: 'LeCraftPixel', monospace; font-size: 8px; line-height: 9px; padding: 0 1px; text-shadow: 1px 1px #3f3f3f; caret-color: #fff; }
 .gui-scroll.book { gap: 1px; padding: 1px; box-sizing: border-box; }

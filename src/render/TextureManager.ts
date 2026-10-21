@@ -159,6 +159,9 @@ const CHEST_TILES: Record<string, [string, string]> = {
   chest_top: ['normal', 'chest_top'], chest_side: ['normal', 'chest_side'], chest_front: ['normal', 'chest_front'],
   ender_chest_top: ['ender', 'chest_top'], ender_chest_side: ['ender', 'chest_side'], ender_chest_front: ['ender', 'chest_front'],
 };
+// coffre piégé et coffres en cuivre (4 stades d'oxydation ; les versions cirées partagent les tuiles)
+for (const [k, tex] of [['trapped_chest', 'trapped'], ['copper_chest', 'copper'], ['exposed_copper_chest', 'copper_exposed'], ['weathered_copper_chest', 'copper_weathered'], ['oxidized_copper_chest', 'copper_oxidized']])
+  for (const f of ['top', 'side', 'front']) CHEST_TILES[`${k}_${f}`] = [tex, `chest_${f}`];
 function chestTile(img: ImageBitmap, name: string): ImageData {
   const k = img.width / 64;
   const c = document.createElement('canvas');
@@ -213,6 +216,40 @@ const ITEM_PATHS: Record<string, string[]> = {
   bow: ['item/bow.png'],
   clock: ['item/clock_00.png'],
   lever: ['block/lever.png'],
+  // textures d'objet aux noms différents dans le jeu original
+  crossbow: ['item/crossbow_standby.png'],
+  recovery_compass: ['item/recovery_compass_16.png', 'item/recovery_compass_00.png'],
+  light: ['item/light_15.png'],
+  enchanted_golden_apple: ['item/golden_apple.png'],
+  tipped_arrow: ['item/tipped_arrow_base.png'],
+};
+/**
+ * Icônes composées depuis les textures d'entité (le jeu original n'a pas de texture d'objet) :
+ * têtes (skin : [fichier, u, v, largeur, hauteur, profondeur] de la tête), lits, bouclier.
+ */
+const HEAD_SKINS: Record<string, [string, number, number, number, number, number]> = {
+  skeleton_skull: ['entity/skeleton/skeleton.png', 0, 0, 8, 8, 8],
+  wither_skeleton_skull: ['entity/skeleton/wither_skeleton.png', 0, 0, 8, 8, 8],
+  zombie_head: ['entity/zombie/zombie.png', 0, 0, 8, 8, 8],
+  creeper_head: ['entity/creeper/creeper.png', 0, 0, 8, 8, 8],
+  player_head: ['entity/player/wide/steve.png', 0, 0, 8, 8, 8],
+  piglin_head: ['entity/piglin/piglin.png', 0, 0, 10, 8, 8],
+};
+
+/**
+ * Boîtes des modèles d'inventaire du jeu original (en seizièmes : x0, y0, z0, x1, y1, z1),
+ * dessinées dans l'ordre : escalier haut à gauche, plaques et tapis à plat, bouton au centre.
+ */
+const ICON_BOXES: Record<string, number[][]> = {
+  slab: [[0, 0, 0, 16, 8, 16]],
+  stairs: [[0, 0, 0, 16, 8, 16], [0, 8, 0, 8, 16, 16]],
+  plate: [[1, 0, 1, 15, 1, 15]],
+  button: [[5, 6, 6, 11, 10, 10]],
+  carpet: [[0, 0, 0, 16, 1, 16]],
+  snow_layer: [[0, 0, 0, 16, 2, 16]],
+  trapdoor: [[0, 0, 0, 16, 3, 16]],
+  farmland: [[0, 0, 0, 16, 15, 16]],
+  cactus: [[1, 0, 1, 15, 16, 15]],
 };
 
 export class TextureManager implements SkinProvider {
@@ -576,6 +613,97 @@ export class TextureManager implements SkinProvider {
     return undefined;
   }
 
+  /** Icône composée (têtes, lits, bouclier depuis les textures d'entité du pack ; bannières) ; faux sinon. */
+  private entityIcon(ctx: CanvasRenderingContext2D, itemId: string): boolean {
+    // bannière : traverse, étendard de la couleur du bloc (comme l'icône du jeu original)
+    if (/_banner$/.test(itemId) && BlockRegistry.has(itemId)) {
+      const col = hex(BlockRegistry.byName(itemId).color);
+      const css = (k: number) => `rgb(${col.map((c) => Math.min(255, Math.round(c * k))).join(',')})`;
+      ctx.fillStyle = '#6b4f2c';
+      ctx.fillRect(6, 1, 20, 3);
+      ctx.fillStyle = css(1);
+      ctx.fillRect(8, 4, 16, 26);
+      ctx.fillStyle = css(0.8);
+      ctx.fillRect(8, 4, 1, 26);
+      ctx.fillRect(23, 4, 1, 26);
+      ctx.fillRect(8, 29, 16, 1);
+      return true;
+    }
+    const v = this.view;
+    if (!v) return false;
+    const crop = (img: ImageBitmap, sx: number, sy: number, sw: number, sh: number, rotate = false) => {
+      const k = img.width / 64;
+      const t = document.createElement('canvas');
+      t.width = t.height = 16;
+      const tc = t.getContext('2d')!;
+      tc.imageSmoothingEnabled = false;
+      if (rotate) {
+        tc.translate(16, 0);
+        tc.rotate(Math.PI / 2);
+      }
+      tc.drawImage(img, sx * k, sy * k, sw * k, sh * k, 0, 0, 16, 16);
+      return t;
+    };
+    // faces d'un pavé isométrique (mêmes transformations que les icônes de blocs) ; h = hauteur relative
+    const s = 14 / 16;
+    const cube = (front: HTMLCanvasElement, side: HTMLCanvasElement, top: HTMLCanvasElement, h = 1) => {
+      const dy = (1 - h) * 16;
+      const face = (tile: HTMLCanvasElement, a: number, b: number, c: number, d: number, e: number, f: number, shade: number) => {
+        ctx.setTransform(a, b, c, d, e, f);
+        ctx.drawImage(tile, 0, 0);
+        if (shade > 0) {
+          ctx.fillStyle = `rgba(0,0,0,${shade})`;
+          ctx.globalCompositeOperation = 'source-atop';
+          ctx.fillRect(0, 0, 16, 16);
+          ctx.globalCompositeOperation = 'source-over';
+        }
+      };
+      face(front, s, 7 / 16, 0, h, 2, 8 + dy, 0.25);
+      face(side, s, -7 / 16, 0, h, 16, 15 + dy, 0.42);
+      face(top, s, -7 / 16, s, 7 / 16, 2, 8 + dy, 0);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    const head = HEAD_SKINS[itemId];
+    if (head) {
+      const img = v.get(head[0]);
+      if (!img) return false;
+      const [, u, vv, w, h, d] = head;
+      cube(crop(img, u + d, vv + d, w, h), crop(img, u, vv + d, d, h), crop(img, u + d, vv, w, d));
+      return true;
+    }
+    const bed = /^(\w+)_bed$/.exec(itemId);
+    if (bed) {
+      const img = v.get(`entity/bed/${bed[1]}.png`);
+      if (!img) return false;
+      const k = img.width / 64;
+      // dessus : tête (oreiller) puis pied ; côtés : flanc du matelas et pieds en bois
+      const top = document.createElement('canvas');
+      top.width = top.height = 16;
+      const tc = top.getContext('2d')!;
+      tc.imageSmoothingEnabled = false;
+      tc.drawImage(img, 6 * k, 6 * k, 16 * k, 16 * k, 0, 0, 16, 8);
+      tc.drawImage(img, 6 * k, 28 * k, 16 * k, 16 * k, 0, 8, 16, 8);
+      const side = document.createElement('canvas');
+      side.width = side.height = 16;
+      const sc = side.getContext('2d')!;
+      sc.imageSmoothingEnabled = false;
+      sc.drawImage(crop(img, 0, 28, 6, 16, true), 0, 0, 16, 16, 0, 0, 16, 11);
+      sc.drawImage(img, 50 * k, 3 * k, 3 * k, 3 * k, 0, 11, 3, 5);
+      sc.drawImage(img, 50 * k, 3 * k, 3 * k, 3 * k, 13, 11, 3, 5);
+      cube(side, side, top, 9 / 16);
+      return true;
+    }
+    if (itemId === 'shield') {
+      const img = v.get('entity/shield_base_nopattern.png') ?? v.get('entity/shield_base.png');
+      if (!img) return false;
+      const k = img.width / 64;
+      // face avant de la planche (12×22 px)
+      ctx.drawImage(img, 1 * k, 1 * k, 12 * k, 22 * k, 8, 1, 17, 30);
+      return true;
+    }
+    return false;
+  }
+
   /** Icône d'un objet en canvas 32x32. */
   iconCanvas(itemId: string): HTMLCanvasElement {
     let c = this.iconCanvasCache.get(itemId);
@@ -592,8 +720,13 @@ export class TextureManager implements SkinProvider {
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     const def = ItemRegistry.get(itemId);
-    // variantes de blocs (bougie allumée, rail activé, répéteur alimenté…) : texture d'objet de base
-    const base = itemId.replace(/_(lit|on|off|powered|active|inactive|unlit|triggered|crafting|ejecting|ominous)$/, '');
+    if (def && this.entityIcon(ctx, itemId)) {
+      this.iconCanvasCache.set(itemId, c);
+      return c;
+    }
+    // variantes de blocs (bougie allumée, rail activé, répéteur alimenté…) : texture d'objet de base ;
+    // blocs cirés : texture de la version non cirée (comme le jeu original)
+    const base = itemId.replace(/_(lit|on|off|powered|active|inactive|unlit|triggered|crafting|ejecting|ominous)$/, '').replace(/^waxed_/, '');
     const packImg = def && this.view?.first(...(ITEM_PATHS[itemId] ?? []), `item/${def.packTexture ?? itemId}.png`, ...(base !== itemId ? [`item/${base}.png`] : []));
     if (def && packImg) {
       const data = this.view!.imageData(packImg, 16);
@@ -639,29 +772,11 @@ export class TextureManager implements SkinProvider {
       const tn = (i: number) => TileRegistry.names[i] ?? '';
       if (block.render === 'model' && block.visuals?.length && !block.shape) {
         this.modelIcon(ctx, block);
-      } else if (this.flatIcon(block)) {
+      } else if (!ICON_BOXES[block.shape ?? ''] && this.flatIcon(block)) {
         const ti = block.metaTiles ? block.metaTiles[block.metaTiles.length - 1] : block.faceTiles[block.shape === 'door' ? 2 : 0];
         ctx.drawImage(this.tile(ti, this.tintFor(block.key, tn(ti))), 0, 0, 32, 32);
       } else {
-        const top = block.faceTiles[2], left = block.faceTiles[4], right = block.faceTiles[0];
-        const draw = (ti: number, a: number, b: number, cc: number, d: number, e: number, f: number, shade: number) => {
-          ctx.setTransform(a, b, cc, d, e, f);
-          ctx.drawImage(this.tile(ti, this.tintFor(block.key, tn(ti))), 0, 0);
-          if (shade > 0) {
-            ctx.fillStyle = `rgba(0,0,0,${shade})`;
-            ctx.globalCompositeOperation = 'source-atop';
-            ctx.fillRect(0, 0, 16, 16);
-            ctx.globalCompositeOperation = 'source-over';
-          }
-        };
-        const s = 14 / 16;
-        // dalles : demi-hauteur ; escaliers dessinés comme un bloc plein (comme une vue réduite)
-        const h = block.shape === 'slab' ? 0.5 : 1;
-        const dy = (1 - h) * 16;
-        draw(left, s, 7 / 16, 0, h, 2, 8 + dy, 0.25);
-        draw(right, s, -7 / 16, 0, h, 16, 15 + dy, 0.42);
-        draw(top, s, -7 / 16, s, 7 / 16, 2, 8 + dy, 0);
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.boxIcon(ctx, block, ICON_BOXES[block.shape ?? ''] ?? [[0, 0, 0, 16, 16, 16]]);
       }
     } else if (def && 'sprite' in def.icon) {
       this.drawSprite(ctx, def.icon.sprite, def.icon.colors);
@@ -671,6 +786,44 @@ export class TextureManager implements SkinProvider {
     }
     this.iconCanvasCache.set(itemId, c);
     return c;
+  }
+
+  /**
+   * Icône isométrique d'un bloc fait de boîtes (en seizièmes) comme les modèles d'inventaire du
+   * jeu original : chaque face ne montre que la partie de texture qu'elle couvre (plaque, bouton,
+   * tapis, marches d'escalier…). Faces gauche et droite ombrées comme dans l'inventaire.
+   */
+  private boxIcon(ctx: CanvasRenderingContext2D, block: { key: string; faceTiles: number[] }, boxes: number[][]) {
+    const tn = (i: number) => TileRegistry.names[i] ?? '';
+    const face = (ti: number, shade: number) => {
+      const t = this.tile(ti, this.tintFor(block.key, tn(ti)));
+      if (!shade) return t;
+      const c = document.createElement('canvas');
+      c.width = t.width;
+      c.height = t.height;
+      const g = c.getContext('2d')!;
+      g.drawImage(t, 0, 0);
+      g.globalCompositeOperation = 'source-atop';
+      g.fillStyle = `rgba(0,0,0,${shade})`;
+      g.fillRect(0, 0, c.width, c.height);
+      return c;
+    };
+    const top = face(block.faceTiles[2], 0), left = face(block.faceTiles[4], 0.25), right = face(block.faceTiles[0], 0.42);
+    const s = 14 / 16, k = 7 / 16;
+    // sous-rectangle (u, v, l, h) de la texture dessiné au même endroit dans le repère de la face
+    const part = (img: HTMLCanvasElement, u: number, v: number, w: number, h: number) => {
+      const r = img.width / 16;
+      if (w > 0 && h > 0) ctx.drawImage(img, u * r, v * r, w * r, h * r, u, v, w, h);
+    };
+    for (const [x0, y0, z0, x1, y1, z1] of boxes) {
+      ctx.setTransform(s, k, 0, 1, 2 + s * z0, 8 - k * z0);
+      part(left, x0, 16 - y1, x1 - x0, y1 - y0);
+      ctx.setTransform(s, -k, 0, 1, 2 + s * x1, 8 + k * x1);
+      part(right, z0, 16 - y1, z1 - z0, y1 - y0);
+      ctx.setTransform(s, -k, s, k, 2, 24 - y1);
+      part(top, z0, x0, z1 - z0, x1 - x0);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   /**
@@ -797,8 +950,10 @@ export class TextureManager implements SkinProvider {
     c.width = c.height = 32;
     const ctx = c.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
-    const bottle = this.view?.get(`item/${base}.png`);
-    const overlay = this.view?.get('item/potion_overlay.png');
+    // flèche à effet : tige du pack + pointe teintée
+    const arrow = base === 'tipped_arrow';
+    const bottle = this.view?.get(arrow ? 'item/tipped_arrow_base.png' : `item/${base}.png`);
+    const overlay = this.view?.get(arrow ? 'item/tipped_arrow_head.png' : 'item/potion_overlay.png');
     const rgb = hex(color);
     if (bottle && overlay) {
       ctx.drawImage(bottle, 0, 0, 32, 32);

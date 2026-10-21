@@ -19,9 +19,10 @@ export class PlayerAvatar {
     this.model = new MobModel('player', SCALE, shadow, skins, skinKey);
     this.model.setShadowSize(0.6, true);
     this.item = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.3, side: THREE.DoubleSide }));
-    // dans la main droite (repère du bras : y vers le bas, 10 px sous l'épaule)
-    this.item.position.set(-1 / 16, -10 / 16, 3 / 16);
-    this.item.rotation.set(0, HALF_PI, 0);
+    // dans la main droite (repère du bras : 10 px sous l'épaule), tenu par le manche comme le jeu
+    // original : le coin bas-gauche de l'icône (manche) dans le poing, la tête vers l'avant et le haut
+    this.item.position.set(-1 / 16, -10 / 16 + 0.15, 3 / 16 + 0.15);
+    this.item.rotation.set(0, -HALF_PI, 0);
     this.item.visible = false;
     this.model.parts.get('armR')?.[0]?.add(this.item);
   }

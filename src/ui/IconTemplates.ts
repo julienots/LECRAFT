@@ -193,9 +193,10 @@ export const ICON_TEMPLATES: Record<string, string[]> = {
     '................', '................', '................', '................', '................', '................', '.kkkkk..........', '.kbbbkkkkkkkkkk.',
     '.kbbbkaaaaaaaaak', '.kkkkkaaaaaaaaak', '.kdddddddddddddk', '.kdkkkkkkkkkkkdk', '.kk...........kk', '................', '................', '................',
   ],
+  // tête en travers du manche, manche en diagonale comme les outils du jeu original (tenu dans le bon sens)
   hammer: [
-    '................', '..kkkkkkkk......', '.keeeeeeaak.....', '.kaaaaaaaadk....', '.kaaaaaaaadk....', '.kdddkhkdddk....', '..kkkkhk.kk.....', '.....khk........',
-    '....khk.........', '....khk.........', '...khk..........', '...khk..........', '..khk...........', '..khk...........', '..kk............', '................',
+    '.......k........', '......kek.......', '.....kaaek......', '....kdaaaek.....', '....kddaaaek....', '.....kddaaaek...', '......kddaaaek..', '.......kddaaaek.',
+    '......khkddaaak.', '.....khk.kddak..', '....khk...kdk...', '...khk.....k....', '..khk...........', '.khk............', '..k.............', '................',
   ],
   excavator: [
     '................', '.........kkkkk..', '........keeeaak.', '.......keaaaadk.', '.......kaaaaadk.', '.......kaaaaddk.', '........kdhddk..', '.......khkkkk...',

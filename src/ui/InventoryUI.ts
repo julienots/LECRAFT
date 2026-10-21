@@ -15,9 +15,9 @@ import { RecipeRegistry } from '../crafting/RecipeRegistry';
 import type { Screen } from './UIManager';
 import { el } from './dom';
 import { rarityColor } from './Rarity';
-import { GUI_W, LAYOUT, containerBackground, packSprite, drawFigure, drawArrow, drawFlame, drawPanel, drawSlot, guiHeight, playerInvY, type ContainerKind } from './ContainerArt';
+import { GUI_W, LAYOUT, containerBackground, packSprite, drawFigure, drawArmor, drawArrow, drawFlame, drawPanel, drawSlot, guiHeight, playerInvY, type ContainerKind } from './ContainerArt';
 import { pixelText } from './PixelFont';
-import { CREATIVE_TABS, creativeItems, tabIcon, type CreativeTabKey } from './CreativeTabs';
+import { CREATIVE_TABS, creativeEntries, tabIcon, type CreativeTabKey } from './CreativeTabs';
 
 export type InventoryMode = 'hand' | 'table' | 'furnace' | 'chest' | 'ender' | 'enchant' | 'anvil' | 'brewing' | 'dispenser' | 'dropper' | 'hopper';
 
@@ -168,6 +168,8 @@ export class InventoryUI {
     const bg = containerBackground(this.kind, title, this.game.textures, 3, `player_${this.game.settings.playerSkin ?? 'steve'}`, this.station?.artSlots ?? [], this.bgFile);
     bg.className = 'gui-bg';
     this.gui.append(bg);
+    // personnage de l'inventaire avec son armure (redessiné quand l'armure change)
+    if (this.kind === 'inventory') this.addFigure(35, 12, 2);
     this.buildSlots(pinv);
     for (const sl of this.slots) this.gui.append(this.slotEl(sl));
     this.station?.decorate(this.gui);
@@ -218,6 +220,30 @@ export class InventoryUI {
     if (mode === 'dispenser' || mode === 'dropper') return new DispenserStation(host, w.getChest(pos.x, pos.y, pos.z, true, 9)!, mode === 'dropper' ? 'Dropper' : 'Distributeur', false);
     if (mode === 'hopper') return new DispenserStation(host, w.getChest(pos.x, pos.y, pos.z, true, 5)!, 'Entonnoir', true);
     return null;
+  }
+
+  /** Calque du personnage (skin + armure portée), à la position du dessin du fond. */
+  private figure: { c: HTMLCanvasElement; k: number; sig: string } | null = null;
+  private addFigure(x: number, y: number, k: number) {
+    const c = this.canvasAt(x - 1, y - 1, Math.ceil(16 * k) + 2, Math.ceil(32 * k) + 2);
+    c.style.pointerEvents = 'none';
+    this.gui.append(c);
+    this.figure = { c, k, sig: '?' };
+    this.drawFigureLayer();
+  }
+  private drawFigureLayer() {
+    const f = this.figure;
+    if (!f || !f.c.isConnected) return;
+    const a = this.s.player.inventory.armor;
+    const armor = { head: a.head?.id, chest: a.chest?.id, legs: a.legs?.id, feet: a.feet?.id };
+    const sig = JSON.stringify(armor);
+    if (sig === f.sig) return;
+    f.sig = sig;
+    const ctx = f.c.getContext('2d')!;
+    ctx.clearRect(0, 0, f.c.width, f.c.height);
+    const tm = this.game.textures;
+    drawFigure(ctx, 1, 1, tm.skin(`player_${this.game.settings.playerSkin ?? 'steve'}`).image as HTMLCanvasElement, f.k);
+    drawArmor(ctx, 1, 1, tm, armor, f.k);
   }
 
   private canvasAt(x: number, y: number, w: number, h: number): HTMLCanvasElement {
@@ -637,6 +663,7 @@ export class InventoryUI {
 
   private refresh() {
     if (this.disposed) return;
+    this.drawFigureLayer();
     for (const sl of this.slots) {
       const st = sl.get();
       const sig = st ? `${st.id}:${st.count}:${st.durability ?? ''}${st.meta ? JSON.stringify(st.meta) : ''}` : '';
@@ -703,7 +730,7 @@ export class InventoryUI {
     const lines: [string, string][] = [[stackName(st), rarityColor(st)]];
     // malédictions en rouge, autres enchantements en gris
     for (const t of enchantLines(st)) lines.push([t, /^Malédiction|Curse/.test(t) ? '#ff5555' : '#aaaaaa']);
-    const pl = potionOf(st) ? potionLine(st) : null;
+    const pl = potionOf(st) || st.id === 'tipped_arrow' ? potionLine(st) : null;
     if (pl) lines.push([pl, '#5555ff']);
     // boîte de shulker remplie : aperçu du contenu
     const inside = (st.meta?.items as (ItemStack | null)[] | undefined)?.filter((x): x is ItemStack => !!x) ?? [];
@@ -833,9 +860,14 @@ export class InventoryUI {
       ctx.drawImage(img, 0, 0, CR_W * k, CR_H * k, 0, 0, CR_W, CR_H);
     } else {
       drawPanel(ctx, 0, 0, CR_W, CR_H);
-      if (cur.key !== 'inventory') for (let r = 0; r < 5; r++) for (let c = 0; c < 9; c++) drawSlot(ctx, 8 + c * 18, 17 + r * 18);
       for (let c = 0; c < 9; c++) drawSlot(ctx, 8 + c * 18, 111);
       if (cur.key === 'inventory') drawSlot(ctx, 172, 111);
+    }
+    // grille des objets : chaque case est dessinée avec son objet (.cr-grid .gslot) et défile avec lui ;
+    // le fond de la zone est uni (le gris du panneau)
+    if (cur.key !== 'inventory') {
+      ctx.fillStyle = '#c6c6c6';
+      ctx.fillRect(8, 17, 9 * 18, 5 * 18);
     }
     // onglet survie : le joueur dans son cadre (comme le jeu original)
     if (cur.key === 'inventory') {
@@ -846,6 +878,7 @@ export class InventoryUI {
       drawFigure(ctx, 79, 7, tm.skin(`player_${this.game.settings.playerSkin ?? 'steve'}`).image as HTMLCanvasElement, 1.3);
     }
     gui.append(bg);
+    if (cur.key === 'inventory') this.addFigure(79, Y + 7, 1.3);
     gui.append(...tabEl(cur));
     // barre d'objets (toujours visible) et corbeille
     for (let c = 0; c < 9; c++) this.slots.push({ x: 9 + c * 18, y: Y + 112, group: 'hotbar', get: () => pinv.slots[c], set: (v) => (pinv.slots[c] = v), key: `inv${c}` });
@@ -954,15 +987,24 @@ export class InventoryUI {
     const list = this.crList;
     if (!list) return;
     list.replaceChildren();
-    for (const d of creativeItems(memory.ctab, memory.query)) {
+    const entries = creativeEntries(memory.ctab, memory.query);
+    for (const { def: d, stack } of entries) {
       const cell = el('div', { class: 'gslot static', 'data-item': d.key });
-      this.stackHTML(cell, { id: d.key, count: 1 });
+      this.stackHTML(cell, stack);
+      // infobulle (nom, effets, enchantements) au survol ou à l'appui long
+      const tip = () => this.showTooltip({ get: () => stack, el: cell } as unknown as GuiSlot);
+      cell.addEventListener('pointerenter', (e) => e.pointerType === 'mouse' && tip());
+      cell.addEventListener('pointerleave', () => (this.tooltip.style.display = 'none'));
       this.bindPress(cell, (kind) => {
-        const full = (): ItemStack => ({ id: d.key, count: ItemRegistry.maxStack(d.key), ...(ItemRegistry.maxDurability(d.key) > 0 ? { durability: ItemRegistry.maxDurability(d.key) } : {}) });
+        const full = (): ItemStack => ({ ...stack, ...(stack.meta ? { meta: structuredClone(stack.meta) } : {}), count: ItemRegistry.maxStack(d.key), ...(ItemRegistry.maxDurability(d.key) > 0 ? { durability: ItemRegistry.maxDurability(d.key) } : {}) });
+        if (kind === 'long') {
+          tip();
+          return;
+        }
         if (kind === 'double' || kind === 'shift') {
           // Maj + clic : une pile complète directement dans l'inventaire
           this.s.player.inventory.add(full());
-        } else if (this.carried && this.carried.id !== d.key) this.carried = null; // poser sur la palette : supprime l'objet tenu
+        } else if (this.carried && (this.carried.id !== d.key || JSON.stringify(this.carried.meta ?? null) !== JSON.stringify(stack.meta ?? null))) this.carried = null; // poser sur la palette : supprime l'objet tenu
         else if (this.carried) this.carried.count = Math.min(ItemRegistry.maxStack(d.key), this.carried.count + 1);
         else this.carried = kind === 'tap' ? full() : { ...full(), count: 1 };
         this.click();
@@ -970,6 +1012,9 @@ export class InventoryUI {
       });
       list.append(cell);
     }
+    // cases vides jusqu'au bout de la rangée (et 5 rangées au moins), comme le jeu original
+    const total = Math.max(45, Math.ceil(entries.length / 9) * 9);
+    for (let i = entries.length; i < total; i++) list.append(el('div', { class: 'gslot static empty' }));
     list.scrollTop = 0;
     this.placeThumb();
   }
