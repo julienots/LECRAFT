@@ -3,6 +3,7 @@ import { isRailKey, updateRailsAround } from './Rails';
 import { updateDripstoneColumn } from './Dripstone';
 import type { ItemStack } from '../inventory/Item';
 import { newBrewing, type BrewingState } from '../crafting/Brewing';
+import type { JukeboxState } from './Jukebox';
 import { BlockRegistry, B } from '../blocks/BlockRegistry';
 import { CHUNK_SIZE, WORLD_HEIGHT } from '../core/Config';
 import { Emitter } from '../core/Events';
@@ -51,6 +52,8 @@ export class World {
   readonly furnaces = new Map<string, FurnaceState>();
   /** Alambics (fioles, ingrédient, poudre de blaze, infusion en cours). */
   readonly brewing = new Map<string, BrewingState>();
+  /** Juke-box : disque inséré et avancement de la piste (world/Jukebox.ts). */
+  readonly jukeboxes = new Map<string, JukeboxState>();
   private dripBusy = false;
   readonly specials = new Map<string, SpecialEntry>();
 
@@ -148,6 +151,7 @@ export class World {
       if (kind === 'chest' || kind === 'dispenser' || kind === 'hopper') this.chests.delete(`${x},${y},${z}`);
       if (kind === 'brewing') this.brewing.delete(`${x},${y},${z}`);
       if (kind === 'furnace' && !(furnaceLike(prev) && furnaceLike(id))) this.furnaces.delete(`${x},${y},${z}`);
+      if (BlockRegistry.get(prev).key === 'jukebox') this.jukeboxes.delete(`${x},${y},${z}`);
     }
     // rails : raccordement automatique aux voisins (pose, casse)
     if (!this.dripBusy && (isRailKey(BlockRegistry.get(id).key) || (prev > 0 && isRailKey(BlockRegistry.get(prev).key)))) {
@@ -247,6 +251,9 @@ export class World {
     const kind = BlockRegistry.get(this.getBlock(x, y, z)).interact;
     // boîte de shulker : son contenu reste dans l'objet (voir shulkerItem)
     if (BlockRegistry.get(this.getBlock(x, y, z)).key.endsWith('shulker_box')) return [];
+    // juke-box : son disque
+    const disc = this.jukeboxes.get(`${x},${y},${z}`)?.disc;
+    if (disc) return [disc];
     if (kind === 'chest' || kind === 'dispenser' || kind === 'hopper') return (this.getChest(x, y, z, false)?.slots ?? []).filter((s) => !!s) as ItemStack[];
     if (kind === 'brewing') {
       const b = this.brewing.get(`${x},${y},${z}`);

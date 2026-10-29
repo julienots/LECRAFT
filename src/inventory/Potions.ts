@@ -157,6 +157,20 @@ export function brewResult(bottle: ItemStack, ingredient: string): ItemStack | n
 }
 
 /** Applique une potion à une cible (buvée : 100 %, éclaboussée : selon la distance). */
+/**
+ * Effet d'une flèche spéciale à l'impact : Surbrillance 10 s (spectrale), ou les effets de la
+ * potion au huitième de leur durée (à effet ; effets instantanés entiers), comme le jeu original.
+ */
+export function applyArrow(effects: EffectList, target: EffectTarget, st: ItemStack) {
+  if (st.id === 'spectral_arrow') {
+    effects.add('glowing', 200, 0, true, target);
+    return;
+  }
+  const p = st.id === 'tipped_arrow' ? (st.meta?.potion as string | undefined) : undefined;
+  if (!p) return;
+  for (const e of potionEffects(p)) effects.add(e.id, e.seconds === 0 ? 1 : Math.max(1, Math.round((e.seconds * 20) / 8)), e.amp, true, target);
+}
+
 export function applyPotion(effects: EffectList, target: EffectTarget, p: string, factor = 1) {
   const list = potionEffects(p);
   if (!list.length) return false;

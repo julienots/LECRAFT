@@ -24,6 +24,7 @@ import { makeStack } from '../inventory/Inventory';
 import { onMobHurtByMob } from './MobRelations';
 import { Allay, Sniffer } from './NewMobs';
 import { enchLevel } from '../inventory/Enchantments';
+import { applyArrow } from '../inventory/Potions';
 import { DamageSystem } from '../combat/DamageSystem';
 import { CombatSystem } from '../combat/CombatSystem';
 import { BOSS } from '../world/StructureGenerator';
@@ -341,6 +342,7 @@ export class EntityManager implements EntitySpawner {
         const dealt = pr.damage > 0 ? p.damage(pr.damage, pr.def?.fire ? 'fire' : 'projectile', (pr.body.vx / v) * 4, (pr.body.vz / v) * 4, pr.owner, pr) : 0;
         if (pr.type === 'ice') p.slowTimer = 2;
         if (pr.def?.effect) p.effects.add(pr.def.effect.id, pr.def.effect.duration, pr.def.effect.amplifier, true, p.effectTarget);
+        if (pr.arrowStack) applyArrow(p.effects, p.effectTarget, pr.arrowStack);
         if (pr.def) {
           pr.customImpact(ctx);
           return;
@@ -350,7 +352,22 @@ export class EntityManager implements EntitySpawner {
           ctx.haptic('medium');
         }
         pr.removed = true;
+        return;
       }
+      // flèche d'une créature (squelette) qui rencontre une autre créature sur sa trajectoire : elle
+      // la touche, comme le jeu original (un creeper tué ainsi lâche un disque de musique)
+      const shooter = pr.owner as { kind?: string } | null;
+      if (pr.type === 'arrow' && !pr.stuck && shooter?.kind === 'mob')
+        for (const e of this.entities) {
+          if (e.kind !== 'mob' || (e as Mob).dead || e === (pr.owner as unknown)) continue;
+          const [a, b, c, d, f, g] = e.aabb();
+          if (pr.x > a - 0.1 && pr.x < d + 0.1 && pr.y > b && pr.y < f && pr.z > c - 0.1 && pr.z < g + 0.1) {
+            const v = Math.hypot(pr.body.vx, pr.body.vz) || 1;
+            this.damage.damageMob(e as Mob, pr.damage, { kind: 'projectile', fromPlayer: false, knockX: (pr.body.vx / v) * 4, knockZ: (pr.body.vz / v) * 4, projectile: pr, attacker: pr.owner });
+            pr.removed = true;
+            return;
+          }
+        }
       return;
     }
     // bouchon de pêche et trident qui revient : ne touchent personne ; flèche perforante : une fois par créature
@@ -372,6 +389,10 @@ export class EntityManager implements EntitySpawner {
         if (pr.damage > 0 || !pr.def) this.damage.damageMob(e as Mob, pr.damage + impale, { kind: 'projectile', fromPlayer: !byMob, knockX: (pr.body.vx / v) * kbk, knockZ: (pr.body.vz / v) * kbk, itemId: byMob ? undefined : pr.type === 'frost_bolt' ? 'frost_scepter' : 'bow', projectile: pr, attacker: pr.owner ?? ctx.player, fire: pr.def?.fire });
         else if (byMob) onMobHurtByMob(e as Mob, pr.owner as unknown as Mob);
         if (pr.type === 'frost_bolt') (e as Mob).slowTimer = 3;
+        if (pr.arrowStack) {
+          const m = e as Mob;
+          applyArrow(m.effects, { heal: (n) => (m.health = Math.min(m.maxHealth, m.health + n)), hurt: (n) => this.damage.damageMob(m, n, { kind: 'environment' }), hp: () => m.health, body: m.body }, pr.arrowStack);
+        }
         // trident : rebondit sur la créature ; Canalisation : la foudre la frappe pendant un orage
         if (pr.pickupStack?.id === 'trident') {
           pr.hitIds.add(e.id);

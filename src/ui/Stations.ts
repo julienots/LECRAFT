@@ -473,8 +473,9 @@ export class DispenserStation extends Station {
     this.kind = hopper ? 'hopper' : 'dispenser';
     this.title = title;
     for (let i = 0; i < inv.size; i++) {
-      const x = hopper ? 44 + i * 18 : 62 + (i % 3) * 18;
-      const y = hopper ? 20 : 17 + Math.floor(i / 3) * 18;
+      // cases de 20 unités (disposition Bedrock) ; repère décalé de (9, 30) par l'interface
+      const x = hopper ? 40 + i * 20 : 60 + (i % 3) * 20;
+      const y = hopper ? 18 : 17 + Math.floor(i / 3) * 20;
       this.slots.push({ x, y, key: `disp${i}`, get: () => inv.slots[i], set: (v) => (inv.slots[i] = v) });
     }
   }

@@ -86,6 +86,16 @@ export class Renderer {
     }
   }
 
+  /** Image JPEG de la vue actuelle (fond de l'écran de chargement) ; null si indisponible. */
+  snapshot(quality = 0.8): string | null {
+    try {
+      this.render();
+      return this.gl.domElement.toDataURL('image/jpeg', quality);
+    } catch {
+      return null;
+    }
+  }
+
   /** Miniature JPEG du dernier rendu (sélection de monde). */
   thumbnail(): string | null {
     try {

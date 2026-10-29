@@ -25,6 +25,8 @@ import { connectionStates } from '../addons/BlockRuntime';
 import { hooks } from '../scripting/Hooks';
 import { tryLight, insertEye } from '../world/Portals';
 import { Wolf, Villager } from '../entities/Creatures';
+import { useJukebox } from '../world/Jukebox';
+import { discLabel } from '../data/discs';
 
 /** Face moteur (0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z) d'une normale. */
 const faceOf = (t: RayHit) => (t.nx > 0 ? 0 : t.nx < 0 ? 1 : t.ny > 0 ? 2 : t.ny < 0 ? 3 : t.nz > 0 ? 4 : 5);
@@ -349,6 +351,8 @@ export class PlayerInteraction {
       for (const d of getDrops(id, meta, itemId, Math.random, ench)) this.entities.spawnItem(d.id, d.count, x + 0.5, y + 0.3, z + 0.5);
       const xp = ench.silk_touch ? 0 : blockXp(id);
       if (xp) p.addXp(xp);
+      // bloc infesté : un poisson d'argent en sort (sauf Toucher de soie), comme le jeu original
+      if (b.def.spawnOnBreak && !ench.silk_touch) this.entities.spawnMob(b.def.spawnOnBreak, x + 0.5, y, z + 0.5);
       const tool = itemId ? ItemRegistry.get(itemId)?.tool : undefined;
       // usure : 1 par bloc (2 pour une épée, faite pour combattre), comme le jeu original
       if (tool && b.hardness > 0) p.inventory.damageSelected(tool.type === 'sword' ? 2 : 1);
@@ -467,6 +471,23 @@ export class PlayerInteraction {
     // 2) blocs interactifs
     if (!repeat && t && !p.sneaking) {
       const b = BlockRegistry.get(t.block);
+      // juke-box : insère le disque tenu (retiré de la main en survie), ou éjecte le disque au-dessus
+      if (b.key === 'jukebox') {
+        const r = useJukebox(ctx.world, t.x, t.y, t.z, held, false);
+        if (r.action === 'insert') {
+          if (!p.creative) inv.takeFromSlot(inv.selected, 1);
+          ctx.hud.nowPlaying?.(`Lecture en cours : ${discLabel(r.disc!.id)}`);
+          ctx.stats.inc('recordsPlayed');
+          this.entities.combat.swing = 0.7;
+          return;
+        }
+        if (r.action === 'eject') {
+          const d = r.disc!;
+          this.entities.spawnItem(d.id, 1, t.x + 0.5, t.y + 1.05, t.z + 0.5, d.durability, d.meta);
+          this.entities.combat.swing = 0.7;
+          return;
+        }
+      }
       if (b.interact === 'crafting') return this.host.openStation('crafting', t.x, t.y, t.z);
       if (b.interact === 'furnace') return this.host.openStation('furnace', t.x, t.y, t.z);
       if (b.interact === 'enchanting') return this.host.openStation('enchant', t.x, t.y, t.z);
@@ -1085,11 +1106,17 @@ export class PlayerInteraction {
     const ctx = this.ctx;
     const p = ctx.player;
     const bow = p.inventory.selectedStack;
-    // Infinité : une flèche suffit (elle n'est pas consommée)
-    const infinite = enchLevel(bow, 'infinity') > 0 && p.inventory.count('arrow') > 0;
-    if (!p.creative && !infinite && !p.inventory.remove('arrow', 1)) {
-      ctx.hud.toast('Pas de flèches', 'warn');
-      return;
+    // première flèche de l'inventaire (normale, spectrale ou à effet) comme le jeu original
+    const slot = p.inventory.arrowSlot();
+    const ammo = slot >= 0 ? { ...p.inventory.slots[slot]!, count: 1 } : { id: 'arrow', count: 1 };
+    // Infinité : une flèche normale suffit (elle n'est pas consommée) ; les flèches spéciales le sont
+    const infinite = enchLevel(bow, 'infinity') > 0 && ammo.id === 'arrow' && slot >= 0;
+    if (!p.creative && !infinite) {
+      if (slot < 0) {
+        ctx.hud.toast('Pas de flèches', 'warn');
+        return;
+      }
+      p.inventory.takeFromSlot(slot, 1);
     }
     const [ox, oy, oz, dx, dy, dz] = this.eye();
     const sp = 12 + charge * 22;
@@ -1100,6 +1127,7 @@ export class PlayerInteraction {
     arrow.pickable = !p.creative && !infinite;
     arrow.punch = enchLevel(bow, 'punch');
     arrow.flame = enchLevel(bow, 'flame') > 0;
+    if (ammo.id !== 'arrow') arrow.arrowStack = ammo;
     ctx.audio.play('bow');
     if (!p.creative) p.inventory.damageSelected(1);
   }
@@ -1148,12 +1176,18 @@ export class PlayerInteraction {
     const p = ctx.player;
     const st = p.inventory.selectedStack;
     if (!st) return;
-    if (!p.creative && !p.inventory.remove('arrow', 1)) {
-      ctx.hud.toast('Pas de flèches', 'warn');
-      this.crossCharge = -9999;
-      return;
+    const slot = p.inventory.arrowSlot();
+    const ammo = slot >= 0 ? { ...p.inventory.slots[slot]!, count: 1 } : { id: 'arrow', count: 1 };
+    if (!p.creative) {
+      if (slot < 0) {
+        ctx.hud.toast('Pas de flèches', 'warn');
+        this.crossCharge = -9999;
+        return;
+      }
+      p.inventory.takeFromSlot(slot, 1);
     }
-    st.meta = { ...(st.meta ?? {}), charged: true };
+    // la flèche chargée (spectrale ou à effet comprise) reste dans l'arbalète
+    st.meta = { ...(st.meta ?? {}), charged: true, ...(ammo.id !== 'arrow' ? { chargedArrow: ammo } : {}) };
     p.inventory.changed();
     ctx.audio.play('click', { pitch: 0.8 });
     this.crossCharge = 0;
@@ -1168,6 +1202,7 @@ export class PlayerInteraction {
     const [ox, oy, oz, dx, dy, dz] = this.eye();
     const multi = enchLevel(st, 'multishot') > 0;
     const pierce = enchLevel(st, 'piercing');
+    const ammo = st.meta?.chargedArrow as ItemStack | undefined;
     for (const a of multi ? [-0.17, 0, 0.17] : [0]) {
       // flèches latérales : tournées de ±10° autour de la verticale
       const c = Math.cos(a), sn = Math.sin(a);
@@ -1176,9 +1211,11 @@ export class PlayerInteraction {
       const arrow = this.entities.spawnProjectile('player_arrow', ox + vx * 0.5, oy + dy * 0.5 - 0.1, oz + vz * 0.5, vx * sp, dy * sp, vz * sp, 9, true);
       arrow.pickable = !p.creative && a === 0;
       arrow.piercing = pierce;
+      if (ammo) arrow.arrowStack = ammo;
     }
     st.meta = { ...(st.meta ?? {}) };
     delete st.meta.charged;
+    delete st.meta.chargedArrow;
     if (!Object.keys(st.meta).length) st.meta = undefined;
     ctx.audio.play('bow', { pitch: 1.3 });
     if (!p.creative) p.inventory.damageSelected(multi ? 3 : 1);

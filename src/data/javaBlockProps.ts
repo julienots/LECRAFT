@@ -83,6 +83,8 @@ export const JAVA_DROPS: Record<string, DropDef[]> = {
   nether_wart_stage0: [{ item: 'nether_wart' }], nether_wart_stage1: [{ item: 'nether_wart' }], nether_wart_stage2: [{ item: 'nether_wart', min: 2, max: 4 }],
   beetroots_stage0: [{ item: 'beetroot_seeds' }], beetroots_stage1: [{ item: 'beetroot_seeds' }], beetroots_stage2: [{ item: 'beetroot_seeds' }],
   beetroots_stage3: [{ item: 'beetroot' }, { item: 'beetroot_seeds', min: 1, max: 4 }],
+  // sable / gravier suspects : rien (le pinceau révèle l'objet) ; ghast desséché : lui-même
+  ...Object.fromEntries([0, 1, 2, 3].flatMap((i) => [[`suspicious_sand_${i}`, []], [`suspicious_gravel_${i}`, []], [`dried_ghast_hydration_${i}`, [{ item: 'dried_ghast' }]]])),
 };
 
 /** Applique les valeurs du jeu original (en place) aux définitions présentes. */

@@ -1,6 +1,42 @@
 import { CHUNK_VOLUME, SAVE_VERSION, type Difficulty, type GameMode } from '../core/Config';
 import { checksumBytes, checksumString, rleDecode, rleDecode16, rleEncode, rleEncode16 } from './WorldSerializer';
 
+/**
+ * Paramètres choisis à la création du monde (écran « Créer un nouveau monde »). `rules` est appliqué aux
+ * règles du jeu ; les autres valeurs sont conservées telles quelles, même quand le moteur ne les gère pas
+ * (monde plat, hardcore, expérimentations, accès multijoueur…).
+ */
+export interface WorldOptions {
+  hardcore?: boolean;
+  flat?: boolean;
+  startingMap?: boolean;
+  showDays?: boolean;
+  unlockRecipes?: boolean;
+  fireTick?: boolean;
+  mobLoot?: boolean;
+  tileDrops?: boolean;
+  sleepSkipsNight?: boolean;
+  sleepPercent?: number;
+  respawnBlocksExplode?: boolean;
+  spawnRadius?: number;
+  simulationDistance?: number;
+  multiplayer?: boolean;
+  playerAccess?: string;
+  defaultPermission?: string;
+  lanVisible?: boolean;
+  friendlyFire?: boolean;
+  waypoints?: boolean;
+  entityLoot?: boolean;
+  commandBlocks?: boolean;
+  education?: boolean;
+  randomTickSpeed?: number;
+  sharedPacks?: boolean;
+  /** Expérimentations activées (identifiants) : valeurs conservées, sans effet dans le moteur. */
+  experiments?: string[];
+  /** Règles du jeu appliquées à la création (GameRules). */
+  rules?: Record<string, boolean>;
+}
+
 export interface WorldMeta {
   id: string;
   name: string;
@@ -20,6 +56,8 @@ export interface WorldMeta {
   smp?: boolean;
   /** Bots joueurs dans un monde ordinaire (option « Bots joueurs »). */
   bots?: boolean;
+  /** Paramètres de création (voir WorldOptions). */
+  options?: WorldOptions;
   /** Partie en réseau rejointe (monde de l'hôte, jamais enregistré localement). */
   remote?: boolean;
   /** Partie en réseau : point d'apparition et dimension de l'hôte. */

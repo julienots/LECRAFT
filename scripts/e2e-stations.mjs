@@ -265,25 +265,31 @@ try {
   await wait(300);
   const keys = [];
   const perTab = {};
-  for (const t of ['building', 'colored', 'nature', 'functional', 'redstone', 'tools', 'combat', 'food', 'ingredients', 'spawn_eggs']) {
+  // la liste défile (seules les rangées visibles existent dans le DOM) : on lit les clés de l'interface
+  for (const t of ['construction', 'equipment', 'items', 'nature']) {
     await tapSel(`.cr-tab[data-tab="${t}"]`);
     await wait(250);
-    const k = await G(() => [...document.querySelectorAll('.cr-grid [data-item]')].map((e) => e.dataset.item));
+    const k = await G(() => window.__lecraft.inventoryUI.listKeys());
     perTab[t] = k;
     keys.push(...k);
   }
+  const uniq = new Set(keys);
   const tech = keys.filter((k) => /^(repeater_on|comparator_on|cake_inner|redstone_dust_line0|piston_head|lightning_rod_on|white_candle_lit|vault_ominous)$/.test(k));
-  check('Créatif : états et morceaux de blocs masqués (comme le jeu original)', keys.length > 800 && tech.length === 0 && keys.includes('repeater') && keys.includes('crimson_stem') && keys.includes('white_candle'), `${keys.length} objets ; techniques visibles : ${tech.join(',')}`);
-  const tabsOk = perTab.colored.includes('white_wool') && perTab.colored.includes('red_concrete') && perTab.redstone.includes('repeater') && perTab.redstone.includes('lever') && perTab.spawn_eggs.length > 10 && perTab.spawn_eggs.every((k) => k.endsWith('_spawn_egg')) && perTab.building.includes('bricks') && !perTab.building.includes('white_wool');
-  check('Créatif : onglets du jeu original (couleurs, redstone, œufs…)', tabsOk, Object.entries(perTab).map(([k, v]) => `${k}:${v.length}`).join(' '));
-  const ui = await G(() => ({ tabs: document.querySelectorAll('.cr-tab').length, hotbar: document.querySelectorAll('.gslot[data-key^="inv"]').length, trash: !!document.querySelector('.gslot[data-key="trash"]'), grid: !!document.querySelector('.cr-grid') }));
-  check('Créatif : 12 onglets, barre d’objets et grille défilante', ui.tabs === 12 && ui.hotbar === 9 && !ui.trash && ui.grid, JSON.stringify(ui));
+  check('Créatif : états et morceaux de blocs masqués (comme le jeu original)', uniq.size > 800 && tech.length === 0 && uniq.has('repeater') && uniq.has('crimson_stem') && uniq.has('white_candle'), `${uniq.size} objets ; techniques visibles : ${tech.join(',')}`);
+  const eggs = perTab.nature.filter((k) => k.endsWith('_spawn_egg'));
+  const tabsOk = perTab.construction.includes('white_wool') && perTab.construction.includes('red_concrete') && perTab.construction.includes('bricks') && perTab.items.includes('repeater') && perTab.items.includes('lever') && eggs.length > 10 && perTab.equipment.includes('diamond_sword') && perTab.nature.includes('oak_log') && !perTab.construction.includes('diamond_sword');
+  check('Créatif : onglets du jeu Bedrock (construction, équipement, objets, nature)', tabsOk, Object.entries(perTab).map(([k, v]) => `${k}:${v.length}`).join(' '));
+  // ordre du jeu : planches, puis murs, clôtures, escaliers, portes, dalles, blocs
+  const cOrder = ['oak_planks', 'cobblestone_wall', 'oak_fence', 'oak_stairs', 'oak_door', 'glass', 'oak_slab', 'stone'].map((k) => perTab.construction.indexOf(k));
+  check('Créatif : ordre des objets de la construction comme dans le jeu', cOrder.every((v, i) => v >= 0 && (i === 0 || v > cOrder[i - 1])), cOrder.join(','));
+  const ui = await G(() => ({ tabs: document.querySelectorAll('.cr-tab').length, hotbar: document.querySelectorAll('.gslot[data-key^="inv"]').length, trash: !!document.querySelector('.gslot[data-key="trash"]'), grid: !!document.querySelector('.cr-grid'), cols: Math.round(document.querySelector('.cr-grid').clientWidth / 20) }));
+  check('Créatif : 5 onglets, 17 colonnes, barre d’objets et liste défilante', ui.tabs === 5 && ui.hotbar === 9 && !ui.trash && ui.grid && ui.cols === 17, JSON.stringify(ui));
   // recherche
   await tapSel('.cr-tab[data-tab="search"]');
   await wait(250);
   await page.locator('.cr-search').fill('carte');
   await wait(250);
-  const found = await G(() => [...document.querySelectorAll('.cr-grid [data-item]')].map((e) => e.dataset.item));
+  const found = await G(() => window.__lecraft.inventoryUI.listKeys());
   check('Créatif : la recherche trouve la carte d’accès', found.includes('keycard') && found.length < 40, found.slice(0, 8).join(','));
   // prendre un objet de la palette, le poser dans la barre, puis le reposer sur la grille (supprimé)
   await tapSel('.cr-grid [data-item="keycard"]');
@@ -297,11 +303,11 @@ try {
   await wait(250);
   const afterDrop = await G(() => ({ slot: window.__lecraft.session.player.inventory.slots[0]?.id ?? null, carried: window.__lecraft.inventoryUI?.carried ?? null }));
   check('Créatif : objet pris dans la palette, posé, puis supprimé en le reposant sur la grille', inHotbar === 'keycard' && afterDrop.slot === null && afterDrop.carried === null, JSON.stringify({ inHotbar, afterDrop }));
-  // onglet inventaire de survie
-  await tapSel('.cr-tab[data-tab="inventory"]');
+  // disposition « fabrication » : armure et inventaire complet à droite (bouton de l'en-tête)
+  await tapSel('.bi-hbtn[data-btn="craft"]');
   await wait(250);
   const surv = await G(() => ({ armor: document.querySelectorAll('.gslot[data-key^="armor_"]').length, main: document.querySelectorAll('.gslot[data-key^="inv"]').length }));
-  check('Créatif : onglet « Inventaire de survie » (armure + 36 cases)', surv.armor === 4 && surv.main === 36, JSON.stringify(surv));
+  check('Créatif : disposition scindée (armure + 36 cases)', surv.armor === 4 && surv.main === 36, JSON.stringify(surv));
   // corbeille : un objet tenu y est détruit
   await G(() => { const inv = window.__lecraft.session.player.inventory; inv.slots[5] = { id: 'diamond', count: 3 }; inv.changed(); });
   await wait(200);
@@ -310,8 +316,8 @@ try {
   await tapSel('.gslot[data-key="trash"]');
   await wait(250);
   const trashed = await G(() => ({ slot: window.__lecraft.session.player.inventory.slots[5]?.id ?? null, carried: window.__lecraft.inventoryUI?.carried ?? null, trash: !!document.querySelector('.gslot[data-key="trash"]') }));
-  check('Créatif : corbeille de l’onglet survie (objet détruit)', trashed.trash && trashed.slot === null && trashed.carried === null, JSON.stringify(trashed));
-  await tapSel('.cr-tab[data-tab="building"]');
+  check('Créatif : corbeille de la disposition scindée (objet détruit)', trashed.trash && trashed.slot === null && trashed.carried === null, JSON.stringify(trashed));
+  await tapSel('.cr-tab[data-tab="construction"]');
   await wait(250);
   await shot('07-creative');
   await G(() => window.__lecraft.closeInventory());
@@ -319,9 +325,7 @@ try {
   // ---------- touches du clavier personnalisables ----------
   await G(() => { window.__lecraft.showSettings(); });
   await wait(300);
-  await page.getByText('Commandes...', { exact: true }).click();
-  await wait(300);
-  await page.getByText('Touches clavier...', { exact: true }).click();
+  await page.locator('[data-nav="kbm"]').click();
   await wait(300);
   await page.locator('[data-key="forward"]').click();
   await wait(150);
@@ -356,7 +360,7 @@ try {
     g.applySettings(false);
     g.showSettings();
     await new Promise((r) => setTimeout(r, 300));
-    const texts = [...document.querySelectorAll('.mc-btn span, .mc-title')].map((e) => e.textContent);
+    const texts = [...document.querySelectorAll('.bh-nav-i span, .bh-bar-title')].map((e) => e.textContent);
     g.ui.back?.();
     g.openInventory('hand');
     await new Promise((r) => setTimeout(r, 300));
@@ -369,7 +373,7 @@ try {
     g.applySettings(false);
     return { texts };
   });
-  check('Langue English : menus traduits', en.texts.includes('Video Settings...') && en.texts.includes('Controls...') && en.texts.includes('Language: English'), en.texts.slice(0, 12).join(' | '));
+  check('Langue English : menus traduits', en.texts.includes('SETTINGS') && en.texts.includes('Video') && en.texts.includes('Touch') && en.texts.includes('Accessibility'), en.texts.slice(0, 12).join(' | '));
 } catch (e) {
   check('Exception', false, String(e?.stack ?? e));
 }

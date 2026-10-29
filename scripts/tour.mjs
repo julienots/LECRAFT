@@ -10,11 +10,12 @@ page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 await page.addInitScript(() => localStorage.setItem('lecraft.settings.v1', JSON.stringify({ quality: 'HIGH', renderDistance: 6, autoQuality: false, fpsCap: 60, shadows: 'blob+ao', clouds: true, resolutionScale: 1, particles: 'high', waterQuality: 'animated' })));
 await page.goto(URL);
 await page.waitForFunction(() => window.__lecraft?.state === 'menu');
-await page.getByText('Solo').first().click();
+await page.getByText('Jouer', { exact: true }).first().click();
   await page.getByText('Créer un nouveau monde').first().click();
+  await page.locator('.bm-from .bm-side .bm-btn').first().click();
   await page.waitForTimeout(200);
 await page.locator('.mc-screen').last().locator('input').nth(1).fill(process.env.SEED ?? '839274928');
-await page.locator('.mc-footer').last().getByText('Créer un nouveau monde').click();
+await page.locator('.bm-left .bm-btn.go').click();
 await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
 const G = (f, a) => page.evaluate(f, a);
 const settle = async () => {

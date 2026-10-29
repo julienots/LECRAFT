@@ -91,6 +91,8 @@ export class Projectile extends Entity {
   flame = false;
   /** Lanceur (API de script : composant projectile.owner). */
   owner: import('../scripting/Hooks').Actor | null = null;
+  /** Flèche spectrale ou à effet : effet à l'impact, et rendue telle quelle quand on la ramasse. */
+  arrowStack: import('../inventory/Item').ItemStack | null = null;
   /** Objet rendu quand on le ramasse (trident) au lieu d'une flèche. */
   pickupStack: import('../inventory/Item').ItemStack | null = null;
   /** Trident : Loyauté (revient vers le lanceur), rebond après avoir touché une créature. */
@@ -193,7 +195,7 @@ export class Projectile extends Entity {
     if (this.stuck) {
       if (this.pickable && !ctx.player.dead) {
         const p = ctx.player;
-        if (Math.abs(p.x - this.x) < 1.3 && Math.abs(p.z - this.z) < 1.3 && this.y > p.y - 0.8 && this.y < p.y + 2.2 && p.inventory.add(this.pickupStack ? { ...this.pickupStack } : { id: 'arrow', count: 1 }) === 0) {
+        if (Math.abs(p.x - this.x) < 1.3 && Math.abs(p.z - this.z) < 1.3 && this.y > p.y - 0.8 && this.y < p.y + 2.2 && p.inventory.add(this.pickupStack ? { ...this.pickupStack } : this.arrowStack ? { ...this.arrowStack, count: 1 } : { id: 'arrow', count: 1 }) === 0) {
           this.removed = true;
           ctx.audio.play('pop', { x: this.x, y: this.y, z: this.z, volume: 0.5, pitch: 1.4 });
         }

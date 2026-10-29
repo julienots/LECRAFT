@@ -18,11 +18,12 @@ try {
   await page.addInitScript(() => { window.I = (k) => window.__lecraft.debug.blockId(k); });
   await page.goto(URL);
   await page.waitForFunction(() => window.__lecraft?.state === 'menu');
-  await page.getByText('Solo').click();
+  await page.getByText('Jouer', { exact: true }).first().click();
   await page.getByText('Créer un nouveau monde').first().click();
+  await page.locator('.bm-from .bm-side .bm-btn').first().click();
   await wait(200);
   await page.locator('.mc-screen').last().locator('input').nth(1).fill('424242');
-  await page.locator('.mc-footer').last().getByText('Créer un nouveau monde').click();
+  await page.locator('.bm-left .bm-btn.go').click();
   await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
   await wait(1000);
   const geo0 = await G(() => window.__lecraft.renderer.gl.info.memory.geometries);
@@ -207,7 +208,7 @@ try {
 
   // ---------- mémoire : quitter libère les ressources ----------
   await page.keyboard.press('Escape');
-  await page.getByText('Sauvegarder et quitter').click();
+  await page.getByText('Sauv. et quitter').click();
   await page.waitForFunction(() => window.__lecraft.state === 'menu');
   await wait(500);
   const geo1 = await G(() => window.__lecraft.renderer.gl.info.memory.geometries);

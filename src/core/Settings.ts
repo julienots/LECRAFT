@@ -36,6 +36,8 @@ export interface Settings {
   fov: number;
   orientation: 'landscape' | 'portrait' | 'auto';
   showFps: boolean;
+  /** Affiche « Nombre de jours joués » en haut à gauche (option de l'édition mobile). */
+  showDaysPlayed?: boolean;
   viewBobbing: boolean;
   haptics: boolean;
   /** Échelle de résolution trouvée par la qualité automatique (reprise au lancement suivant). */

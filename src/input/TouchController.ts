@@ -2,12 +2,13 @@ import type { Settings } from '../core/Settings';
 import type { InputState } from './InputState';
 import { VirtualJoystick } from './VirtualJoystick';
 import { DPad } from './DPad';
-import { touchIcon } from '../ui/TouchIcons';
+import { bhTouchIcon } from '../ui/TouchIcons';
+import { bedrockScale } from '../ui/Bedrock';
 
 export interface TouchButtonDef {
   id: string;
   label: string;
-  /** Position par défaut : distance depuis le bord (droite/bas) en px. */
+  /** Position par défaut : distance depuis le bord (droite/bas) en pixels d'interface (× échelle de l'écran). */
   right?: number;
   left?: number;
   bottom?: number;
@@ -22,9 +23,11 @@ export interface TouchButtonDef {
  * (toucher bref = poser / frapper, appui long = casser), comme dans le jeu original.
  */
 const BUTTONS: TouchButtonDef[] = [
-  { id: 'jump', label: 'up', right: 26, bottom: 34, size: 74, kind: 'hold' },
-  { id: 'sneak', label: 'sneak', right: 110, bottom: 34, size: 62, kind: 'toggle' },
-  { id: 'sprint', label: 'sprint', left: 40, bottom: 200, size: 56, kind: 'toggle' },
+  // disposition mesurée sur l'édition mobile (écran 20:9) : sauter au-dessus de s'accroupir,
+  // courir (double chevron) à leur gauche
+  { id: 'jump', label: 'bh_jump', right: 24.3, bottom: 127.7, size: 32.5, kind: 'hold' },
+  { id: 'sneak', label: 'bh_sneak', right: 24.3, bottom: 80, size: 32.5, kind: 'toggle' },
+  { id: 'sprint', label: 'bh_sprint', right: 76, bottom: 104, size: 32.5, kind: 'toggle' },
 ];
 
 const LONG_PRESS_MS = 280;
@@ -42,6 +45,8 @@ export class TouchController {
   private buttons = new Map<string, HTMLDivElement>();
   private look = new Map<number, { x: number; y: number; sx: number; sy: number; t: number; long: boolean; timer: number }>();
   private editMode = false;
+  /** Cercle blanc sous le doigt qui oriente la caméra. */
+  private ring: HTMLDivElement;
   enabled = true;
   private cleanup: (() => void)[] = [];
 
@@ -49,10 +54,17 @@ export class TouchController {
     this.root = document.createElement('div');
     this.root.className = 'touch-layer';
     parent.appendChild(this.root);
-    this.joystick = new VirtualJoystick(this.root, settings.joystickSize / 2);
+    this.joystick = new VirtualJoystick(this.root, settings.joystickSize);
     this.dpad = new DPad(this.root, input);
+    this.ring = document.createElement('div');
+    this.ring.className = 'bh-ring';
+    this.ring.style.display = 'none';
+    this.root.appendChild(this.ring);
     for (const b of BUTTONS) this.createButton(b);
     this.applyLayout();
+    const relayout = () => this.applyLayout();
+    window.addEventListener('resize', relayout);
+    this.cleanup.push(() => window.removeEventListener('resize', relayout));
     const opts = { passive: false } as AddEventListenerOptions;
     const down = (e: PointerEvent) => this.onDown(e);
     const move = (e: PointerEvent) => this.onMove(e);
@@ -73,7 +85,7 @@ export class TouchController {
     const el = document.createElement('div');
     el.className = `touch-btn btn-${def.id}`;
     el.dataset.id = def.id;
-    el.style.backgroundImage = touchIcon(def.label);
+    el.style.backgroundImage = bhTouchIcon(def.label);
     el.setAttribute('role', 'button');
     el.setAttribute('aria-label', def.id);
     this.root.appendChild(el);
@@ -146,7 +158,6 @@ export class TouchController {
     if (on === this.flying) return;
     this.flying = on;
     const b = this.buttons.get('sneak')!;
-    b.style.backgroundImage = touchIcon(on ? 'down' : 'sneak');
     if (on) {
       this.input.sneak = false;
       b.classList.remove('active');
@@ -164,9 +175,10 @@ export class TouchController {
   applyLayout() {
     const s = this.settings;
     const scale = s.buttonScale;
+    const u = bedrockScale();
     for (const def of BUTTONS) {
       const el = this.buttons.get(def.id)!;
-      const size = def.size * scale;
+      const size = def.size * scale * u;
       el.style.width = el.style.height = `${size}px`;
       const custom = s.layout[def.id];
       el.style.left = el.style.right = el.style.top = el.style.bottom = '';
@@ -176,22 +188,23 @@ export class TouchController {
       } else {
         const mirror = s.leftHanded;
         const r = def.right, l = def.left;
-        if (r !== undefined) el.style[mirror ? 'left' : 'right'] = `${r * scale}px`;
-        if (l !== undefined) el.style[mirror ? 'right' : 'left'] = `${l * scale}px`;
-        if (def.bottom !== undefined) el.style.bottom = `${def.bottom * scale}px`;
-        if (def.top !== undefined) el.style.top = `${def.top * scale}px`;
+        if (r !== undefined) el.style[mirror ? 'left' : 'right'] = `${r * u}px`;
+        if (l !== undefined) el.style[mirror ? 'right' : 'left'] = `${l * u}px`;
+        if (def.bottom !== undefined) el.style.bottom = `${def.bottom * u}px`;
+        if (def.top !== undefined) el.style.top = `${def.top * u}px`;
       }
     }
-    this.joystick.setSize(s.joystickSize);
+    this.joystick.layout(s.joystickSize, s.leftHanded);
     // croix directionnelle : la case centrale remplace « accroupi », double appui avant = sprint
     const dpad = s.controlScheme === 'dpad';
     this.dpad.setVisible(dpad);
+    this.joystick.setShown(!dpad);
     this.dpad.setScale(scale, s.leftHanded);
     this.buttons.get('sneak')!.style.display = dpad ? 'none' : '';
     this.buttons.get('sprint')!.style.display = dpad ? 'none' : '';
     if (dpad && !s.layout.jump) {
       const j = this.buttons.get('jump')!;
-      j.style.bottom = `${40 * scale}px`;
+      j.style.bottom = `${40 * u}px`;
     }
   }
 
@@ -231,11 +244,21 @@ export class TouchController {
     entry.timer = window.setTimeout(() => {
       if (Math.hypot(entry.x - entry.sx, entry.y - entry.sy) < TAP_MOVE_PX * 2) {
         entry.long = true;
+        this.ring.classList.add('hold');
         this.input.attack = true;
         this.input.holdAim = this.aimAt(entry.x, entry.y);
       }
     }, LONG_PRESS_MS);
     this.look.set(e.pointerId, entry);
+    this.showRing(e.clientX, e.clientY, false);
+  }
+
+  /** Cercle de visée sous le doigt (peau claire quand l'appui long mine / attaque). */
+  private showRing(x: number, y: number, hold: boolean) {
+    this.ring.style.display = '';
+    this.ring.style.left = `${x}px`;
+    this.ring.style.top = `${y}px`;
+    this.ring.classList.toggle('hold', hold);
   }
 
   private onMove(e: PointerEvent) {
@@ -252,6 +275,7 @@ export class TouchController {
     this.input.lookDY += (e.clientY - l.y) * k * (this.settings.invertY ? -1 : 1);
     l.x = e.clientX;
     l.y = e.clientY;
+    this.showRing(l.x, l.y, l.long);
     if (l.long) this.input.holdAim = this.aimAt(l.x, l.y);
   }
 
@@ -265,6 +289,7 @@ export class TouchController {
     if (!l) return;
     clearTimeout(l.timer);
     this.look.delete(e.pointerId);
+    if (!this.look.size) this.ring.style.display = 'none';
     const short = e.timeStamp - l.t < LONG_PRESS_MS && Math.hypot(l.x - l.sx, l.y - l.sy) < TAP_MOVE_PX;
     if (l.long) {
       if (![...this.look.values()].some((o) => o.long)) {
@@ -293,6 +318,8 @@ export class TouchController {
     this.dpad.release();
     for (const l of this.look.values()) clearTimeout(l.timer);
     this.look.clear();
+    this.ring.style.display = 'none';
+    this.joystick.reset();
     this.input.attack = this.input.jump = this.input.useHeld = false;
     this.input.holdAim = this.input.tapAim = null;
     this.input.moveX = this.input.moveY = 0;

@@ -154,12 +154,14 @@ try {
   await page.goto(URL);
   await page.waitForFunction(() => window.__lecraft?.state === 'menu');
   // ---------- import par l'interface ----------
-  await page.getByText('Options...').click();
-  await page.getByText('Add-ons (.mcaddon)...').click();
+  await page.getByText('Paramètres', { exact: true }).click();
+  await page.locator('[data-nav="addons"]').click();
   await wait(200);
-  await page.locator('.mc-screen').last().locator('input[type=file]').setInputFiles(addonPath);
+  await page.locator('.bh-pane input[type=file]').setInputFiles(addonPath);
   await page.waitForFunction(() => /importé/.test(document.body.innerText), null, { timeout: 20000 });
-  check('Import d’un .mcaddon (packs .mcpack imbriqués)', (await page.locator('.world-entry', { hasText: 'Rubis BP' }).count()) === 1);
+  // la liste se rafraîchit juste après le message d'import : on attend la ligne
+  await page.locator('.bh-row', { hasText: 'Rubis BP' }).first().waitFor({ timeout: 10000 }).catch(() => {});
+  check('Import d’un .mcaddon (packs .mcpack imbriqués)', (await page.locator('.bh-row', { hasText: 'Rubis BP' }).count()) === 1);
   await page.screenshot({ path: `${OUT}/addons-01-screen.png` });
   await Promise.all([page.waitForEvent('load'), page.getByText('Redémarrer pour appliquer').click()]);
   await page.waitForFunction(() => window.__lecraft?.state === 'menu' && window.__lecraft.addonResult, null, { timeout: 30000 });
@@ -261,9 +263,13 @@ try {
     const B = s.world.getBlock(x, y, z);
     return { id, placed: B === id };
   });
-  await wait(1200);
-  // lumière des voisins libres (le relief peut en recouvrir certains)
-  const light = await G(() => { const s = window.__lecraft.session, r = window.__rb, w = s.world; return Math.max(...[[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, -1]].filter(([a, b, c]) => !w.isSolid(r.x + a, r.y + b, r.z + c)).map(([a, b, c]) => w.getLight(r.x + a, r.y + b, r.z + c).block)); });
+  // lumière des voisins libres (le relief peut en recouvrir certains) : on attend la propagation
+  const readLight = () => G(() => { const s = window.__lecraft.session, r = window.__rb, w = s.world; return Math.max(...[[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, -1]].filter(([a, b, c]) => !w.isSolid(r.x + a, r.y + b, r.z + c)).map(([a, b, c]) => w.getLight(r.x + a, r.y + b, r.z + c).block)); });
+  let light = 0;
+  for (let i = 0; i < 40 && light < 8; i++) {
+    await wait(300);
+    light = await readLight();
+  }
   check('Bloc d’add-on posé et lumineux (light_emission 10)', blk.placed && light >= 8, `id ${blk.id}, lumière voisine ${light}`);
   const drops = await G(() => {
     const s = window.__lecraft.session, r = window.__rb;
@@ -357,7 +363,7 @@ try {
   // ---------- désactivation ----------
   await page.keyboard.press('Escape');
   await wait(200);
-  await page.getByText('Sauvegarder et quitter').click();
+  await page.getByText('Sauv. et quitter').click();
   await page.waitForFunction(() => window.__lecraft.state === 'menu');
   await G(async () => {
     const r = indexedDB.open('lecraft-addons', 1);

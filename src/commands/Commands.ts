@@ -134,6 +134,8 @@ const ALIAS: Record<string, string> = {
   cooked_fish: 'cooked_beef', melon: 'melon_slice', monster_egg: 'spawner', lit_pumpkin: 'pumpkin',
   flowing_water: 'water', flowing_lava: 'lava', stonebrick: 'stone_bricks', brick_block: 'bricks', glass_pane: 'glass',
   wooden_slab: 'oak_slab', double_stone_slab: 'stone', concrete: 'white_concrete', undyed_shulker_box: 'chest',
+  // identifiants Java dont le bloc porte un autre nom ici
+  ender_chest: 'ender_chest_block', note_block: 'noteblock', magma_block: 'magma',
 };
 
 export function resolveItem(id: string): string {

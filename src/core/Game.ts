@@ -1,6 +1,6 @@
 import { detectDevice, AdaptiveQuality, type DeviceInfo } from './DeviceProfiler';
 import { setLanguage } from '../ui/i18n';
-import { serversScreen, openGameSelector, openShop } from '../ui/ServerUI';
+import { openGameSelector, openShop } from '../ui/ServerUI';
 import { SMP_NAME, SMP_SEED, SMP_WORLD_ID } from '../server/SmpServer';
 import { SERVER_NAME, type ServerNetwork } from '../server/ServerNetwork';
 import type { Screen } from '../ui/UIManager';
@@ -9,7 +9,7 @@ import { GameLoop } from './GameLoop';
 import { Session, type WorldState } from './Session';
 import { NetLink, relayUrl, type NetMsg, type Welcome } from '../net/Protocol';
 import { MultiplayerClient } from '../net/MultiplayerClient';
-import { hostScreen, joinScreen } from '../ui/NetUI';
+import { hostScreen } from '../ui/NetUI';
 import { TextureManager } from '../render/TextureManager';
 import { loadInstalledPack, loadBundledPack, type LoadedPack } from '../render/ResourcePack';
 import { installPixelFont } from '../ui/FontBuilder';
@@ -21,7 +21,7 @@ import { ChatUI } from '../ui/ChatUI';
 import { loadEnabledAddons, type AddonLoadResult } from '../addons/AddonManager';
 import { Renderer } from '../render/Renderer';
 import { AudioManager } from '../audio/AudioManager';
-import { SaveManager, type WorldMeta } from '../save/SaveManager';
+import { SaveManager, type WorldMeta, type WorldOptions } from '../save/SaveManager';
 import { InputState } from '../input/InputState';
 import { TouchController } from '../input/TouchController';
 import { KeyboardMouse } from '../input/KeyboardMouse';
@@ -30,7 +30,8 @@ import { END_SPAWN } from '../world/EndGenerator';
 import { UIManager } from '../ui/UIManager';
 import { HUD } from '../ui/HUD';
 import { Platform } from '../platform/Platform';
-import { mainMenu, worldsScreen, newWorldScreen, pauseScreen, deathScreen, loadingScreen, helpScreen, creditsScreen, progressScreen, statsScreen, resetMenuArt } from '../ui/Screens';
+import { createIntro } from '../ui/BedrockMenus';
+import { mainMenu, worldsScreen, newWorldScreen, playScreen, pauseScreen, deathScreen, loadingScreen, helpScreen, creditsScreen, progressScreen, statsScreen, resetMenuArt } from '../ui/Screens';
 import { settingsScreen } from '../ui/SettingsUI';
 import { InventoryUI, type InventoryMode } from '../ui/InventoryUI';
 import type { Difficulty, GameMode } from './Config';
@@ -117,17 +118,23 @@ export class Game {
   }
 
   async boot() {
+    // écran du studio puis chargement avec barre de progression (retiré quand tout est prêt)
+    const intro = createIntro(this.root);
     await this.platform.init({ onBack: () => this.back(), onPause: () => this.onAppPause(), onResume: () => this.onAppResume() });
     await this.platform.setOrientation(this.settings.orientation);
+    intro.progress(0.12);
     try {
       await this.saves.open();
     } catch (e) {
       console.error('IndexedDB indisponible', e);
     }
+    intro.progress(0.25);
     await installPixelFont();
+    intro.progress(0.4);
     setWidgetClick(() => this.audio.play('click', { volume: 0.5 }));
     // pack de ressources importé par l'utilisateur (stocké localement)
     const pack = (await loadInstalledPack()) ?? (await loadBundledPack());
+    intro.progress(0.7);
     // add-ons Bedrock activés : enregistrés avant toute création de monde
     try {
       const addons = await loadEnabledAddons();
@@ -141,11 +148,13 @@ export class Game {
       console.error('Chargement des add-ons', e);
       if (pack) this.textures.applyPack(pack);
     }
+    intro.progress(0.88);
     applyTheme(this.textures);
     this.syncSky();
     this.showMainMenu();
     this.loop.start();
     await this.platform.hideSplash();
+    await intro.finish();
   }
 
   // ---------- navigation ----------
@@ -259,7 +268,7 @@ export class Game {
   // ---------- mondes ----------
   // ---------- serveur de mini-jeux ----------
   showServers() {
-    this.ui.push(serversScreen(this));
+    this.ui.push(playScreen(this, 'servers'));
   }
 
   /** Connexion au serveur intégré : monde du hub et des arènes, non sauvegardé. */
@@ -291,7 +300,7 @@ export class Game {
   }
 
   showJoinRemote() {
-    this.ui.push(joinScreen(this));
+    this.ui.push(playScreen(this, 'realms'));
   }
 
   showHostScreen() {
@@ -365,13 +374,15 @@ export class Game {
     openGameSelector(this, net);
   }
 
-  async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty, bonusChest = false, cheats = true, bots = false) {
+  async createWorld(name: string, seedText: string, mode: GameMode, difficulty: Difficulty, bonusChest = false, cheats = true, bots = false, options?: WorldOptions) {
     const seed = seedText.trim() ? seedFromString(seedText) : (Math.random() * 2 ** 31) | 0;
     const meta = await this.saves.createWorld(name.trim() || 'Nouveau monde', seed, mode, difficulty);
     meta.cheats = cheats;
     if (bots) meta.bots = true;
+    // paramètres de création : conservés dans le monde, les règles que le moteur gère sont appliquées au démarrage
+    if (options) meta.options = options;
     await this.saves.updateMeta(meta);
-    await this.startWorld(meta, null, bonusChest);
+    await this.startWorld(meta, null, bonusChest, undefined, options?.rules ? (s) => Object.assign(s.gamerules, options.rules) : undefined);
     if (bots) this.session?.smp?.start();
   }
 
@@ -395,7 +406,7 @@ export class Game {
   /** Nouveau monde avec la même graine et les mêmes options (bouton « Recréer »). */
   async recreateWorld(meta: WorldMeta) {
     // mêmes options que l'original (triches, bots de survie)
-    await this.createWorld(`${meta.name} (recréé)`, String(meta.seed), meta.gameMode, meta.difficulty, false, meta.cheats ?? true, !!meta.bots);
+    await this.createWorld(`${meta.name} (recréé)`, String(meta.seed), meta.gameMode, meta.difficulty, false, meta.cheats ?? true, !!meta.bots, meta.options);
   }
 
   async continueLast() {
@@ -405,11 +416,13 @@ export class Game {
   }
 
   private async startWorld(meta: WorldMeta, state: WorldState | null, bonusChest = false, travel?: string, setup?: (s: Session) => void) {
+    // dernier décor affiché (panorama du titre, ou vue du jeu) : fond de l'écran de chargement
+    const backdrop = this.renderer.snapshot(0.8);
     this.stopPanorama();
     this.audio.unlock();
     this.state = 'loading';
     this.settings.difficulty = meta.difficulty;
-    const loading = loadingScreen(travel ?? meta.name);
+    const loading = loadingScreen(this, travel ?? 'Chargement…', backdrop);
     this.ui.set(loading.screen);
     this.session?.dispose();
     this.chat.clear();
@@ -446,7 +459,7 @@ export class Game {
     const state = s.snapshot();
     const from = s.dimension;
     const dims = { ...(state.dims ?? {}) };
-    dims[from] = { chests: state.chests, spawners: state.spawners, furnaces: state.furnaces, brewing: state.brewing, mobs: state.mobs };
+    dims[from] = { chests: state.chests, spawners: state.spawners, furnaces: state.furnaces, brewing: state.brewing, jukeboxes: state.jukeboxes, mobs: state.mobs };
     const next = dims[target];
     delete dims[target];
     const k = target === 'nether' ? 1 / 8 : from === 'nether' ? 8 : 1;
@@ -465,6 +478,7 @@ export class Game {
       spawners: next?.spawners ?? {},
       furnaces: next?.furnaces ?? {},
       brewing: next?.brewing ?? {},
+      jukeboxes: next?.jukeboxes ?? {},
       mobs: next?.mobs ?? [],
       arrival: at ? undefined : { x: ax, y: p.y, z: az, kind: via },
       player: (at ? { ...state.player, ...at } : { ...state.player, x: ax, y: target === 'end' ? END_SPAWN.y : Math.min(120, Math.max(40, p.y)), z: az }) as WorldState['player'],
@@ -492,6 +506,8 @@ export class Game {
     this.touch.setVisible(false);
     this.ui.set(pauseScreen(this));
     this.audio.stopAmbience();
+    // juke-box : la piste reprend au même endroit après la pause (le temps de jeu est arrêté)
+    this.audio.stopRecords();
   }
 
   resume() {

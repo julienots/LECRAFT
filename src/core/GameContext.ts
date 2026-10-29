@@ -49,6 +49,8 @@ export interface HudApi {
   toast(text: string, kind?: 'info' | 'achievement' | 'warn'): void;
   setBoss(name: string | null, frac?: number, phase?: number): void;
   showTitle?(text: string, kind: 'title' | 'subtitle' | 'actionbar'): void;
+  /** Juke-box : « Lecture en cours : … » en couleurs animées au-dessus de la barre d'objets. */
+  nowPlaying?(text: string): void;
 }
 export interface StatsApi {
   inc(stat: string, n?: number): void;

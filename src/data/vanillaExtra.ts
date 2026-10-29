@@ -8,13 +8,16 @@
 import type { BlockDef } from '../blocks/Block';
 import type { ItemDef } from '../inventory/Item';
 import type { CraftingRecipe, SmeltingRecipe } from '../crafting/Recipe';
-import { WOOL_COLORS } from './blocks';
+import { BLOCK_DEFS, WOOL_COLORS } from './blocks';
 import { hex, registerPainter, paint, type Tile } from '../render/TextureGenerator';
 import { MORE_BLOCKS, MORE_ITEMS, MORE_RECIPES, MORE_SMELTING } from './vanillaMore';
 import { PAPER_BLOCKS, PAPER_ITEMS, PAPER_RECIPES, PAPER_SMELTING } from './paperContent';
 import { applyPackFaces, PACK_BLOCK_DEFS, PACK_ITEM_DEFS, PACK_RECIPES } from './packContent';
+import { DISC_ITEMS } from './discs';
 import { SMELT_XP, VANILLA_RECIPES, VANILLA_SMELTING } from './vanillaRecipes';
 import { applyJavaBlockProps } from './javaBlockProps';
+import { CRAFTING_RECIPES } from './recipes';
+import { buildJavaContent, JAVA_RECIPE_FIXES } from './vanillaJava';
 
 const B: BlockDef[] = [];
 const I: ItemDef[] = [];
@@ -732,12 +735,29 @@ applyPackFaces(MORE_BLOCKS);
   EXTRA_TAGS.eggs.push('blue_egg', 'brown_egg');
 }
 
-export const EXTRA_BLOCKS: BlockDef[] = [...B, ...MORE_BLOCKS, ...PAPER_BLOCKS, ...PACK_BLOCK_DEFS];
+const ASSEMBLED: BlockDef[] = [...B, ...MORE_BLOCKS, ...PAPER_BLOCKS, ...PACK_BLOCK_DEFS];
 // dureté / outil / tier du jeu original (l'ordre, donc les identifiants, ne change pas)
-applyJavaBlockProps(EXTRA_BLOCKS);
+applyJavaBlockProps(ASSEMBLED);
+// recettes du jeu remplacées par leur version Java 1.21.11 (laisse…)
+for (const r of [...R, ...MORE_RECIPES]) {
+  const fix = JAVA_RECIPE_FIXES[r.id];
+  if (fix) Object.assign(r, fix);
+}
+// objets et blocs Java encore absents (lits et bannières colorés, têtes, coffres, cuivre ciré…) :
+// ajoutés À LA FIN (les identifiants déjà attribués ne bougent pas)
+const JAVA = buildJavaContent([...BLOCK_DEFS, ...ASSEMBLED], [...CRAFTING_RECIPES, ...R, ...MORE_RECIPES, ...PACK_RECIPES, ...VANILLA_RECIPES]);
+applyJavaBlockProps(JAVA.blocks);
+for (const [t, list] of Object.entries(JAVA.tags)) (EXTRA_TAGS[t] ??= []).push(...list);
+export const EXTRA_BLOCKS: BlockDef[] = [...ASSEMBLED, ...JAVA.blocks];
 const MORE_KEYS = new Set([...I, ...MORE_ITEMS, ...PAPER_ITEMS].map((i) => i.key));
-export const EXTRA_ITEMS: ItemDef[] = [...I, ...MORE_ITEMS, ...PAPER_ITEMS, ...PACK_ITEM_DEFS.filter((i) => !MORE_KEYS.has(i.key))];
+export const EXTRA_ITEMS: ItemDef[] = [...I, ...MORE_ITEMS, ...PAPER_ITEMS, ...PACK_ITEM_DEFS.filter((i) => !MORE_KEYS.has(i.key)), ...DISC_ITEMS];
+// objets Java : à la fin, sauf la flèche à effet rangée juste après la flèche spectrale (inventaire créatif)
+for (const it of JAVA.items) {
+  const after = it.key === 'tipped_arrow' ? EXTRA_ITEMS.findIndex((x) => x.key === 'spectral_arrow') : -1;
+  if (after >= 0) EXTRA_ITEMS.splice(after + 1, 0, it);
+  else EXTRA_ITEMS.push(it);
+}
 // recettes officielles manquantes (générées, voir vanillaRecipes.ts) : ajoutées en dernier
-export const EXTRA_RECIPES = [...R, ...MORE_RECIPES, ...PAPER_RECIPES, ...PACK_RECIPES, ...VANILLA_RECIPES];
+export const EXTRA_RECIPES = [...R, ...MORE_RECIPES, ...PAPER_RECIPES, ...PACK_RECIPES, ...VANILLA_RECIPES, ...JAVA.recipes];
 // expérience de cuisson du jeu original (minerais des abîmes, débris antiques, argile…)
 export const EXTRA_SMELTING = [...S, ...MORE_SMELTING, ...PAPER_SMELTING, ...VANILLA_SMELTING].map((r) => (SMELT_XP[r.input] !== undefined ? { ...r, xp: SMELT_XP[r.input] } : r));

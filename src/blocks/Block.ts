@@ -90,6 +90,8 @@ export interface BlockDef {
   interact?: 'crafting' | 'furnace' | 'chest' | 'door' | 'bed' | 'tnt' | 'lever' | 'button' | 'enchanting' | 'anvil' | 'brewing' | 'dispenser' | 'hopper' | 'ender_chest';
   /** Ne s'ouvre pas à la main (portes et trappes en fer : redstone seulement). */
   redstoneOnly?: boolean;
+  /** Créature qui sort du bloc quand il est cassé hors créatif (blocs infestés → poisson d'argent). */
+  spawnOnBreak?: string;
   /** Porte à carte : ne s'ouvre qu'avec cet objet en main (ni à la main, ni par la redstone). */
   keyItem?: string;
   /** Doit reposer sur un bloc solide (plantes, torches). */

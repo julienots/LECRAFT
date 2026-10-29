@@ -19,7 +19,14 @@ export class CraftingGrid {
   }
   get result(): ItemStack | null {
     const r = this.recipe;
-    return r ? makeStack(r.result.item, r.result.count) : null;
+    if (!r) return null;
+    const out = makeStack(r.result.item, r.result.count);
+    // flèches à effet : la potion persistante de la grille donne son effet (meta.potion), comme le jeu original
+    if (r.result.item === 'tipped_arrow') {
+      const p = this.slots.find((s) => s?.id === 'lingering_potion')?.meta?.potion;
+      if (p !== undefined) out.meta = { potion: p };
+    }
+    return out;
   }
   /**
    * Consomme un exemplaire de chaque case (prise du résultat). Comme le jeu original, les seaux

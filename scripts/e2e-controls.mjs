@@ -59,14 +59,14 @@ try {
   await pad();
   const gpOn = await G(() => ({ active: window.__lecraft.gamepad.active, cls: document.documentElement.classList.contains('gamepad'), cursor: !document.querySelector('.gp-cursor').classList.contains('hidden') }));
   check('Manette détectée : mode manette + curseur virtuel', gpOn.active && gpOn.cls && gpOn.cursor, JSON.stringify(gpOn));
-  check('Stick gauche → curseur jusqu’au bouton « Solo »', await cursorTo('.mc-btn', 'Solo'));
+  check('Stick gauche → curseur jusqu’au bouton « Jouer »', await cursorTo('.bm-btn', 'Jouer'));
   await tap(A);
   await wait(300);
   const onWorlds = await page.getByText('Créer un nouveau monde').count();
   check('A : clic sur le bouton (liste des mondes)', onWorlds > 0);
   await tap(B);
   await wait(300);
-  check('B : retour au menu principal', (await page.getByText('Solo').count()) > 0 && (await page.getByText('Créer un nouveau monde').count()) === 0);
+  check('B : retour au menu principal', (await page.getByText('Paramètres', { exact: true }).first().isVisible()) && !(await page.getByText('Créer un nouveau monde').first().isVisible().catch(() => false)));
 
   // ---------- en jeu ----------
   await G(() => window.__lecraft.createWorld('Manette', '777', 'creative', 'peaceful'));

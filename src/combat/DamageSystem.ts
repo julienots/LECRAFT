@@ -8,6 +8,7 @@ import { AIState } from '../ai/StateMachine';
 import { hooks, type DamageEvent } from '../scripting/Hooks';
 import { onMobHurtByMob } from '../entities/MobRelations';
 import { onDeathEffects, onHurtEffects } from '../entities/EffectOutcomes';
+import { creeperDiscDrop } from '../data/discs';
 
 /**
  * Application des dégâts aux créatures : faiblesses, coups critiques, invincibilité temporaire,
@@ -145,6 +146,10 @@ export class DamageSystem {
         const n = d.min + Math.floor(Math.random() * (d.max - d.min + 1)) + (looting ? Math.floor(Math.random() * (looting + 1)) : 0);
         if (n > 0) this.spawner.spawnItem(d.item, n, m.x, m.y + 0.5, m.z);
       }
+      // creeper tué par un squelette (flèche) : un disque de musique, comme le jeu original
+      const killer = src.attacker as { kind?: string; def?: { key: string } } | null | undefined;
+      const disc = creeperDiscDrop(m.def.key, killer?.kind === 'mob' ? killer.def?.key : null);
+      if (disc && ItemRegistry.has(disc)) this.spawner.spawnItem(disc, 1, m.x, m.y + 0.5, m.z);
     }
     if (src.fromPlayer || src.kind === 'player') {
       ctx.player.addXp(m.def.xp);

@@ -7,6 +7,7 @@ import type { World } from '../world/World';
 import { LOOT } from '../world/StructureGenerator';
 import { MORE_LOOT, MORE_LOOT_TABLES } from '../world/MoreStructures';
 import { VANILLA_CHEST_LOOT, type LootPool } from '../data/vanillaLoot';
+import { DISC_CHEST_POOL } from '../data/discs';
 import { Rng } from '../util/math';
 import { FACING_DIR } from './Shapes';
 
@@ -248,7 +249,8 @@ const LOOT_TABLES: Record<number, { rolls: [number, number]; entries: LootEntry[
  */
 const OFFICIAL_CHESTS: Record<number, { table: string; extra?: LootPool[] }> = {
   [LOOT.DUNGEON]: { table: 'simple_dungeon', extra: [[[0, 1], [['ancient_relic', 3, 1, 1], ['compass_golem', 3, 1, 1], ['', 4, 0, 0]]]] },
-  [LOOT.MINE]: { table: 'abandoned_mineshaft' },
+  // puits de mine : de temps en temps un disque de LeCraft (src/data/discs.ts)
+  [LOOT.MINE]: { table: 'abandoned_mineshaft', extra: DISC_CHEST_POOL },
   [LOOT.FORTRESS]: { table: 'nether_bridge' },
   [MORE_LOOT.DESERT_PYRAMID]: { table: 'desert_pyramid' },
   [MORE_LOOT.JUNGLE_TEMPLE]: { table: 'jungle_temple' },

@@ -369,7 +369,7 @@ function buildHub(set: Set3) {
     set(sx + 6, FLOOR + 4, sz, B.LANTERN);
     const { x: mx, z: mz } = HUB_SERVICES.mystery;
     disc(set, mx + 5, mz, 3, FLOOR, (_x, _z, d) => (d > 2.2 ? id('crying_obsidian', B.OBSIDIAN) : B.OBSIDIAN));
-    set(mx + 5, FLOOR + 1, mz, id('ender_chest', B.CHEST));
+    set(mx + 5, FLOOR + 1, mz, id('ender_chest_block', B.CHEST));
     for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) {
       set(mx + 5 + dx, FLOOR + 1, mz + dz, B.OBSIDIAN);
       set(mx + 5 + dx, FLOOR + 2, mz + dz, id('end_rod', glow));

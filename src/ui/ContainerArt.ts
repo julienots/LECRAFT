@@ -6,6 +6,7 @@
 import { t as tr } from './i18n';
 import type { TextureManager } from '../render/TextureManager';
 import { drawText, textWidth } from './PixelFont';
+import { BC, drawBArrow, drawBPanel, drawBSlot, drawSilhouette } from './BedrockArt';
 
 export type ContainerKind = 'inventory' | 'table' | 'furnace' | 'chest' | 'enchant' | 'anvil' | 'brewing' | 'dispenser' | 'hopper';
 
@@ -288,4 +289,99 @@ export function packSprite(tex: TextureManager, path: string): string | null {
     spriteCache.set(img, url);
   }
   return url;
+}
+
+// =====================================================================================
+// Interfaces façon édition Bedrock (mobile) : cases de 20 unités, panneau droit de 195
+// =====================================================================================
+export const PANEL_W = 195;
+/** Largeur du panneau gauche (liste des recettes / des objets) et position du panneau droit en vue scindée. */
+export const LEFT_W = 162;
+export const RIGHT_X = 167;
+/** Ordonnée du haut des panneaux (au-dessus : onglets et en-tête de 26 unités). */
+export const BODY_Y = 26;
+
+/** Ordonnée (cases de 20 unités) de la première rangée de l'inventaire du joueur. */
+export function bedrockInvTop(kind: ContainerKind, rows = 3) {
+  return kind === 'chest' ? 66 + rows * 20 : kind === 'hopper' ? 86 : 121;
+}
+/** Hauteur du panneau droit. */
+export function bedrockBodyH(kind: ContainerKind, rows = 3) {
+  return bedrockInvTop(kind, rows) + 63;
+}
+
+/** Positions des cases (coin de la case de 20 × 20, repère du panneau droit). */
+export const BLAYOUT = {
+  inventory: {
+    armor: [0, 1, 2, 3].map((i) => [8, 33 + i * 20] as const),
+    figure: [28, 33, 59, 80] as const,
+    offhand: [88, 93] as const,
+    grid: [[107, 46], [127, 46], [107, 66], [127, 66]] as const,
+    arrow: [149, 58] as const,
+    result: [168, 54] as const,
+    title: [95, 34] as const,
+  },
+  table: {
+    grid: Array.from({ length: 9 }, (_, i) => [28 + (i % 3) * 20, 46 + Math.floor(i / 3) * 20] as const),
+    arrow: [98, 69] as const,
+    result: [132, 66] as const,
+    title: [28, 34] as const,
+  },
+  furnace: { input: [62, 44] as const, fuel: [62, 84] as const, flame: [66, 67] as const, arrow: [92, 65] as const, result: [132, 64] as const },
+};
+
+/** Fond du panneau droit : panneau, cases, personnage, flèches et libellés (repère absolu, 195 de large). */
+export function bedrockBackground(kind: ContainerKind, title: string, tex: TextureManager, rows = 3, skinKey = 'player', extraCells: [number, number][] = [], opts: { chestCells?: number; arrowAt?: [number, number]; arrowW?: number; flame?: boolean; hideLabel?: boolean } = {}): HTMLCanvasElement {
+  const h = BODY_Y + bedrockBodyH(kind, rows);
+  const c = document.createElement('canvas');
+  c.width = PANEL_W;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  drawBPanel(ctx, 0, BODY_Y, PANEL_W, bedrockBodyH(kind, rows));
+  const top = bedrockInvTop(kind, rows);
+  for (let r = 0; r < 3; r++) for (let i = 0; i < 9; i++) drawBSlot(ctx, 8 + i * 20, top + r * 20);
+  for (let i = 0; i < 9; i++) drawBSlot(ctx, 8 + i * 20, top + 63);
+  const label = (s: string, x: number, y: number) => drawText(ctx, tr(s), x, y - 2, BC.text);
+  if (kind === 'inventory') {
+    const L = BLAYOUT.inventory;
+    L.armor.forEach(([x, y], i) => {
+      drawBSlot(ctx, x, y);
+      drawSilhouette(ctx, (['head', 'chest', 'legs', 'feet'] as const)[i], x + 2, y);
+    });
+    const [fx, fy, fw, fh] = L.figure;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(fx, fy, fw, fh);
+    ctx.fillStyle = BC.slotDark;
+    ctx.fillRect(fx, fy, fw, 1);
+    ctx.fillRect(fx, fy, 1, fh);
+    drawBSlot(ctx, L.offhand[0], L.offhand[1]);
+    drawSilhouette(ctx, 'shield', L.offhand[0] + 2, L.offhand[1]);
+    for (const [x, y] of L.grid) drawBSlot(ctx, x, y);
+    drawBArrow(ctx, L.arrow[0], L.arrow[1]);
+    drawBSlot(ctx, L.result[0], L.result[1]);
+    label('Fabrication', L.title[0], 35);
+  } else if (kind === 'table') {
+    const L = BLAYOUT.table;
+    for (const [x, y] of L.grid) drawBSlot(ctx, x, y);
+    drawBArrow(ctx, L.arrow[0], L.arrow[1]);
+    drawBSlot(ctx, L.result[0], L.result[1]);
+    label(title, L.title[0], 35);
+  } else if (kind === 'furnace') {
+    const L = BLAYOUT.furnace;
+    drawBSlot(ctx, L.input[0], L.input[1]);
+    drawBSlot(ctx, L.fuel[0], L.fuel[1]);
+    drawBSlot(ctx, L.result[0], L.result[1]);
+    drawFlame(ctx, L.flame[0], L.flame[1], 0);
+    drawBArrow(ctx, L.arrow[0], L.arrow[1], 0, 24);
+    label(title, 10, 35);
+  } else if (kind === 'chest') {
+    for (let r = 0; r < rows; r++) for (let i = 0; i < 9; i++) drawBSlot(ctx, 8 + i * 20, 46 + r * 20);
+    label(title, 10, 35);
+  } else {
+    label(title, 10, 35);
+  }
+  if (kind === 'chest' || kind === 'hopper' || kind === 'dispenser') label('Inventaire', 10, top - 12);
+  for (const [x, y] of extraCells) drawBSlot(ctx, x, y);
+  return c;
 }

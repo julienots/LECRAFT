@@ -243,7 +243,7 @@ function hideTechnicalBlocks() {
   for (const d of EXTRA_BLOCKS) {
     const it = ItemRegistry.get(d.key);
     if (!it || it.hidden) continue;
-    if (PART.test(d.key) && !/_(slab|stairs|wall)$/.test(d.key)) {
+    if (PART.test(d.key) && !/_(slab|stairs|wall)$|^(zombie|creeper|dragon|piglin|player)_head$/.test(d.key)) {
       it.hidden = true;
       continue;
     }

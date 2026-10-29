@@ -6,7 +6,8 @@ import type { World } from './World';
  * portillons voisins (dans un rayon d'un bloc, diagonales comprises). Les portes et trappes en fer ne
  * s'ouvrent qu'ainsi, comme dans le jeu original.
  *
- * Méta : levier / bouton bit 3 = activé ; plaque bit 0 = enfoncée ; ouvrants bit 2 = ouvert.
+ * Méta : levier / bouton bit 3 = activé ; plaque bit 0 = enfoncée ; ouvrants bit 2 = ouvert ;
+ * juke-box bit 1 = en lecture.
  * Les pistons (world/Pistons.ts) utilisent les mêmes sources.
  */
 const kind = (id: number) => (id > 0 ? SHAPES[BlockRegistry.shape[id] - 1] : undefined);
@@ -24,6 +25,8 @@ export function sourceActive(world: World, x: number, y: number, z: number): boo
   const k = kind(id);
   if (k === 'lever' || k === 'button') return (world.getMeta(x, y, z) & 8) !== 0;
   if (k === 'plate') return (world.getMeta(x, y, z) & 1) !== 0;
+  // juke-box en lecture (méta bit 1, world/Jukebox.ts) : signal 15 comme le jeu original
+  if (id > 0 && BlockRegistry.get(id).key === 'jukebox') return (world.getMeta(x, y, z) & 2) !== 0;
   return false;
 }
 

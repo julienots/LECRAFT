@@ -4,6 +4,9 @@ import type { Screen } from './UIManager';
 import { el } from './dom';
 import { mcNodes } from './McText';
 import { hooks } from '../scripting/Hooks';
+import { bhButton, bhIconEl } from './Bedrock';
+import { tb } from './BedrockLang';
+import { QUICK, quickIcon, type QItem } from './QuickCommands';
 
 interface Line {
   text: string;
@@ -58,26 +61,113 @@ export class ChatUI {
     return !!this.screen;
   }
 
-  /** Ouvre la saisie (préremplie par exemple avec « / »). */
+  /** Ouvre la saisie (préremplie par exemple avec « / » : mode commandes avec la liste rapide). */
   open(prefill = '') {
     const game = this.game;
     if (this.screen || !game.session) return;
     const log = el('div', { class: 'chat-log' });
     const sugg = el('div', { class: 'chat-sugg' });
-    const input = el('input', { class: 'chat-input', type: 'text', maxlength: '256', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', enterkeyhint: 'send', placeholder: 'Message ou /commande (ex. /help)' });
+    const usage = el('div', { class: 'bh-usage' });
+    const quick = el('div', { class: 'bh-quick' });
+    const input = el('input', { class: 'chat-input', type: 'text', maxlength: '256', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', enterkeyhint: 'send', placeholder: '' });
     input.value = prefill;
     let hIdx = this.history.length;
-    const send = el('button', { class: 'mc-btn chat-send', type: 'button', style: '--w:24', 'aria-label': 'Envoyer' }, el('span', {}, '➤'));
-    const slash = el('button', { class: 'mc-btn chat-send', type: 'button', style: '--w:20' }, el('span', {}, '/'));
-    const close = el('button', { class: 'mc-btn chat-send', type: 'button', style: '--w:20' }, el('span', {}, '✕'));
+    // ----- barre du haut -----
+    const backLbl = el('span', {}, tb('Quitter'));
+    const back = el('button', { class: 'bh-chat-back', type: 'button' }, bhIconEl('back'), backLbl);
+    const bar = el('div', { class: 'bh-chat-bar' }, back, el('div', { class: 'bh-chat-title' }, tb('Tchat et commandes')));
+    // ----- barre de saisie : clavier, « / », réglages, champ, envoi -----
+    const kb = el('button', { class: 'bh-chat-ib', type: 'button', 'aria-label': 'Clavier' }, bhIconEl('keyboard'));
+    const slash = el('button', { class: 'bh-chat-ib', type: 'button', 'aria-label': 'Commandes' }, '/');
+    const gear = el('button', { class: 'bh-chat-ib', type: 'button', 'aria-label': 'Paramètres' }, bhIconEl('gear'));
+    const send = el('button', { class: 'bh-chat-send', type: 'button', 'aria-label': 'Envoyer' }, bhIconEl('send'));
+    const row = el('div', { class: 'bh-chat-input' }, kb, slash, gear, input, send);
     this.refreshLog = () => {
       log.replaceChildren(...this.lines.slice(-60).map((l) => this.lineEl(l)));
       log.scrollTop = log.scrollHeight;
     };
     this.refreshLog();
+
+    // ----- liste rapide (point d'apparition, téléportation, heure, météo) -----
+    let commandMode = prefill.startsWith('/');
+    let who = '@s';
+    const path: QItem[] = [];
+    const quickList = () => QUICK(game.session!, () => who, (w) => (who = w));
+    const showUsage = (cmd: string | undefined) => {
+      const name = cmd?.replace(/^\//, '').split(' ')[0];
+      const defs = name ? commandList().filter((c) => c.name === name) : [];
+      usage.replaceChildren(...defs.map((d) => el('div', {}, d.usage)));
+    };
+    const runQuick = (cmd: string) => {
+      this.add(cmd, 'chat');
+      game.session?.runCommand(cmd);
+      path.length = 0;
+      input.value = '';
+      renderQuick();
+    };
+    const renderQuick = () => {
+      const typing = input.value.trim() !== '' && path.length === 0;
+      const visible = commandMode && !typing;
+      quick.style.display = visible ? '' : 'none';
+      usage.style.display = visible && path.length ? '' : 'none';
+      backLbl.textContent = tb(commandMode ? 'Retour' : 'Quitter');
+      if (!visible) return;
+      const items = path.length ? path[path.length - 1].children ?? [] : quickList();
+      const nodes: HTMLElement[] = [];
+      if (path.length) {
+        const head = path[path.length - 1];
+        const b = bhButton(head.label, () => {
+          path.pop();
+          input.value = path.length ? path[path.length - 1].prefix ?? '' : '';
+          showUsage(path[path.length - 1]?.prefix);
+          renderQuick();
+        }, { cls: 'bh-q head', back: true });
+        nodes.push(b);
+      }
+      items.forEach((it, idx) => {
+        const leaf = !it.children;
+        const b = bhButton(it.label, () => {
+          if (it.pick) it.pick();
+          if (it.run) return runQuick(it.run());
+          if (it.children) {
+            path.push(it);
+            input.value = it.prefix ?? '';
+            showUsage(it.prefix);
+            renderQuick();
+          } else if (it.pick) {
+            // choix d'un paramètre (cible de téléportation) : retour à la liste précédente
+            path.pop();
+            input.value = path.length ? `${path[path.length - 1].prefix ?? ''} ${who}`.trim() : '';
+            renderQuick();
+          }
+        }, { cls: `bh-q${path.length ? ' sub' : ''}${leaf && path.length && it.icon ? ' opt' : ''}${idx === 0 ? ' sel' : ''}`, chevron: !!it.children });
+        if (it.icon && !it.children) {
+          const ic = el('i', { class: 'bh-q-ic' });
+          ic.style.backgroundImage = `url(${quickIcon(it.icon)})`;
+          b.prepend(ic);
+        }
+        b.addEventListener('pointerenter', () => nodes.forEach((n) => n.classList.toggle('sel', n === b)));
+        nodes.push(b);
+      });
+      quick.replaceChildren(...nodes);
+    };
+    const stepBack = () => {
+      if (commandMode && path.length) {
+        path.pop();
+        input.value = path.length ? path[path.length - 1].prefix ?? '' : '';
+        showUsage(path[path.length - 1]?.prefix);
+        renderQuick();
+      } else if (commandMode) {
+        commandMode = false;
+        input.value = '';
+        usage.replaceChildren();
+        renderQuick();
+        updateSugg();
+      } else this.close();
+    };
     const updateSugg = () => {
       const v = input.value;
-      if (!v.startsWith('/')) {
+      if (!v.startsWith('/') || (commandMode && path.length)) {
         sugg.replaceChildren();
         return;
       }
@@ -107,8 +197,10 @@ export class ChatUI {
       updateSugg();
     };
     const submit = () => {
-      const v = input.value.trim();
+      let v = input.value.trim();
       if (!v) return this.close();
+      // mode commandes : la barre oblique est facultative
+      if (commandMode && !v.startsWith('/')) v = `/${v}`;
       this.history.push(v);
       if (this.history.length > 50) this.history.shift();
       if (v.startsWith('/')) {
@@ -126,7 +218,7 @@ export class ChatUI {
     input.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') submit();
-      else if (e.key === 'Escape') this.close();
+      else if (e.key === 'Escape') stepBack();
       else if (e.key === 'Tab') {
         e.preventDefault();
         const first = sugg.firstElementChild?.textContent;
@@ -141,21 +233,34 @@ export class ChatUI {
         e.preventDefault();
       }
     });
-    input.addEventListener('input', updateSugg);
-    send.addEventListener('click', submit);
-    slash.addEventListener('click', () => {
-      if (!input.value.startsWith('/')) input.value = `/${input.value}`;
-      input.focus();
+    input.addEventListener('input', () => {
+      if (!input.value.trim()) path.length = 0;
+      renderQuick();
       updateSugg();
     });
-    close.addEventListener('click', () => this.close());
-    const help = el('div', { class: 'chat-help' }, `${commandList().length} commandes : tapez / pour voir les suggestions`);
-    const root = el('div', { class: 'screen chat-screen' }, log, el('div', { class: 'chat-bottom' }, sugg, help, el('div', { class: 'chat-row' }, slash, input, send, close)));
-    root.addEventListener('pointerdown', (e) => {
-      if (e.target === root) this.close();
+    send.addEventListener('click', submit);
+    back.addEventListener('click', stepBack);
+    kb.addEventListener('click', () => input.focus());
+    slash.addEventListener('click', () => {
+      // « / » : bascule vers les commandes (liste rapide) ; un second toucher écrit la barre oblique
+      if (!commandMode) {
+        commandMode = true;
+        input.value = '';
+        renderQuick();
+        updateSugg();
+      } else if (!input.value.startsWith('/')) {
+        input.value = `/${input.value}`;
+        renderQuick();
+        updateSugg();
+      }
+      input.focus();
     });
-    this.screen = { el: root, onBack: () => (this.close(), true) };
+    gear.addEventListener('click', () => game.showSettings());
+    const root = el('div', { class: 'screen bh-chat' }, bar, el('div', { class: 'bh-chat-mid' }, log, usage, quick, sugg), row);
+    this.screen = { el: root, onBack: () => (stepBack(), true) };
+    document.documentElement.classList.add('bh-chatting');
     game.ui.push(this.screen);
+    renderQuick();
     updateSugg();
     setTimeout(() => input.focus(), 30);
     this.renderFeed();
@@ -166,6 +271,7 @@ export class ChatUI {
     const s = this.screen;
     this.screen = null;
     this.refreshLog = null;
+    document.documentElement.classList.remove('bh-chatting');
     this.game.ui.remove(s);
     this.game.onChatClosed();
     this.renderFeed();

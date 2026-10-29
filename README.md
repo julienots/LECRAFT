@@ -273,6 +273,31 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **Interface identique à Minecraft Bedrock mobile, objets Java et disques (v2.32)**
+  - **Menus** : écran de démarrage et chargement, menu principal (Jouer, Paramètres, Realms,
+    Magasin, Social, Profil, Vestiaire), écran Jouer (Mondes, Realms, Serveurs), création de
+    monde avec toutes les sections (Général, Avancé, Multijoueur, Triche, packs,
+    expérimentations) et chargement avec les astuces du jeu. Les options que le moteur n'a
+    pas (monde plat, hardcore, propagation du feu, blocs de commandes…) sont affichées et
+    conservées sans effet simulé.
+  - **En jeu** : HUD (position, jours joués, cœurs, nourriture, XP, barre d'objets avec « … »),
+    commandes tactiles (joystick carré, sprint, sauter, s'accroupir), menu de pause, réglages
+    par catégories, « Tchat et commandes » avec boutons rapides (point d'apparition,
+    téléportation, heure, météo).
+  - **Inventaires** : survie avec livre de recettes fonctionnel (recherche, filtre, clic pour
+    placer la recette), créatif « Tous les objets » en 17 colonnes avec recherche et toutes les
+    variantes (potions normales, jetables, persistantes, longues, renforcées, flèches à effet,
+    livres enchantés de chaque niveau), établi, four, coffre, enclume, alambic, échanges.
+  - **Objets et blocs Java** : environ 140 ajoutés (lits de 16 couleurs, bannières, têtes,
+    coffre piégé, coffres et blocs de cuivre cirés, pot décoré, blocs infestés d'où sort un
+    poisson d'argent, plaques pondérées…) avec leurs recettes Java ; flèches spectrales et à
+    effet utilisables à l'arc et à l'arbalète.
+  - **Disques et juke-box** : le juke-box joue les disques (musique propre à chaque disque,
+    composée par le jeu, positionnelle jusqu'à 64 blocs, signal de redstone), message « Lecture
+    en cours » ; 4 nouveaux disques originaux angoissants (« murmures », « toc », « signal
+    perdu », « gouffre »), lâchés par un creeper tué par un squelette.
+  - **Objets tenus** : en vue à la 3e personne, les outils sont tenus par le manche (ils
+    l'étaient par la tête) ; marteau redessiné ; armure visible sur le personnage de l'inventaire.
 - **Audit complet face à Minecraft Java 1.21 (v2.31)**
   - **Joueur** :
     - déplacements calculés par tick comme le jeu Java : marche 4,317 m/s, sprint

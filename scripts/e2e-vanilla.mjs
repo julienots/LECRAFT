@@ -317,10 +317,10 @@ try {
   ]));
   await page.keyboard.press('Escape');
   await wait(300);
-  await page.getByText('Options...').click();
-  await page.getByText('Packs de ressources...').click();
+  await page.getByText('Paramètres', { exact: true }).click();
+  await page.locator('[data-nav="packs"]').click();
   await wait(200);
-  await page.locator('.mc-screen').last().locator('input[type=file]').setInputFiles(zipPath);
+  await page.locator('.bh-pane input[type=file]').setInputFiles(zipPath);
   await page.waitForFunction(() => /importés depuis/.test(document.body.innerText), null, { timeout: 20000 });
   const px = await G(() => {
     const g = window.__lecraft, t = g.textures;
@@ -335,9 +335,9 @@ try {
   await page.waitForFunction(() => window.__lecraft?.state === 'menu');
   const persisted = await G(() => window.__lecraft.textures.packName);
   check('Pack conservé après redémarrage (stockage local)', persisted === 'pack-test.zip', persisted);
-  await page.getByText('Options...').click();
-  await page.getByText('Packs de ressources...').click();
-  await page.getByText('Retirer le pack').click();
+  await page.getByText('Paramètres', { exact: true }).click();
+  await page.locator('[data-nav="packs"]').click();
+  await page.locator('.bh-pane .bh-btn', { hasText: 'Retirer' }).click();
   await wait(500);
   const cleared = await G(() => ({ name: window.__lecraft.textures.packName, px: [...window.__lecraft.textures.tileByName('stone').getContext('2d').getImageData(4, 4, 1, 1).data] }));
   check('Retirer le pack rétablit les textures du jeu', cleared.name === null && !(cleared.px[0] === 255 && cleared.px[1] === 0), JSON.stringify(cleared));

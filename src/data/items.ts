@@ -2,7 +2,9 @@ import type { ItemDef } from '../inventory/Item';
 import { BLOCK_DEFS } from './blocks';
 
 /** Blocs non obtenables en tant qu'objet (ou obtenus via un objet dédié). */
-const NO_ITEM = new Set(['air', 'water', 'lava', 'bedrock', 'wheat', 'carrots', 'potatoes', 'farmland', 'boss_altar', 'spawner', 'dirt_path', 'snowy_grass_block', 'lit_furnace', 'oak_door', 'red_bed', 'sugar_cane', 'snow', 'amethyst_cluster', 'glow_lichen']);
+// (bedrock, terre labourée, générateur, chemin, couche de neige, amas d'améthyste et lichen luisant
+// sont des objets de l'inventaire créatif du jeu original : ils ont désormais leur objet)
+const NO_ITEM = new Set(['air', 'water', 'lava', 'wheat', 'carrots', 'potatoes', 'boss_altar', 'snowy_grass_block', 'lit_furnace', 'oak_door', 'red_bed', 'sugar_cane']);
 
 /** Matériaux d'outils (valeurs du jeu vanilla Java). */
 export const MATERIALS = {

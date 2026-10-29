@@ -15,13 +15,19 @@ import { RecipeRegistry } from '../crafting/RecipeRegistry';
 import type { Screen } from './UIManager';
 import { el } from './dom';
 import { rarityColor } from './Rarity';
-import { GUI_W, LAYOUT, containerBackground, packSprite, drawFigure, drawArmor, drawArrow, drawFlame, drawPanel, drawSlot, guiHeight, playerInvY, type ContainerKind } from './ContainerArt';
-import { pixelText } from './PixelFont';
-import { CREATIVE_TABS, creativeEntries, tabIcon, type CreativeTabKey } from './CreativeTabs';
+import { BLAYOUT, BODY_Y, LEFT_W, PANEL_W, RIGHT_X, bedrockBackground, bedrockBodyH, bedrockInvTop, drawFigure, drawArmor, drawFlame, packSprite, type ContainerKind } from './ContainerArt';
+import {
+  BC, drawBArrow, drawBButton, drawBField, drawBHeader, drawBListArea, drawBPanel, drawBSlot, drawBTab, drawBToggle, drawChestIcon, drawCraftIcon, drawCross, drawMagnifier, drawOpenBook,
+  drawQuestion, drawSmallMagnifier, drawTrash,
+} from './BedrockArt';
+import { pixelText, textWidth } from './PixelFont';
+import { CREATIVE_TABS, creativeEntries, creativeItems, recipeCategory, type CreativeTabKey } from './CreativeTabs';
 
 export type InventoryMode = 'hand' | 'table' | 'furnace' | 'chest' | 'ender' | 'enchant' | 'anvil' | 'brewing' | 'dispenser' | 'dropper' | 'hopper';
 
 type Group = 'main' | 'hotbar' | 'armor' | 'container' | 'grid' | 'result' | 'input' | 'fuel' | 'trash';
+/** Disposition : deux panneaux (liste à gauche, inventaire à droite), inventaire seul, ou grand panneau du catalogue créatif. */
+type View = 'split' | 'solo' | 'book';
 
 interface GuiSlot {
   canTake?(): boolean;
@@ -41,17 +47,49 @@ interface GuiSlot {
   ph?: string;
 }
 
+/** Entrée d'une liste défilante (objet du catalogue créatif ou recette du livre). */
+interface ListEntry {
+  item: string;
+  stack: ItemStack;
+  /** Recette dont les ingrédients manquent (fond rouge). */
+  red?: boolean;
+  tap(kind: 'tap' | 'long' | 'double' | 'right' | 'shift'): void;
+}
+
 const LONG_MS = 380;
 const DOUBLE_MS = 320;
+/** Colonnes de la liste : le catalogue plein écran en a 17, le panneau gauche 7. */
+const SPLIT_COLS = 7;
+const BOOK_COLS = 17;
+const TAB_X = [1, 29, 56, 84];
+const SEARCH_TAB_X = 136;
 
-/** Mémoire de l'état du livre de recettes / onglet créatif entre deux ouvertures. */
-const memory = { book: false, craftableOnly: true, ctab: 'building' as CreativeTabKey, query: '' };
-/** Inventaire créatif (fenêtre du jeu original : 195 × 136, onglets de 26 × 32 au-dessus et en dessous). */
-const CR_W = 195, CR_H = 136, CR_TOP = 28;
+/** Mémoire de la disposition, des onglets et du filtre entre deux ouvertures. */
+const memory = {
+  view: 'split' as View,
+  crView: 'book' as View,
+  ctab: 'construction' as CreativeTabKey,
+  rtab: 'search' as CreativeTabKey,
+  query: '',
+  rquery: '',
+  craftableOnly: false,
+};
+
+/** Recettes connues du joueur : on découvre une recette en possédant l'un de ses ingrédients (l'établi est connu d'emblée). */
+const knownRecipes = new WeakMap<object, Set<string>>();
+function knownOf(owner: object): Set<string> {
+  let k = knownRecipes.get(owner);
+  if (!k) {
+    k = new Set(RecipeRegistry.crafting.filter((r) => r.result.item === 'crafting_table').map((r) => r.id));
+    knownRecipes.set(owner, k);
+  }
+  return k;
+}
 
 /**
- * Interfaces de conteneurs fidèles aux jeux de blocs « Java » : objet tenu au curseur,
- * grille de fabrication 2x2 / 3x3, fourneau, coffre, armure, livre de recettes et inventaire créatif.
+ * Interfaces de conteneurs fidèles à l'édition Bedrock : objet tenu au curseur, grille de
+ * fabrication 2x2 / 3x3, fourneau, coffre, armure, livre de recettes (liste de gauche) et
+ * catalogue créatif (onglets, « Tous les objets », recherche).
  *
  * Gestes (tactile) :
  *  - toucher : prendre / poser / échanger le stack (comme un clic gauche)
@@ -70,7 +108,6 @@ export class InventoryUI {
   private kind: ContainerKind;
   private wrap: HTMLElement;
   private gui: HTMLElement;
-  private side: HTMLElement | null = null;
   private cursorEl: HTMLElement;
   private tooltip: HTMLElement;
   private flameCtx: CanvasRenderingContext2D | null = null;
@@ -86,17 +123,29 @@ export class InventoryUI {
   private disposed = false;
   /** Bloc fonctionnel (table d'enchantement, enclume, alambic, distributeur, entonnoir). */
   private station: Station | null = null;
-  /** Mode créatif : inventaire créatif du jeu original à la place de l'inventaire de survie. */
+  /** Mode créatif : catalogue du jeu à la place du livre de recettes. */
   private creative = false;
-  /** Taille de la fenêtre quand elle diffère d'un conteneur standard (inventaire créatif). */
-  private guiW = 0;
-  private guiH = 0;
-  private crList: HTMLElement | null = null;
-  private crThumb: HTMLCanvasElement | null = null;
   private furnaceKind: 'furnace' | 'blast_furnace' | 'smoker' = 'furnace';
-  private bgFile: string | undefined;
+  private view: View = 'solo';
+  private rx = 0;
+  private compW = PANEL_W;
+  private compH = 210;
+  private rows = 3;
+  private cols = BOOK_COLS;
+  private title = '';
+  private hasRecipePanel = false;
+  private building = false;
 
-  constructor(private game: Game, private s: Session, private mode: InventoryMode, pos?: { x: number; y: number; z: number }) {
+  // liste défilante (catalogue créatif ou recettes)
+  private listEl: HTMLElement | null = null;
+  private listRect = { x: 7, y: 49, w: 148, h: 155, cols: SPLIT_COLS };
+  private listEntries: ListEntry[] = [];
+  private listFirst = -1;
+  private thumb: HTMLElement | null = null;
+  private recipeSig = '';
+  private unlockSig = '';
+
+  constructor(private game: Game, private s: Session, mode: InventoryMode, pos?: { x: number; y: number; z: number }) {
     const pinv = s.player.inventory;
     this.kind = mode === 'hand' ? 'inventory' : mode === 'ender' ? 'chest' : mode === 'dropper' ? 'dispenser' : mode;
     if (mode === 'chest' && pos) this.chestInv = s.world.getChest(pos.x, pos.y, pos.z);
@@ -104,25 +153,19 @@ export class InventoryUI {
     if (pos) this.station = this.makeStation(mode, pos);
     if (mode === 'furnace' && pos) this.furnace = s.world.getFurnace(pos.x, pos.y, pos.z);
     this.creative = mode === 'hand' && s.player.creative;
-    if (mode === 'hand' && !this.creative) this.grid = new CraftingGrid(2);
+    if (mode === 'hand') this.grid = new CraftingGrid(2);
     if (mode === 'table') this.grid = new CraftingGrid(3);
     const blockDef = pos ? BlockRegistry.get(s.world.getBlock(pos.x, pos.y, pos.z)) : null;
     const blockName = blockDef?.name ?? '';
     const blockKey = blockDef?.key ?? '';
-    // haut fourneau et fumoir : titre, fond et jauges propres (comme le jeu original)
+    // haut fourneau et fumoir : titre et jauges propres (comme le jeu original)
     this.furnaceKind = blockKey === 'blast_furnace' ? 'blast_furnace' : blockKey === 'smoker' ? 'smoker' : 'furnace';
     const furnaceTitle = { furnace: 'Fourneau', blast_furnace: 'Haut fourneau', smoker: 'Fumoir' }[this.furnaceKind];
-    this.bgFile = mode === 'furnace' ? `gui/container/${this.furnaceKind}.png` : blockKey.endsWith('shulker_box') ? 'gui/container/shulker_box.png' : undefined;
-    const title = this.station?.title ?? (mode === 'ender' ? "Coffre de l'Ender" : mode === 'chest' ? (blockName && !/^Coffre/.test(blockName) ? blockName : 'Coffre') : mode === 'table' ? 'Artisanat' : mode === 'furnace' ? furnaceTitle : '');
-    const h = guiHeight(this.kind);
+    this.title = this.station?.title ?? (mode === 'ender' ? "Coffre de l'Ender" : mode === 'chest' ? (blockName && !/^Coffre/.test(blockName) ? blockName : 'Coffre') : mode === 'table' ? 'Fabrication' : mode === 'furnace' ? furnaceTitle : '');
+    this.rows = this.chestInv ? Math.max(1, Math.ceil(this.chestInv.size / 9)) : 3;
+    this.hasRecipePanel = mode === 'hand' || mode === 'table' || mode === 'furnace';
 
-    if (this.creative) {
-      this.guiW = CR_W;
-      this.guiH = CR_TOP * 2 + CR_H;
-    }
-    this.gui = el('div', { class: 'gui', style: `width:${this.guiW || GUI_W}px;height:${this.guiH || h}px` });
-    if (this.creative) this.buildCreativeScreen();
-    else this.buildContainer(pinv, mode, title);
+    this.gui = el('div', { class: 'gui' });
     this.wrap = el('div', { class: 'gui-wrap' }, this.gui);
     this.cursorEl = el('div', { class: 'gui-cursor' });
     this.tooltip = el('div', { class: 'gui-tooltip' });
@@ -147,12 +190,22 @@ export class InventoryUI {
       this.dragOver(e.clientX, e.clientY);
     });
     this.screen = { el: root, onBack: () => (game.closeInventory(), true) };
-    this.buildSide();
+
+    document.body.classList.add('bi-open');
+    this.view = this.hasRecipePanel ? (this.creative ? memory.crView : memory.view === 'book' ? 'split' : memory.view) : 'solo';
+    this.build();
 
     const refresh = () => this.refresh();
     this.unsub.push(pinv.onChange(refresh));
     if (this.chestInv) this.unsub.push(this.chestInv.onChange(refresh));
-    const onResize = () => this.layout();
+    const onResize = () => {
+      const c = this.wantedCols();
+      if (c !== this.cols) {
+        this.build();
+        this.refresh();
+      }
+      this.layout();
+    };
     window.addEventListener('resize', onResize);
     this.unsub.push(() => window.removeEventListener('resize', onResize));
     if (this.furnace || this.station?.ticking) this.timer = window.setInterval(() => this.refresh(), 100);
@@ -163,54 +216,355 @@ export class InventoryUI {
 
   // ---------- construction ----------
 
-  /** Interface d'un conteneur ordinaire (inventaire de survie, coffre, fourneau, stations…). */
-  private buildContainer(pinv: Inventory, mode: InventoryMode, title: string) {
-    const bg = containerBackground(this.kind, title, this.game.textures, 3, `player_${this.game.settings.playerSkin ?? 'steve'}`, this.station?.artSlots ?? [], this.bgFile);
-    bg.className = 'gui-bg';
+  /** Nombre de colonnes du catalogue plein écran : 17 comme le jeu, moins sur un petit écran. */
+  private wantedCols() {
+    if (this.view !== 'book') return SPLIT_COLS;
+    const maxW = (window.innerWidth - 12) / 1.5;
+    return Math.max(SPLIT_COLS, Math.min(BOOK_COLS, Math.floor((maxW - 22) / 20)));
+  }
+
+  /** Construit (ou reconstruit après un changement de disposition ou d'onglet) tout le contenu de la fenêtre. */
+  private build() {
+    this.building = true;
+    const gui = this.gui;
+    gui.replaceChildren();
+    this.slots = [];
+    this.slotByEl = new WeakMap();
+    this.listEl = null;
+    this.thumb = null;
+    this.figure = null;
+    this.flameCtx = this.arrowCtx = null;
+    this.listEntries = [];
+    this.listFirst = -1;
+    this.recipeSig = '';
+    const view = this.view;
+    const book = view === 'book';
+    const split = view === 'split';
+    this.cols = this.wantedCols();
+    const bodyH = book ? 184 : bedrockBodyH(this.kind, this.rows);
+    this.rx = split ? RIGHT_X : 0;
+    this.compW = book ? this.cols * 20 + 22 : split ? RIGHT_X + PANEL_W : PANEL_W;
+    const trashRow = this.creative && !book;
+    this.compH = BODY_Y + bodyH + (book ? 25 : trashRow ? 26 : 0);
+    gui.style.width = `${this.compW}px`;
+    gui.style.height = `${this.compH}px`;
+
+    // panneau gauche (liste) ou grand panneau du catalogue
+    if (book || split) this.buildLeft(bodyH);
+    // panneau droit : inventaire, fabrication, conteneur
+    if (!book) this.buildRight(bodyH);
+    else this.buildTray();
+    this.buildHeader();
+    if (book || split) this.buildTabs();
+    this.building = false;
+  }
+
+  /** Panneau de gauche : fond, titre, recherche, liste défilante. */
+  private buildLeft(bodyH: number) {
+    const book = this.view === 'book';
+    const w = book ? this.compW : LEFT_W;
+    const bg = this.canvasAt(0, 0, book ? w : RIGHT_X, BODY_Y + bodyH);
+    bg.className = 'gui-bg gui-side';
+    const g = bg.getContext('2d')!;
+    drawBPanel(g, 0, BODY_Y, w, bodyH);
+    if (!book) {
+      g.fillStyle = '#606060';
+      g.fillRect(w, 32, RIGHT_X - w, bodyH - 11);
+    }
     this.gui.append(bg);
-    // personnage de l'inventaire avec son armure (redessiné quand l'armure change)
-    if (this.kind === 'inventory') this.addFigure(35, 12, 2);
+    const key = this.creative ? memory.ctab : memory.rtab;
+    const search = key === 'search';
+    const cols = this.cols;
+    const listW = cols * 20 + 8;
+    const x = 7;
+    const y = search ? 67 : 49;
+    const h = BODY_Y + bodyH - 6 - y;
+    this.listRect = { x, y, w: listW, h, cols };
+    // titre, aligné à droite du panneau
+    const tab = CREATIVE_TABS.find((t) => t.key === key) ?? CREATIVE_TABS[CREATIVE_TABS.length - 1];
+    const toggleOn = !this.creative && memory.craftableOnly;
+    const title = this.creative ? tab.name : search ? (toggleOn ? 'Recettes fabricables' : 'Toutes les recettes') : tab.name;
+    const lbl = pixelText(tr(title), { color: BC.text, cls: 'gui-abs bi-title' });
+    lbl.style.left = `${x + listW - 3 - textWidth(tr(title))}px`;
+    lbl.style.top = '33px';
+    this.gui.append(lbl);
+    const barW = !this.creative ? listW - 36 : listW;
+    if (search) {
+      const f = this.canvasAt(x, 47, barW, 18);
+      drawBField(f.getContext('2d')!, 0, 0, barW, 18);
+      drawSmallMagnifier(f.getContext('2d')!, 4, 4);
+      this.gui.append(f);
+      const q = this.creative ? memory.query : memory.rquery;
+      const input = el('input', { class: 'cr-search bi-search', type: 'text', value: q, placeholder: '', spellcheck: 'false', style: `left:${x + 19}px;top:50px;width:${barW - 24}px;height:11px` }) as HTMLInputElement;
+      input.addEventListener('input', () => {
+        if (this.creative) memory.query = input.value;
+        else memory.rquery = input.value;
+        if (this.creative) this.fillCreativeList();
+        else {
+          this.recipeSig = '';
+          this.refreshRecipes();
+        }
+      });
+      // les touches tapées ne doivent pas commander le jeu (E, Échap…)
+      input.addEventListener('keydown', (e) => e.stopPropagation());
+      input.addEventListener('pointerdown', (e) => e.stopPropagation());
+      input.addEventListener('pointerup', (e) => e.stopPropagation());
+      this.gui.append(input);
+    }
+    // filtre « recettes fabricables »
+    if (!this.creative) {
+      const tg = this.canvasAt(x + listW - 28, search ? 47 : 30, 28, 17);
+      tg.className = 'gui-layer gui-btn bi-toggle';
+      tg.dataset.btn = 'filter';
+      drawBToggle(tg.getContext('2d')!, 0, 0, toggleOn);
+      tg.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        memory.craftableOnly = !memory.craftableOnly;
+        this.click();
+        this.build();
+        this.refresh();
+      });
+      const ico = el('img', { class: 'gui-layer', src: this.game.textures.iconURL('crafting_table') ?? '', alt: '', style: `left:${x + listW - 26}px;top:${(search ? 47 : 30) + 2}px;width:13px;height:13px;image-rendering:pixelated` });
+      this.gui.append(tg, ico);
+    }
+    // zone de la liste
+    const area = this.canvasAt(x, y, listW, h);
+    drawBListArea(area.getContext('2d')!, 0, 0, listW, h);
+    this.gui.append(area);
+    const list = el('div', { class: `bi-list ${this.creative ? 'cr-grid' : 'book'}`, style: `left:${x}px;top:${y}px;width:${cols * 20}px;height:${h}px` });
+    list.addEventListener('scroll', () => this.renderRows());
+    list.addEventListener('pointerup', (e) => {
+      e.stopPropagation();
+      // poser un objet sur la liste le supprime (comme le jeu original)
+      if (e.target === list && this.carried && this.creative) {
+        this.carried = null;
+        this.refresh();
+      }
+    });
+    this.gui.append(list);
+    this.listEl = list;
+    // ascenseur
+    const track = el('div', { class: 'bi-track gui-btn', style: `left:${x + cols * 20}px;top:${y}px;width:8px;height:${h}px` });
+    const thumb = el('div', { class: 'bi-thumb', style: 'left:1px;top:0;width:5px;height:14px' });
+    track.append(thumb);
+    let dragging = false;
+    const scrollTo = (clientY: number) => {
+      const r = track.getBoundingClientRect();
+      const th = this.thumbHeight();
+      const f = Math.max(0, Math.min(1, (clientY - r.top - ((th / 2) * r.height) / h) / (r.height - (th * r.height) / h)));
+      list.scrollTop = f * Math.max(0, list.scrollHeight - list.clientHeight);
+    };
+    track.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      dragging = true;
+      track.setPointerCapture(e.pointerId);
+      scrollTo(e.clientY);
+    });
+    track.addEventListener('pointermove', (e) => dragging && scrollTo(e.clientY));
+    track.addEventListener('pointerup', (e) => {
+      e.stopPropagation();
+      dragging = false;
+    });
+    this.gui.append(track);
+    this.thumb = thumb;
+    if (this.creative) this.fillCreativeList();
+    else this.refreshRecipes();
+  }
+
+  /** Panneau de droite : inventaire du joueur, fabrication, fourneau, coffre ou station. */
+  private buildRight(bodyH: number) {
+    const rx = this.rx;
+    const pinv = this.s.player.inventory;
+    const stCells: [number, number][] = (this.station?.slots ?? []).map((st) => [st.x + 9 - 2, st.y + 30 - 2]);
+    const bg = bedrockBackground(this.kind, tr(this.title), this.game.textures, this.rows, `player_${this.game.settings.playerSkin ?? 'steve'}`, stCells);
+    bg.className = 'gui-bg';
+    bg.style.left = `${rx}px`;
+    this.gui.append(bg);
+    if (this.kind === 'inventory') {
+      const f = BLAYOUT.inventory.figure;
+      this.addFigure(rx + f[0] + 12, f[1] + 9, 2);
+    }
     this.buildSlots(pinv);
     for (const sl of this.slots) this.gui.append(this.slotEl(sl));
-    this.station?.decorate(this.gui);
+    // éléments propres à la station (boutons de la table d'enchantement, champ de l'enclume, jauges de l'alambic)
+    if (this.station) {
+      const layer = el('div', { class: 'gui-layer', style: `left:${rx + 9}px;top:30px;width:1px;height:1px;overflow:visible` });
+      this.station.decorate(layer);
+      this.gui.append(layer);
+    }
     if (this.furnace) {
-      const L = LAYOUT.furnace;
-      const fc = this.canvasAt(L.flame[0], L.flame[1], 14, 14);
-      const ac = this.canvasAt(L.arrow[0], L.arrow[1], 24, 17);
+      const L = BLAYOUT.furnace;
+      const fc = this.canvasAt(rx + L.flame[0], L.flame[1], 14, 14);
+      const ac = this.canvasAt(rx + L.arrow[0], L.arrow[1], 24, 16);
       this.flameCtx = fc.getContext('2d');
       this.arrowCtx = ac.getContext('2d');
       this.gui.append(fc, ac);
     }
-    // case de la seconde main du fond original (bouclier en silhouette)
-    if (this.kind === 'inventory' && this.game.textures.packImage('gui/container/inventory.png')) {
-      const sh = packSprite(this.game.textures, 'container/slot/shield');
-      if (sh) this.gui.append(el('div', { class: 'gui-layer', style: `left:77px;top:62px;width:16px;height:16px;background:url(${sh}) 0 0 / 100% 100%` }));
-    }
     if (this.grid) {
-      const [ax, ay] = this.kind === 'inventory' ? LAYOUT.inventory.arrow : LAYOUT.table.arrow;
-      if (!this.game.textures.packImage(`gui/container/${this.kind === 'inventory' ? 'inventory' : 'crafting_table'}.png`)) {
-        const c = this.canvasAt(ax, ay, 22, 15);
-        drawArrow(c.getContext('2d')!, 0, 0, 0);
-        this.gui.append(c);
+      const [ax, ay] = this.kind === 'inventory' ? BLAYOUT.inventory.arrow : BLAYOUT.table.arrow;
+      if (this.kind === 'table') {
+        // flèche de la table : repère propre (le fond la dessine déjà)
       }
+      void ax;
+      void ay;
     }
-    // bouton du livre de recettes / de l'inventaire créatif
-    if (mode === 'hand' || mode === 'table' || mode === 'furnace') {
-      const [bx, by] = mode === 'hand' ? LAYOUT.inventory.book : mode === 'table' ? LAYOUT.table.book : LAYOUT.furnace.book;
-      const btn = this.canvasAt(bx, by, 20, 18);
-      this.drawBookButton(btn.getContext('2d')!);
-      btn.classList.add('gui-btn');
-      btn.addEventListener('pointerup', (e) => {
+    // poubelle du catalogue créatif (sous le panneau, à droite)
+    if (this.creative) {
+      const tw = 32, th = 28;
+      const tx = rx + PANEL_W - tw - 6, ty = BODY_Y + bodyH - 4;
+      const t = this.canvasAt(tx, ty, tw, th);
+      const g = t.getContext('2d')!;
+      drawBPanel(g, 0, 0, tw, th);
+      drawBPanel(g, 0, 0, tw, 6);
+      g.fillStyle = BC.panel;
+      g.fillRect(2, 0, tw - 4, 6);
+      drawBSlot(g, 6, 4);
+      drawTrash(g, 8, 4);
+      t.style.zIndex = '0';
+      this.gui.insertBefore(t, this.gui.firstChild);
+      const sl: GuiSlot = { x: tx + 8, y: ty + 6, group: 'trash', get: () => null, set: () => {}, key: 'trash' };
+      this.slots.push(sl);
+      this.gui.append(this.slotEl(sl));
+    }
+  }
+
+  /** Barre d'objets (9 cases) sous le grand panneau du catalogue créatif. */
+  private buildTray() {
+    const pinv = this.s.player.inventory;
+    const w = 193, x0 = Math.round((this.compW - w) / 2), y0 = BODY_Y + 184 - 14;
+    const c = this.canvasAt(x0, y0, w, 39);
+    const g = c.getContext('2d')!;
+    drawBPanel(g, 0, 0, w, 39);
+    // le plateau rejoint le grand panneau : on efface le trait du bas du panneau sur sa largeur
+    g.fillStyle = BC.panel;
+    g.fillRect(2, 0, w - 4, 20);
+    for (let i = 0; i < 9; i++) drawBSlot(g, 7 + i * 20, 13);
+    c.className = 'gui-bg bi-tray';
+    // placé sous le panneau du catalogue mais au-dessus de son trait du bas
+    this.gui.insertBefore(c, this.gui.firstChild);
+    const mask = this.canvasAt(x0 + 2, BODY_Y + 184 - 5, w - 4, 5);
+    mask.className = 'gui-bg';
+    const mg = mask.getContext('2d')!;
+    mg.fillStyle = BC.panel;
+    mg.fillRect(0, 0, w - 4, 5);
+    this.gui.append(mask);
+    for (let i = 0; i < 9; i++) {
+      this.slots.push({ x: x0 + 7 + i * 20 + 2, y: y0 + 13 + 2, group: 'hotbar', get: () => pinv.slots[i], set: (v) => (pinv.slots[i] = v), key: `inv${i}` });
+    }
+    for (const sl of this.slots) this.gui.append(this.slotEl(sl));
+  }
+
+  /** En-tête sombre en haut à droite : boutons de disposition, aide et fermeture. */
+  private buildHeader() {
+    const book = this.view === 'book';
+    const buttons: ('book' | 'craft' | 'chest')[] = !this.hasRecipePanel ? [] : this.creative ? ['book', 'craft', 'chest'] : ['craft', 'chest'];
+    const hw = buttons.length === 3 ? 139 : buttons.length === 2 ? 110 : 40;
+    const right = book ? this.compW : this.rx + PANEL_W;
+    const hx = right - hw;
+    const bg = this.canvasAt(hx, 0, hw, 27);
+    bg.className = 'gui-bg bi-header';
+    drawBHeader(bg.getContext('2d')!, 0, 0, hw, 27);
+    this.gui.append(bg);
+    const sel = book ? 'book' : this.view === 'split' ? 'craft' : 'chest';
+    buttons.forEach((b, i) => {
+      const bx = hx + 8 + i * 29;
+      const c = this.canvasAt(bx, 5, 27, 19);
+      c.className = 'gui-layer gui-btn bi-hbtn';
+      c.dataset.btn = b;
+      const g = c.getContext('2d')!;
+      drawBButton(g, 0, 0, 27, 19, b === sel);
+      if (b === 'book') drawOpenBook(g, 4, 3);
+      else if (b === 'craft') drawCraftIcon(g, 4, 3);
+      else drawChestIcon(g, 6, 4);
+      c.addEventListener('pointerup', (e) => {
         e.stopPropagation();
-        memory.book = !memory.book;
+        const next: View = b === 'book' ? 'book' : b === 'craft' ? 'split' : 'solo';
+        if (next === this.view) return;
+        this.view = next;
+        if (this.creative) memory.crView = next;
+        else memory.view = next;
         this.click();
-        this.buildSide();
+        this.build();
+        this.refresh();
         this.layout();
       });
-      this.gui.append(btn);
+      this.gui.append(c);
+    });
+    const off = hw - (buttons.length ? 33 : 20);
+    if (buttons.length) {
+      const q = this.canvasAt(hx + off - 2, 8, 5, 7);
+      drawQuestion(q.getContext('2d')!, 0, 0);
+      const qb = el('div', { class: 'gui-btn bi-hbtn', 'data-btn': 'help', style: `position:absolute;left:${hx + off - 20}px;top:3px;width:17px;height:21px` });
+      qb.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        this.game.hud.toast('Toucher : prendre / poser. Appui long : moitié. Double toucher : transfert rapide.');
+      });
+      this.gui.append(q, qb);
     }
-
+    const x = this.canvasAt(hx + hw - 18, 9, 5, 5);
+    drawCross(x.getContext('2d')!, 0, 0);
+    const xb = el('div', { class: 'gui-btn bi-hbtn', 'data-btn': 'close', style: `position:absolute;left:${hx + hw - 24}px;top:3px;width:17px;height:21px` });
+    xb.addEventListener('pointerup', (e) => {
+      e.stopPropagation();
+      this.game.closeInventory();
+    });
+    this.gui.append(x, xb);
   }
+
+  /** Onglets au-dessus du panneau gauche : catégories (catalogue ou recettes connues) et recherche. */
+  private buildTabs() {
+    const tm = this.game.textures;
+    const cur = this.creative ? memory.ctab : memory.rtab;
+    let keys: CreativeTabKey[];
+    if (this.creative) keys = CREATIVE_TABS.filter((t) => t.key !== 'search').map((t) => t.key);
+    else {
+      const have = new Set(this.recipeEntriesAll().map((e) => recipeCategory(e.item)));
+      keys = CREATIVE_TABS.filter((t) => t.key !== 'search' && have.has(t.key as never)).map((t) => t.key);
+    }
+    const place = (key: CreativeTabKey, x: number) => {
+      const sel = key === cur;
+      const c = this.canvasAt(x, 0, 27, sel ? 29 : 27);
+      c.className = 'gui-layer gui-btn cr-tab bi-tab';
+      c.dataset.tab = key;
+      const t = CREATIVE_TABS.find((v) => v.key === key)!;
+      c.title = tr(t.name);
+      drawBTab(c.getContext('2d')!, 0, 0, 27, sel ? 29 : 27, sel);
+      const icon = el('div', { class: 'gui-layer', style: `left:${x}px;top:${sel ? 1 : 2}px;width:27px;height:26px` });
+      const add = (id: string, l: number, tp: number, sz: number) => {
+        const src = tm.iconURL(ItemRegistry.has(id) ? id : 'stick');
+        if (src) icon.append(el('img', { src, alt: '', style: `position:absolute;left:${l}px;top:${tp}px;width:${sz}px;height:${sz}px;image-rendering:pixelated` }));
+      };
+      if (key === 'construction') add('bricks', 5, 4, 17);
+      else if (key === 'equipment') {
+        add('diamond_sword', 3, 2, 17);
+        add('iron_helmet', 11, 11, 12);
+      } else if (key === 'items') {
+        add(ItemRegistry.has('red_bed') ? 'red_bed' : 'white_bed', 4, 3, 17);
+        add('water_bucket', 4, 13, 9);
+      } else if (key === 'nature') add('grass_block', 5, 4, 17);
+      else {
+        const m = this.canvasAt(5, 4, 17, 17);
+        drawMagnifier(m.getContext('2d')!, 0, 0, 17);
+        icon.append(m);
+      }
+      c.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        if (cur === key) return;
+        if (this.creative) memory.ctab = key;
+        else memory.rtab = key;
+        this.click();
+        this.build();
+        this.refresh();
+      });
+      return [c, icon];
+    };
+    // les onglets non sélectionnés d'abord (derrière), le sélectionné devant
+    keys.forEach((k, i) => k !== cur && this.gui.append(...place(k, TAB_X[i])));
+    if ('search' !== cur) this.gui.append(...place('search', SEARCH_TAB_X));
+    keys.forEach((k, i) => k === cur && this.gui.append(...place(k, TAB_X[i])));
+    if ('search' === cur) this.gui.append(...place('search', SEARCH_TAB_X));
+  }
+
   private makeStation(mode: InventoryMode, pos: { x: number; y: number; z: number }): Station | null {
     const host: StationHost = { game: this.game, s: this.s, refresh: () => this.refresh(), click: () => this.click(), canvasAt: (x, y, w, h) => this.canvasAt(x, y, w, h) };
     const w = this.s.world;
@@ -258,48 +612,39 @@ export class InventoryUI {
     return c;
   }
 
-  private drawBookButton(ctx: CanvasRenderingContext2D) {
-    drawPanel(ctx, 0, 0, 20, 18);
-    const px = (x: number, y: number, w: number, h: number, c: string) => ((ctx.fillStyle = c), ctx.fillRect(x, y, w, h));
-    px(5, 4, 10, 11, '#2f6b2a');
-    px(6, 5, 8, 9, '#4f9a3a');
-    px(13, 5, 1, 9, '#e8e8d8');
-    px(7, 7, 4, 1, '#a8d870');
-    px(7, 9, 4, 1, '#a8d870');
-  }
-
   private playerSlots(pinv: Inventory) {
-    const py = playerInvY(this.kind);
+    const rx = this.rx;
+    const py = bedrockInvTop(this.kind, this.rows) + 2;
     for (let r = 0; r < 3; r++)
       for (let c = 0; c < 9; c++) {
         const i = HOTBAR_SIZE + r * 9 + c;
-        this.slots.push({ x: 8 + c * 18, y: py + r * 18, group: 'main', get: () => pinv.slots[i], set: (v) => (pinv.slots[i] = v), key: `inv${i}` });
+        this.slots.push({ x: rx + 10 + c * 20, y: py + r * 20, group: 'main', get: () => pinv.slots[i], set: (v) => (pinv.slots[i] = v), key: `inv${i}` });
       }
-    for (let c = 0; c < 9; c++) this.slots.push({ x: 8 + c * 18, y: py + 58, group: 'hotbar', get: () => pinv.slots[c], set: (v) => (pinv.slots[c] = v), key: `inv${c}` });
+    for (let c = 0; c < 9; c++) this.slots.push({ x: rx + 10 + c * 20, y: py + 63, group: 'hotbar', get: () => pinv.slots[c], set: (v) => (pinv.slots[c] = v), key: `inv${c}` });
   }
 
   private buildSlots(pinv: Inventory) {
     const s = this.slots;
+    const rx = this.rx;
     if (this.kind === 'inventory') {
-      const ph: Record<ArmorSlot, string> = { head: 'helmet', chest: 'chestplate', legs: 'leggings', feet: 'boots' };
-      LAYOUT.inventory.armor.forEach(([x, y], i) => {
+      BLAYOUT.inventory.armor.forEach(([x, y], i) => {
         const a: ArmorSlot = ARMOR_SLOTS[i];
-        s.push({ x, y, group: 'armor', max: 1, ph: `container/slot/${ph[a]}`, get: () => pinv.armor[a], set: (v) => (pinv.armor[a] = v), accept: (st) => ItemRegistry.get(st.id)?.armor?.slot === a, key: `armor_${a}` });
+        s.push({ x: rx + x + 2, y: y + 2, group: 'armor', max: 1, get: () => pinv.armor[a], set: (v) => (pinv.armor[a] = v), accept: (st) => ItemRegistry.get(st.id)?.armor?.slot === a, key: `armor_${a}` });
       });
     }
     if (this.grid) {
       const g = this.grid;
-      const pos = this.kind === 'inventory' ? LAYOUT.inventory : LAYOUT.table;
-      pos.grid.forEach(([x, y], i) => s.push({ x, y, group: 'grid', get: () => g.slots[i], set: (v) => (g.slots[i] = v), key: `grid${i}` }));
-      s.push({ x: pos.result[0], y: pos.result[1], group: 'result', big: this.kind === 'table', get: () => g.result, set: () => {}, take: () => this.onCraft(), key: 'result' });
+      const pos = this.kind === 'inventory' ? BLAYOUT.inventory : BLAYOUT.table;
+      pos.grid.forEach(([x, y], i) => s.push({ x: rx + x + 2, y: y + 2, group: 'grid', get: () => g.slots[i], set: (v) => (g.slots[i] = v), key: `grid${i}` }));
+      s.push({ x: rx + pos.result[0] + 2, y: pos.result[1] + 2, group: 'result', get: () => g.result, set: () => {}, take: () => this.onCraft(), key: 'result' });
     }
     if (this.furnace) {
       const f = this.furnace;
-      const L = LAYOUT.furnace;
-      s.push({ x: L.input[0], y: L.input[1], group: 'input', get: () => f.input, set: (v) => (f.input = v), key: 'f_in' });
-      s.push({ x: L.fuel[0], y: L.fuel[1], group: 'fuel', get: () => f.fuel, set: (v) => (f.fuel = v), accept: (st) => (ItemRegistry.get(st.id)?.burnTime ?? 0) > 0 || st.id === 'bucket', key: 'f_fuel' });
+      const L = BLAYOUT.furnace;
+      s.push({ x: rx + L.input[0] + 2, y: L.input[1] + 2, group: 'input', get: () => f.input, set: (v) => (f.input = v), key: 'f_in' });
+      s.push({ x: rx + L.fuel[0] + 2, y: L.fuel[1] + 2, group: 'fuel', get: () => f.fuel, set: (v) => (f.fuel = v), accept: (st) => (ItemRegistry.get(st.id)?.burnTime ?? 0) > 0 || st.id === 'bucket', key: 'f_fuel' });
       s.push({
-        x: L.result[0], y: L.result[1], group: 'result', big: true,
+        x: rx + L.result[0] + 2, y: L.result[1] + 2, group: 'result',
         get: () => f.output,
         set: (v) => (f.output = v),
         take: () => {
@@ -315,19 +660,16 @@ export class InventoryUI {
     }
     if (this.station)
       for (const st of this.station.slots)
-        s.push({ x: st.x, y: st.y, group: st.take ? 'result' : 'container', big: st.big, max: st.max, get: st.get, set: st.set, accept: st.accept, take: st.take, canTake: st.canTake, key: st.key, ph: st.ph });
+        s.push({ x: rx + st.x + 9, y: st.y + 30, group: st.take ? 'result' : 'container', big: false, max: st.max, get: st.get, set: st.set, accept: st.accept, take: st.take, canTake: st.canTake, key: st.key, ph: st.ph });
     if (this.chestInv) {
       const ci = this.chestInv;
-      for (let i = 0; i < ci.size; i++) s.push({ x: 8 + (i % 9) * 18, y: 18 + Math.floor(i / 9) * 18, group: 'container', get: () => ci.slots[i], set: (v) => (ci.slots[i] = v), key: `chest${i}` });
+      for (let i = 0; i < ci.size; i++) s.push({ x: rx + 10 + (i % 9) * 20, y: 48 + Math.floor(i / 9) * 20, group: 'container', get: () => ci.slots[i], set: (v) => (ci.slots[i] = v), key: `chest${i}` });
     }
     this.playerSlots(pinv);
   }
 
   private slotEl(sl: GuiSlot): HTMLElement {
-    const size = sl.big ? 26 : 18;
-    const o = (size - 16) / 2;
-    const d = el('div', { class: 'gslot', style: `left:${sl.x - o}px;top:${sl.y - o}px;width:${size}px;height:${size}px` });
-    if (sl.big) d.style.padding = `${o}px`;
+    const d = el('div', { class: 'gslot', style: `left:${sl.x - 2}px;top:${sl.y - 2}px;width:20px;height:20px` });
     sl.el = d;
     if (sl.key) d.dataset.key = sl.key;
     this.bindPress(d, (kind) => this.onSlot(sl, kind), sl);
@@ -344,7 +686,7 @@ export class InventoryUI {
     let e = document.elementFromPoint(x, y);
     while (e && !this.slotByEl.has(e)) e = e.parentElement;
     const sl = e ? this.slotByEl.get(e) : undefined;
-    if (!sl || sl.take || this.drag.slots.includes(sl)) return;
+    if (!sl || sl.take || sl.group === 'trash' || this.drag.slots.includes(sl)) return;
     const cur = sl.get();
     if (sl.accept && !sl.accept(this.carried)) return;
     if (cur && !canMerge(cur, this.carried)) return;
@@ -411,6 +753,17 @@ export class InventoryUI {
       }, 0)), LONG_MS);
     });
     const cancel = () => clearTimeout(t);
+    // le doigt qui glisse n'est pas un appui long : on annule dès que le contact s'éloigne de son point de départ
+    let sx = 0, sy = 0;
+    d.addEventListener('pointerdown', (e) => ((sx = e.clientX), (sy = e.clientY)));
+    d.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse' && Math.hypot(e.clientX - sx, e.clientY - sy) > 6 && this.drag) {
+        clearTimeout(t);
+        this.drag.one = false;
+        fired = false;
+        released = true;
+      }
+    });
     d.addEventListener('pointerleave', cancel);
     d.addEventListener('pointercancel', cancel);
     d.addEventListener('pointerup', (e) => {
@@ -449,13 +802,16 @@ export class InventoryUI {
       kind = 'double';
     } else if (kind === 'tap') this.lastTap = { slot: sl, t: now };
     this.undoLast = null;
-    // corbeille de l'inventaire créatif : Maj + clic (double toucher) vide tout l'inventaire
-    if (sl.key === 'trash' && (kind === 'double' || kind === 'shift')) {
-      const inv = this.s.player.inventory;
-      inv.slots.fill(null);
-      for (const a of ARMOR_SLOTS) inv.armor[a] = null;
-      inv.changed();
+    // corbeille de l'inventaire créatif : l'objet tenu y est détruit ; Maj + clic (double toucher) vide tout l'inventaire
+    if (sl.key === 'trash') {
+      if (kind === 'double' || kind === 'shift') {
+        const inv = this.s.player.inventory;
+        inv.slots.fill(null);
+        for (const a of ARMOR_SLOTS) inv.armor[a] = null;
+        inv.changed();
+      }
       this.carried = null;
+      this.click();
       this.afterChange();
       return;
     }
@@ -670,7 +1026,7 @@ export class InventoryUI {
       if (sl.el!.dataset.sig !== sig) {
         sl.el!.dataset.sig = sig;
         this.stackHTML(sl.el!, st);
-        // silhouette de la case vide (casque, plastron, lapis, fiole…)
+        // silhouette de la case vide (lapis, fiole…)
         const ph = !st && sl.ph ? packSprite(this.game.textures, sl.ph) : null;
         sl.el!.style.backgroundImage = ph ? `url(${ph})` : '';
         sl.el!.classList.toggle('ph', !!ph);
@@ -682,31 +1038,29 @@ export class InventoryUI {
       const f = this.furnace;
       const fc = this.flameCtx, ac = this.arrowCtx;
       fc.clearRect(0, 0, 14, 14);
-      ac.clearRect(0, 0, 24, 17);
+      ac.clearRect(0, 0, 24, 16);
       const flame = f.burnMax > 0 && f.burn > 0 ? Math.min(1, f.burn / f.burnMax) : 0;
       const prog = f.input ? Math.min(1, f.cook / (RecipeRegistry.smeltingFor(f.input.id)?.time ?? 10)) : 0;
       const sprites = this.game.textures;
       const fk = this.furnaceKind;
       const lit = sprites.packImage(`gui/sprites/container/${fk}/lit_progress.png`, 'gui/sprites/container/furnace/lit_progress.png');
-      const burn = sprites.packImage(`gui/sprites/container/${fk}/burn_progress.png`, 'gui/sprites/container/furnace/burn_progress.png');
-      const legacy = sprites.packImage(`gui/container/${fk}.png`, 'gui/container/furnace.png');
-      // comme le jeu original : flamme de ceil(13 × reste) + 1 px, flèche de ceil(24 × progression) px (24 × 16)
+      // comme le jeu original : flamme de ceil(13 × reste) + 1 px, flèche de ceil(24 × progression) px
       const h = flame > 0 ? Math.ceil(13 * flame) + 1 : 0;
       const w = Math.ceil(24 * prog);
-      if (lit && burn) {
+      if (lit) {
         if (h > 0) fc.drawImage(lit, 0, (lit.height * (14 - h)) / 14, lit.width, (lit.height * h) / 14, 0, 14 - h, 14, h);
-        if (w > 0) ac.drawImage(burn, 0, 0, (burn.width * w) / 24, burn.height, 0, 0, w, 16);
-      } else if (legacy) {
-        const k = legacy.width / 256;
-        if (h > 0) fc.drawImage(legacy, 176 * k, (14 - h) * k, 14 * k, h * k, 0, 14 - h, 14, h);
-        if (w > 0) ac.drawImage(legacy, 176 * k, 14 * k, w * k, 17 * k, 0, 0, w, 17);
-      } else {
-        drawFlame(fc, 0, 0, flame);
-        drawArrow(ac, 0, 1, prog);
+      } else drawFlame(fc, 0, 0, flame);
+      if (w > 0) {
+        ac.fillStyle = '#ffffff';
+        const tmp = document.createElement('canvas');
+        tmp.width = 24;
+        tmp.height = 16;
+        drawBArrow(tmp.getContext('2d')!, 0, 1, 1, 24);
+        ac.drawImage(tmp, 0, 0, w, 16, 0, 0, w, 16);
       }
     }
     this.station?.update();
-    if (this.side && (this.mode === 'hand' || this.mode === 'table' || this.mode === 'furnace') && memory.book && !this.s.player.creative) this.refreshBook();
+    if (!this.creative && this.listEl) this.refreshRecipes();
   }
 
   private placeCursor() {
@@ -771,360 +1125,234 @@ export class InventoryUI {
     this.tooltipTimer = window.setTimeout(() => (this.tooltip.style.display = 'none'), 2200);
   }
 
-  /** Mise à l'échelle entière si possible (pixels nets), centrée. */
+  /** Mise à l'échelle entière (ou demi-entière) si possible, pixels nets ; la même pour tous les écrans d'une même taille d'appareil. */
   private layout() {
-    const sideW = this.side ? this.side.offsetWidth / (this.scale || 1) || 0 : 0;
-    const w = (this.guiW || GUI_W) + (this.side ? (parseFloat(this.side.dataset.w ?? '0') || sideW) + 2 : 0);
-    const h = this.guiH || guiHeight(this.kind);
-    const fit = Math.min((window.innerWidth - 16) / w, (window.innerHeight - 12) / h);
-    const k = fit >= 2 ? Math.floor(fit * 2) / 2 : Math.max(1, fit);
+    const w = this.compW;
+    const h = this.compH;
+    const fitK = (cw: number, ch: number) => {
+      const fit = Math.min((window.innerWidth - 12) / cw, (window.innerHeight - 8) / ch);
+      return fit >= 2 ? Math.floor(fit * 2) / 2 : Math.max(0.5, fit);
+    };
+    // échelle de référence : celle du plus grand écran (catalogue créatif de 362 × 235), pour que tous les écrans aient la même taille
+    const k = Math.min(fitK(Math.max(w, 362), Math.max(h, 235)), fitK(w, h));
     this.scale = k;
     this.wrap.style.transform = `scale(${k})`;
     this.wrap.style.width = `${w}px`;
     this.wrap.style.height = `${h}px`;
     this.wrap.style.left = `${Math.round((window.innerWidth - w * k) / 2)}px`;
-    this.wrap.style.top = `${Math.round((window.innerHeight - h * k) / 2)}px`;
+    // le haut des panneaux reste au même endroit d'une disposition à l'autre (la hauteur de référence est celle du catalogue)
+    const ref = Math.max(h, 235);
+    this.wrap.style.top = `${Math.round((window.innerHeight - ref * k) / 2) - 1}px`;
+    this.drawFigureLayer();
   }
 
-  // ---------- panneau latéral : livre de recettes / créatif ----------
-  private buildSide() {
-    this.side?.remove();
-    this.side = null;
-    if (!memory.book || !(this.mode === 'hand' || this.mode === 'table' || this.mode === 'furnace')) return;
-    if (this.creative) return;
-    const w = 147;
-    const h = guiHeight(this.kind);
-    const side = el('div', { class: 'gui-side', style: `width:${w}px;height:${h}px` });
-    side.dataset.w = String(w);
-    const bg = document.createElement('canvas');
-    bg.width = w;
-    bg.height = h;
-    bg.className = 'gui-bg';
-    drawPanel(bg.getContext('2d')!, 0, 0, w, h);
-    side.append(bg);
-    this.wrap.prepend(side);
-    this.side = side;
-    this.buildBook(side, w, h);
+  // ---------- liste défilante (catalogue créatif, livre de recettes) ----------
+
+  /** Hauteur de la poignée de l'ascenseur. */
+  private thumbHeight() {
+    const l = this.listEl;
+    if (!l || !l.scrollHeight) return 14;
+    return Math.max(14, Math.min(this.listRect.h, (l.clientHeight / l.scrollHeight) * this.listRect.h));
   }
 
-
-  // ---------- inventaire créatif (comme le jeu original) ----------
-  private buildCreativeScreen() {
-    const tm = this.game.textures;
-    const gui = this.gui;
-    gui.replaceChildren();
-    this.slots = [];
-    this.crList = null;
-    this.crThumb = null;
-    const pinv = this.s.player.inventory;
-    const cur = CREATIVE_TABS.find((t) => t.key === memory.ctab) ?? CREATIVE_TABS[0];
-    const Y = CR_TOP;
-    // onglets : non sélectionnés derrière la fenêtre, sélectionné devant
-    const tabEl = (t: (typeof CREATIVE_TABS)[number]) => {
-      const sel = t === cur;
-      const x = t.right ? CR_W - 27 * (7 - t.col) + 1 : 27 * t.col;
-      const y = t.row === 'top' ? Y - 28 : Y + CR_H - 4;
-      const c = this.canvasAt(x, y, 26, 32);
-      const g = c.getContext('2d')!;
-      g.imageSmoothingEnabled = false;
-      const img = tm.packImage(`gui/sprites/container/creative_inventory/tab_${t.row}_${sel ? 'selected' : 'unselected'}_${t.col + 1}.png`);
-      if (img) g.drawImage(img, 0, 0, 26, 32);
-      else drawPanel(g, 0, t.row === 'top' ? 0 : 0, 26, 32);
-      c.classList.add('gui-btn', 'cr-tab');
-      c.dataset.tab = t.key;
-      c.title = tr(t.name);
-      const icon = el('img', { class: 'gui-layer', src: tm.iconURL(tabIcon(t)), alt: '', style: `left:${x + 5}px;top:${y + (t.row === 'top' ? 9 : 7)}px;width:16px;height:16px;image-rendering:pixelated;pointer-events:none` });
-      const pick = (e: Event) => {
-        e.stopPropagation();
-        if (memory.ctab === t.key) return;
-        memory.ctab = t.key;
-        this.click();
-        this.buildCreativeScreen();
-        this.refresh();
-      };
-      c.addEventListener('pointerup', pick);
-      return [c, icon];
-    };
-    for (const t of CREATIVE_TABS) if (t !== cur) gui.append(...tabEl(t));
-    // fond de la fenêtre (texture du pack, sinon panneau dessiné)
-    const bg = this.canvasAt(0, Y, CR_W, CR_H);
-    bg.className = 'gui-bg';
-    bg.style.top = `${Y}px`;
-    bg.style.left = '0px';
-    const ctx = bg.getContext('2d')!;
-    ctx.imageSmoothingEnabled = false;
-    const file = cur.key === 'search' ? 'tab_item_search' : cur.key === 'inventory' ? 'tab_inventory' : 'tab_items';
-    const img = tm.packImage(`gui/container/creative_inventory/${file}.png`);
-    if (img) {
-      const k = img.width / 256;
-      ctx.drawImage(img, 0, 0, CR_W * k, CR_H * k, 0, 0, CR_W, CR_H);
-    } else {
-      drawPanel(ctx, 0, 0, CR_W, CR_H);
-      for (let c = 0; c < 9; c++) drawSlot(ctx, 8 + c * 18, 111);
-      if (cur.key === 'inventory') drawSlot(ctx, 172, 111);
-    }
-    // grille des objets : chaque case est dessinée avec son objet (.cr-grid .gslot) et défile avec lui ;
-    // le fond de la zone est uni (le gris du panneau)
-    if (cur.key !== 'inventory') {
-      ctx.fillStyle = '#c6c6c6';
-      ctx.fillRect(8, 17, 9 * 18, 5 * 18);
-    }
-    // onglet survie : le joueur dans son cadre (comme le jeu original)
-    if (cur.key === 'inventory') {
-      if (!img) {
-        ctx.fillStyle = '#000';
-        ctx.fillRect(73, 6, 32, 43);
-      }
-      drawFigure(ctx, 79, 7, tm.skin(`player_${this.game.settings.playerSkin ?? 'steve'}`).image as HTMLCanvasElement, 1.3);
-    }
-    gui.append(bg);
-    if (cur.key === 'inventory') this.addFigure(79, Y + 7, 1.3);
-    gui.append(...tabEl(cur));
-    // barre d'objets (toujours visible) et corbeille
-    for (let c = 0; c < 9; c++) this.slots.push({ x: 9 + c * 18, y: Y + 112, group: 'hotbar', get: () => pinv.slots[c], set: (v) => (pinv.slots[c] = v), key: `inv${c}` });
-    // corbeille : seulement dans l'onglet « Inventaire de survie » (ailleurs, l'ascenseur occupe la place
-    // et on supprime un objet en le reposant sur la grille, comme le jeu original)
-    if (cur.key === 'inventory') this.slots.push({ x: 173, y: Y + 112, group: 'trash', get: () => null, set: () => {}, key: 'trash' });
-    if (!img && cur.key === 'inventory') {
-      const tc = this.canvasAt(173, Y + 112, 16, 16);
-      const g = tc.getContext('2d')!;
-      g.fillStyle = '#b02020';
-      g.fillRect(3, 3, 10, 2);
-      g.fillRect(5, 5, 6, 8);
-      tc.style.pointerEvents = 'none';
-      gui.append(tc);
-    }
-    if (cur.key === 'inventory') {
-      // onglet « Inventaire de survie » : armure et inventaire complet
-      const armorPos: [number, number][] = [[54, 6], [54, 33], [108, 6], [108, 33]];
-      ARMOR_SLOTS.forEach((a, i) => {
-        const [x, y] = armorPos[i];
-        this.slots.push({ x, y: Y + y, group: 'armor', max: 1, get: () => pinv.armor[a], set: (v) => (pinv.armor[a] = v), accept: (st) => ItemRegistry.get(st.id)?.armor?.slot === a, key: `armor_${a}` });
-      });
-      for (let r = 0; r < 3; r++)
-        for (let c = 0; c < 9; c++) {
-          const i = HOTBAR_SIZE + r * 9 + c;
-          this.slots.push({ x: 9 + c * 18, y: Y + 54 + r * 18, group: 'main', get: () => pinv.slots[i], set: (v) => (pinv.slots[i] = v), key: `inv${i}` });
-        }
-    } else {
-      // titre de l'onglet
-      if (cur.key !== 'search') {
-        const label = pixelText(tr(cur.name), { color: '#404040', cls: 'gui-abs' });
-        label.style.left = '8px';
-        label.style.top = `${Y + 6}px`;
-        gui.append(label);
-      } else {
-        const input = el('input', { class: 'cr-search', type: 'text', value: memory.query, placeholder: '', spellcheck: 'false', style: `left:82px;top:${Y + 6}px;width:89px;height:9px` }) as HTMLInputElement;
-        input.addEventListener('input', () => {
-          memory.query = input.value;
-          this.fillCreativeList();
-        });
-        // les touches tapées ne doivent pas commander le jeu (E, Échap…)
-        input.addEventListener('keydown', (e) => e.stopPropagation());
-        input.addEventListener('pointerup', (e) => e.stopPropagation());
-        gui.append(input);
-      }
-      // grille de 9 × 5 cases qui défile, et son ascenseur
-      const list = el('div', { class: 'gui-scroll cr-grid', style: `left:8px;top:${Y + 17}px;width:${9 * 18}px;height:${5 * 18}px` });
-      list.addEventListener('pointerup', (e) => {
-        e.stopPropagation();
-        if (e.target === list && this.carried) {
-          this.carried = null;
-          this.refresh();
-        }
-      });
-      list.addEventListener('scroll', () => {
-        this.placeThumb();
-        // fin du défilement (doigt, ascenseur) : on cale sur une rangée entière, comme le jeu original
-        clearTimeout(snapTimer);
-        snapTimer = window.setTimeout(snapRow, 140);
-      });
-      let snapTimer = 0;
-      const snapRow = () => {
-        const row = Math.round(list.scrollTop / 18) * 18;
-        if (Math.abs(list.scrollTop - row) > 0.5) list.scrollTop = row;
-      };
-      // molette : une rangée par cran
-      list.addEventListener(
-        'wheel',
-        (e) => {
-          e.preventDefault();
-          list.scrollTop = Math.round(list.scrollTop / 18) * 18 + Math.sign(e.deltaY) * 18;
-        },
-        { passive: false },
-      );
-      gui.append(list);
-      this.crList = list;
-      const track = el('div', { class: 'gui-layer cr-track', style: `left:175px;top:${Y + 18}px;width:12px;height:112px` });
-      const thumb = this.canvasAt(175, Y + 18, 12, 15);
-      thumb.style.pointerEvents = 'none';
-      this.crThumb = thumb;
-      const scrollTo = (clientY: number) => {
-        const r = track.getBoundingClientRect();
-        const f = Math.max(0, Math.min(1, (clientY - r.top - (r.height * 7.5) / 112) / (r.height * (97 / 112))));
-        list.scrollTop = f * Math.max(0, list.scrollHeight - list.clientHeight);
-      };
-      let dragging = false;
-      track.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        dragging = true;
-        track.setPointerCapture(e.pointerId);
-        scrollTo(e.clientY);
-      });
-      track.addEventListener('pointermove', (e) => dragging && scrollTo(e.clientY));
-      track.addEventListener('pointerup', (e) => {
-        e.stopPropagation();
-        dragging = false;
-      });
-      gui.append(track, thumb);
-      this.fillCreativeList();
-    }
-    for (const sl of this.slots) gui.append(this.slotEl(sl));
-  }
-
-  /** Remplit la grille de l'onglet créatif courant (ou les résultats de la recherche). */
-  private fillCreativeList() {
-    const list = this.crList;
+  /** Remplace les entrées de la liste (retour en haut). */
+  private setEntries(entries: ListEntry[]) {
+    const list = this.listEl;
     if (!list) return;
-    list.replaceChildren();
-    const entries = creativeEntries(memory.ctab, memory.query);
-    for (const { def: d, stack } of entries) {
-      const cell = el('div', { class: 'gslot static', 'data-item': d.key });
-      this.stackHTML(cell, stack);
-      // infobulle (nom, effets, enchantements) au survol ou à l'appui long
-      const tip = () => this.showTooltip({ get: () => stack, el: cell } as unknown as GuiSlot);
-      cell.addEventListener('pointerenter', (e) => e.pointerType === 'mouse' && tip());
-      cell.addEventListener('pointerleave', () => (this.tooltip.style.display = 'none'));
-      this.bindPress(cell, (kind) => {
-        const full = (): ItemStack => ({ ...stack, ...(stack.meta ? { meta: structuredClone(stack.meta) } : {}), count: ItemRegistry.maxStack(d.key), ...(ItemRegistry.maxDurability(d.key) > 0 ? { durability: ItemRegistry.maxDurability(d.key) } : {}) });
-        if (kind === 'long') {
-          tip();
-          return;
-        }
-        if (kind === 'double' || kind === 'shift') {
-          // Maj + clic : une pile complète directement dans l'inventaire
-          this.s.player.inventory.add(full());
-        } else if (this.carried && (this.carried.id !== d.key || JSON.stringify(this.carried.meta ?? null) !== JSON.stringify(stack.meta ?? null))) this.carried = null; // poser sur la palette : supprime l'objet tenu
-        else if (this.carried) this.carried.count = Math.min(ItemRegistry.maxStack(d.key), this.carried.count + 1);
-        else this.carried = kind === 'tap' ? full() : { ...full(), count: 1 };
-        this.click();
-        this.refresh();
-      });
-      list.append(cell);
-    }
-    // cases vides jusqu'au bout de la rangée (et 5 rangées au moins), comme le jeu original
-    const total = Math.max(45, Math.ceil(entries.length / 9) * 9);
-    for (let i = entries.length; i < total; i++) list.append(el('div', { class: 'gslot static empty' }));
+    this.listEntries = entries;
+    const { cols, h } = this.listRect;
+    const total = Math.max(Math.ceil(h / 20), Math.ceil(entries.length / cols));
+    list.replaceChildren(el('div', { class: 'bi-spacer', style: `height:${total * 20}px` }));
     list.scrollTop = 0;
-    this.placeThumb();
+    this.listFirst = -1;
+    this.renderRows();
   }
 
-  private placeThumb() {
-    const list = this.crList, th = this.crThumb;
-    if (!list || !th) return;
-    const max = list.scrollHeight - list.clientHeight;
-    const f = max > 0 ? list.scrollTop / max : 0;
-    th.style.top = `${CR_TOP + 18 + Math.round(f * (112 - 15))}px`;
-    const g = th.getContext('2d')!;
-    g.clearRect(0, 0, 12, 15);
-    g.imageSmoothingEnabled = false;
-    const img = this.game.textures.packImage(`gui/sprites/container/creative_inventory/${max > 0 ? 'scroller' : 'scroller_disabled'}.png`);
-    if (img) g.drawImage(img, 0, 0, 12, 15);
-    else drawPanel(g, 0, 0, 12, 15);
+  /** Dessine les rangées visibles seulement (le catalogue compte des milliers d'objets). */
+  private renderRows() {
+    const list = this.listEl;
+    if (!list) return;
+    const { cols, h } = this.listRect;
+    const first = Math.floor(list.scrollTop / 20);
+    const th = this.thumb;
+    if (th) {
+      const max = list.scrollHeight - list.clientHeight;
+      const hh = this.thumbHeight();
+      th.style.height = `${hh}px`;
+      th.style.top = `${max > 0 ? (list.scrollTop / max) * (h - hh) : 0}px`;
+      th.style.display = max > 0 ? '' : 'none';
+    }
+    if (first === this.listFirst) return;
+    this.listFirst = first;
+    const last = first + Math.ceil(h / 20) + 1;
+    const total = Math.max(Math.ceil(h / 20), Math.ceil(this.listEntries.length / cols));
+    const spacer = list.firstElementChild;
+    list.replaceChildren(...(spacer ? [spacer] : []));
+    const frag = document.createDocumentFragment();
+    for (let r = first; r <= Math.min(last, total - 1); r++)
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
+        const e = this.listEntries[i];
+        if (!e) break;
+        const cell = el('div', { class: `bi-cell${e.red ? ' miss' : ''}${this.creative ? '' : ' brecipe'}`, style: `left:${c * 20}px;top:${r * 20}px` });
+        cell.dataset.item = e.item;
+        this.stackHTML(cell, e.stack);
+        const tip = () => this.showTooltip({ get: () => e.stack, el: cell } as unknown as GuiSlot);
+        cell.addEventListener('pointerenter', (ev) => ev.pointerType === 'mouse' && tip());
+        cell.addEventListener('pointerleave', () => (this.tooltip.style.display = 'none'));
+        this.bindPress(cell, (kind) => {
+          if (kind === 'long' && this.creative) return tip();
+          e.tap(kind);
+        });
+        frag.append(cell);
+      }
+    list.append(frag);
   }
 
-  private bookList: HTMLElement | null = null;
-  private bookSig = '';
-
-  private buildBook(side: HTMLElement, w: number, h: number) {
-    const title = pixelText('Livre de recettes', { color: '#404040', cls: 'gui-abs' });
-    title.style.left = '8px';
-    title.style.top = '6px';
-    const toggle = el('div', { class: 'gui-toggle', style: 'left:8px;top:18px' });
-    const setT = () => toggle.replaceChildren(pixelText(memory.craftableOnly ? '[x] Fabricables' : '[ ] Toutes', { color: '#404040' }));
-    setT();
-    toggle.addEventListener('pointerup', (e) => {
-      e.stopPropagation();
-      memory.craftableOnly = !memory.craftableOnly;
-      setT();
-      this.bookSig = '';
-      this.refreshBook();
-    });
-    this.bookList = el('div', { class: 'gui-scroll book', style: `left:7px;top:32px;width:${w - 14}px;height:${h - 40}px` });
-    side.append(title, toggle, this.bookList);
-    this.bookSig = '';
-    this.refreshBook();
+  /** Objets disponibles dans la clé d'inventaire créatif : liste de leurs clés (tests, recherche). */
+  listKeys(): string[] {
+    return this.listEntries.map((e) => e.item);
   }
 
-  private recipesHere(): CraftingRecipe[] {
-    if (this.furnace) return [];
-    const size = this.grid?.size ?? 2;
-    const seen = new Set<string>();
-    const out: CraftingRecipe[] = [];
+  /** Remplit la liste de l'onglet créatif courant (ou des résultats de la recherche). */
+  private fillCreativeList() {
+    const entries = creativeEntries(memory.ctab, memory.query);
+    this.setEntries(
+      entries.map(({ def: d, stack }) => ({
+        item: d.key,
+        stack,
+        tap: (kind) => {
+          const full = (): ItemStack => ({ ...stack, ...(stack.meta ? { meta: structuredClone(stack.meta) } : {}), count: ItemRegistry.maxStack(d.key), ...(ItemRegistry.maxDurability(d.key) > 0 ? { durability: ItemRegistry.maxDurability(d.key) } : {}) });
+          if (kind === 'double' || kind === 'shift') {
+            // Maj + clic : une pile complète directement dans l'inventaire
+            this.s.player.inventory.add(full());
+          } else if (this.carried && (this.carried.id !== d.key || JSON.stringify(this.carried.meta ?? null) !== JSON.stringify(stack.meta ?? null))) this.carried = null; // poser sur la liste : supprime l'objet tenu
+          else if (this.carried) this.carried.count = Math.min(ItemRegistry.maxStack(d.key), this.carried.count + 1);
+          else this.carried = kind === 'tap' ? full() : { ...full(), count: 1 };
+          this.click();
+          this.refresh();
+        },
+      })),
+    );
+  }
+
+  // ---------- livre de recettes ----------
+
+  /** Découvre les recettes dont le joueur possède un ingrédient. */
+  private scanUnlocks() {
+    const inv = this.s.player.inventory;
+    const ids = new Set<string>();
+    for (const st of inv.slots) if (st) ids.add(st.id);
+    for (const a of ARMOR_SLOTS) if (inv.armor[a]) ids.add(inv.armor[a]!.id);
+    const sig = [...ids].sort().join(',');
+    if (sig === this.unlockSig) return;
+    this.unlockSig = sig;
+    const known = knownOf(this.s.player);
+    const have = [...ids];
     for (const r of RecipeRegistry.crafting) {
-      if (r.width > size || r.height > size) continue;
-      if (seen.has(r.result.item)) continue;
+      if (known.has(r.id)) continue;
+      const ing = r.type === 'shaped' ? Object.values(r.key ?? {}) : r.ingredients ?? [];
+      if (ing.some((i) => have.some((id) => RecipeRegistry.matches(id, i)))) known.add(r.id);
+    }
+    for (const r of RecipeRegistry.smelting) if (!known.has(r.id) && ids.has(r.input)) known.add(r.id);
+  }
+
+  /** Recettes connues de la station, une par objet fabriqué, dans l'ordre des objets du jeu. */
+  private recipeEntriesAll(): { item: string; count: number; ok: boolean; use: (kind: 'tap' | 'long' | 'double' | 'right' | 'shift') => void }[] {
+    this.scanUnlocks();
+    const known = knownOf(this.s.player);
+    const inv = this.s.player.inventory;
+    const cs = this.s.crafting;
+    const seen = new Set<string>();
+    const out: { item: string; count: number; ok: boolean; use: (kind: 'tap' | 'long' | 'double' | 'right' | 'shift') => void }[] = [];
+    if (this.furnace) {
+      for (const r of RecipeRegistry.smelting) {
+        if (!known.has(r.id) || seen.has(r.result) || !ItemRegistry.has(r.result)) continue;
+        seen.add(r.result);
+        out.push({
+          item: r.result,
+          count: 1,
+          ok: inv.count(r.input) > 0,
+          use: () => {
+            const idx = inv.slots.findIndex((x) => x?.id === r.input);
+            if (idx < 0 || !this.furnace) return;
+            const st = inv.slots[idx]!;
+            const f = this.furnace;
+            if (f.input && f.input.id !== r.input) return;
+            const n = Math.min(st.count, 64 - (f.input?.count ?? 0));
+            if (f.input) f.input.count += n;
+            else f.input = { ...st, count: n };
+            inv.takeFromSlot(idx, n);
+            this.click();
+            this.afterChange();
+          },
+        });
+      }
+      return out;
+    }
+    const size = this.grid?.size ?? 2;
+    for (const r of RecipeRegistry.crafting as CraftingRecipe[]) {
+      if (r.width > size || r.height > size || !known.has(r.id) || seen.has(r.result.item)) continue;
       seen.add(r.result.item);
-      out.push(r);
+      const ok = this.grid ? cs.canCraft(inv, r, size, this.grid) : false;
+      out.push({
+        item: r.result.item,
+        count: r.result.count,
+        ok,
+        use: (kind) => {
+          if (!this.grid || this.carried) return;
+          const times = kind === 'long' || kind === 'shift' || kind === 'double' ? 64 : 1;
+          if (!cs.fillGrid(inv, this.grid, r, times)) this.game.hud.toast('Ingrédients manquants', 'warn');
+          this.click();
+          this.afterChange();
+          this.recipeSig = '';
+        },
+      });
     }
     return out;
   }
 
-  private refreshBook() {
-    const list = this.bookList;
-    if (!list) return;
-    const inv = this.s.player.inventory;
-    const cs = this.s.crafting;
-    if (this.furnace) {
-      const sig = 'furnace';
-      if (this.bookSig === sig) return;
-      this.bookSig = sig;
-      list.replaceChildren();
-      for (const r of RecipeRegistry.smelting) {
-        const cell = el('div', { class: `brecipe${inv.count(r.input) > 0 ? '' : ' miss'}`, 'data-item': r.result });
-        this.stackHTML(cell, { id: r.result, count: 1 });
-        this.bindPress(cell, () => {
-          const idx = inv.slots.findIndex((x) => x?.id === r.input);
-          if (idx < 0 || !this.furnace) return;
-          const st = inv.slots[idx]!;
-          const f = this.furnace;
-          if (f.input && f.input.id !== r.input) return;
-          const n = Math.min(st.count, 64 - (f.input?.count ?? 0));
-          if (f.input) f.input.count += n;
-          else f.input = { ...st, count: n };
-          inv.takeFromSlot(idx, n);
-          this.click();
-          this.afterChange();
-        });
-        list.append(cell);
-      }
-      return;
-    }
-    const recipes = this.recipesHere().map((r) => ({ r, ok: cs.canCraft(inv, r, this.grid!.size, this.grid!) }));
-    const shown = recipes.filter((x) => x.ok || !memory.craftableOnly).sort((a, b) => Number(b.ok) - Number(a.ok));
-    const sig = shown.map((x) => `${x.r.id}${x.ok ? 1 : 0}`).join(',');
-    if (sig === this.bookSig) return;
-    this.bookSig = sig;
-    list.replaceChildren();
-    if (!shown.length) list.append(pixelText(tr('Aucune recette'), { color: '#606060' }));
-    for (const { r, ok } of shown) {
-      const cell = el('div', { class: `brecipe${ok ? '' : ' miss'}`, 'data-item': r.result.item });
-      this.stackHTML(cell, { id: r.result.item, count: r.result.count });
-      this.bindPress(cell, (kind) => {
-        if (!this.grid) return;
-        const times = kind === 'long' || kind === 'shift' || kind === 'double' ? 64 : 1;
-        if (this.carried) return;
-        if (!cs.fillGrid(inv, this.grid, r, times)) this.game.hud.toast('Ingrédients manquants', 'warn');
-        this.click();
-        this.afterChange();
-        this.bookSig = '';
-      });
-      list.append(cell);
+  /** Réaffiche la liste des recettes selon l'onglet, la recherche et le filtre « fabricables ». */
+  private refreshRecipes() {
+    if (this.creative || !this.listEl) return;
+    const all = this.recipeEntriesAll();
+    const tab = memory.rtab;
+    const q = memory.rquery.trim().toLowerCase();
+    let shown = all.filter((e) => tab === 'search' || recipeCategory(e.item) === tab);
+    if (tab === 'search' && q) shown = shown.filter((e) => e.item.includes(q.replace(/\s+/g, '_')) || (ItemRegistry.get(e.item)?.name ?? '').toLowerCase().includes(q));
+    if (memory.craftableOnly) shown = shown.filter((e) => e.ok);
+    const rank = orderIndex();
+    shown.sort((a, b) => (rank.get(a.item) ?? 1e9) - (rank.get(b.item) ?? 1e9));
+    const sig = `${tab}|${q}|${memory.craftableOnly}|${shown.map((e) => `${e.item}${e.ok ? 1 : 0}`).join(',')}`;
+    if (sig === this.recipeSig) return;
+    this.recipeSig = sig;
+    const keep = this.listEl.scrollTop;
+    this.setEntries(
+      shown.map((e) => ({
+        item: e.item,
+        stack: { id: e.item, count: e.count },
+        red: !e.ok,
+        tap: (kind) => {
+          if (!e.ok && !this.furnace) this.game.hud.toast('Ingrédients manquants', 'warn');
+          else e.use(kind);
+        },
+      })),
+    );
+    this.listEl.scrollTop = keep;
+    // un onglet de catégorie peut apparaître quand une recette est découverte
+    const tabs = this.gui.querySelectorAll('.bi-tab').length;
+    const need = new Set(all.map((e) => recipeCategory(e.item))).size + 1;
+    if (!this.building && tabs !== need && this.view !== 'solo') {
+      const sc = this.listEl.scrollTop;
+      this.build();
+      this.refresh();
+      if (this.listEl) this.listEl.scrollTop = sc;
     }
   }
 
   dispose() {
     this.disposed = true;
+    document.body.classList.remove('bi-open');
     clearInterval(this.timer);
     clearTimeout(this.tooltipTimer);
     this.unsub.forEach((u) => u());
@@ -1144,6 +1372,18 @@ export class InventoryUI {
   }
 }
 
+/** Rang des objets dans « Tous les objets » (pour ranger les recettes dans le même ordre que le jeu). */
+let ORDER: Map<string, number> | null = null;
+let ORDER_N = 0;
+function orderIndex(): Map<string, number> {
+  const n = ItemRegistry.all().length;
+  if (!ORDER || ORDER_N !== n) {
+    ORDER = new Map(creativeItems('search').map((d, i) => [d.key, i]));
+    ORDER_N = n;
+  }
+  return ORDER;
+}
+
 /** Ombre portée du texte : couleur divisée par 4, comme la police du jeu original. */
 function shadowOf(c: string): string {
   const n = parseInt(c.slice(1), 16);
@@ -1151,4 +1391,3 @@ function shadowOf(c: string): string {
   return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`;
 }
 
-export { drawSlot };

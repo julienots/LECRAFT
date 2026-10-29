@@ -464,6 +464,37 @@ const portalPane = (t: string): JModel => ({
 M.nether_portal = portalPane('nether_portal');
 M.paper_portal = portalPane('paper_portal');
 
+// ---------- bannières : mât, traverse et étendard (deux blocs de haut, traversables) ----------
+for (const c of COLORS) {
+  const t = `${c}_banner`;
+  def(t, {
+    facing: true,
+    els: [
+      box([7, 0, 7], [9, 30, 9], 'oak_planks', { uv: { side: [7, 0, 9, 16], up: [7, 7, 9, 9], down: [7, 7, 9, 9] } }),
+      box([1, 30, 7], [15, 32, 9], 'oak_planks', { uv: { side: [1, 6, 15, 8], up: [1, 7, 15, 9], down: [1, 7, 15, 9] } }),
+      box([1, 4, 6], [15, 30, 7], t, { uv: { north: [0, 0, 16, 16], south: [0, 0, 16, 16], side: [0, 0, 1, 16], up: [0, 0, 16, 1], down: [0, 15, 16, 16] } }),
+    ],
+    collision: [],
+  });
+}
+// ---------- têtes et crânes : cube de 8 px (tête de dragon et de piglin plus larges) ----------
+for (const [k, from, to] of [
+  ['skeleton_skull', [4, 0, 4], [12, 8, 12]], ['zombie_head', [4, 0, 4], [12, 8, 12]], ['creeper_head', [4, 0, 4], [12, 8, 12]],
+  ['player_head', [4, 0, 4], [12, 8, 12]], ['piglin_head', [3, 0, 4], [13, 8, 12]], ['dragon_head', [2, 0, 2], [14, 10, 14]],
+] as [string, number[], number[]][])
+  def(k, { facing: true, els: [box(from, to, { north: `${k}_face`, up: `${k}_top`, down: `${k}_top`, side: `${k}_side` }, { uv: { all: [0, 0, 16, 16] } })] });
+// ---------- pot décoré : panse, col et lèvre ----------
+def('decorated_pot', {
+  els: [
+    box([1, 0, 1], [15, 13, 15], { side: 'decorated_pot_side', up: 'decorated_pot_top', down: 'decorated_pot_top' }, { uv: { side: [0, 1, 16, 15], up: [1, 1, 15, 15], down: [1, 1, 15, 15] } }),
+    box([5, 13, 5], [11, 14, 11], 'decorated_pot_side', { uv: { side: [0, 0, 16, 1] }, skip: ['down'] }),
+    box([4, 14, 4], [12, 16, 12], { side: 'decorated_pot_side', up: 'decorated_pot_top' }, { uv: { side: [0, 14, 16, 16], up: [4, 4, 12, 12] }, skip: ['down'] }),
+  ],
+  collision: [[1, 0, 1, 15, 16, 15]],
+});
+// ---------- cuivre ciré : mêmes modèles que le cuivre non ciré ----------
+for (const k of Object.keys(M)) if (/copper|lightning_rod/.test(k) && !k.startsWith('waxed_')) M[`waxed_${k}`] = M[k];
+
 /** Modèles par clé de bloc. */
 export const BLOCK_MODELS: Record<string, JModel> = M;
 

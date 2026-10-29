@@ -1,7 +1,8 @@
 import type { Game } from '../core/Game';
 import type { Screen } from './UIManager';
 import { el } from './dom';
-import { mcButton, mcLabel, mcRow, mcScreen } from './Mc';
+import { mcButton, mcScreen } from './Mc';
+import { bmBtn, bmScreen } from './BedrockUI';
 import { setMcText } from './McText';
 import { GAMES, NEW_GAMES, SERVER_IP, SERVER_NAME, type ServerNetwork } from '../server/ServerNetwork';
 import { COSMETICS, KIND_NAMES, MYSTERY_PRICE, RARITY_COLOR, type CosmeticKind } from '../server/Cosmetics';
@@ -11,8 +12,8 @@ import type { GameKey } from '../server/ServerMaps';
 
 const ICON_FOR: Record<GameKey, string> = { bedwars: 'red_bed', skywars: 'grass_block', duels: 'iron_sword', sumo: 'slime_ball', blockparty: 'magenta_wool', tntrun: 'tnt', spleef: 'diamond_shovel', parkour: 'emerald_block', murder: 'bow', bridge: 'red_terracotta', tnttag: 'flint_and_steel', pillars: 'bedrock' };
 
-/** Liste des serveurs (écran « Multijoueur ») : serveurs intégrés (mini-jeux, survie moddée). */
-export function serversScreen(game: Game): Screen {
+/** Liste des serveurs (onglet « Serveurs » de Jouer) : serveurs intégrés (mini-jeux, survie moddée). */
+export function serversPanel(game: Game): HTMLElement {
   type Srv = { name: string; icon: string; motd: [string, string]; online: number; max: number; join: () => void };
   const servers: Srv[] = [
     { name: SERVER_NAME, icon: 'red_bed', motd: [`§6§l      HypXL Network §r§7[1.21] §8${SERVER_IP}`, '§b§lNOUVEAU : §4Murder Mystery §7· §9The Bridge §7· §cTNT Tag §7· §5Piliers'], online: 38000 + Math.floor(Math.random() * 14000), max: 100000, join: () => game.joinServer() },
@@ -20,7 +21,7 @@ export function serversScreen(game: Game): Screen {
   ];
   let selected: Srv | null = null;
   let lastTap = 0;
-  const join = mcButton('Rejoindre le serveur', () => selected?.join(), { w: 150, disabled: true });
+  const join = bmBtn('Rejoindre le serveur', () => selected?.join(), { tone: 'green', w: 150, h: 33, disabled: true });
   const rows: { s: Srv; entry: HTMLElement; count: HTMLElement; m1: HTMLElement; m2: HTMLElement }[] = [];
   const refresh = () => {
     for (const r of rows) {
@@ -35,10 +36,10 @@ export function serversScreen(game: Game): Screen {
     const ping = el('div', { class: 'srv-ping' }, ...[1, 2, 3, 4, 5].map((i) => el('i', { style: `height:${i * 20}%` })));
     const entry = el(
       'div',
-      { class: 'world-entry server-entry' },
+      { class: 'bm-srv server-entry world-entry', role: 'button', tabindex: '0' },
       el('img', { src: game.textures.iconURL(srv.icon), alt: '' }),
-      el('div', { style: 'min-width:0;flex:1' }, el('div', { class: 'name' }, srv.name), m1, m2),
-      el('div', { class: 'srv-right' }, count, ping),
+      el('div', { class: 'tx' }, el('div', { class: 'name' }, srv.name), m1, m2),
+      el('div', { class: 'rt' }, count, ping),
     );
     entry.dataset.server = srv.name;
     entry.addEventListener('click', () => {
@@ -53,21 +54,19 @@ export function serversScreen(game: Game): Screen {
     rows.push({ s: srv, entry, count, m1, m2 });
   }
   refresh();
-  return mcScreen({
-    title: 'Jouer en multijoueur',
-    body: [
-      el(
-        'div',
-        { class: 'col', style: 'align-items:center;gap:calc(var(--gs) * 2px)' },
-        mcButton('Parties en réseau (vrais joueurs)...', () => game.showJoinRemote(), { w: 300 }),
-        mcLabel('Jouez avec vos amis : un joueur ouvre son monde (Menu du jeu › Ouvrir au multijoueur), les autres le rejoignent ici.'),
-        ...rows.map((r) => r.entry),
-        mcLabel('Serveurs intégrés : fonctionnent hors ligne, les autres joueurs sont des bots.'),
-      ),
-    ],
-    list: true,
-    footer: [mcRow(join, mcButton('Actualiser', refresh, { w: 72 }), mcButton('Retour', () => game.ui.back(), { w: 72 }))],
-  });
+  return el(
+    'div',
+    { class: 'bm-tabpanel bm-panel' },
+    el('div', { class: 'bm-rw' }, el('div', { class: 'd' }, 'Serveurs intégrés : fonctionnent hors ligne, les autres joueurs sont des bots. Pour de vrais joueurs, ouvrez l’onglet Realms.')),
+    ...rows.map((r) => r.entry),
+    el('div', { class: 'bm-rw' }, el('div', { class: 'bm-inrow', style: 'margin-top:0;flex-wrap:wrap' }, join, bmBtn('Actualiser', refresh, { w: 100, h: 33 }))),
+  );
+}
+
+/** Écran complet des serveurs (même contenu que l'onglet de Jouer). */
+export function serversScreen(game: Game): Screen {
+  const s = bmScreen(game, { cls: 'bm-play', title: 'Serveurs', dim: true, body: [el('div', { class: 'bm-wrap' }, serversPanel(game))] });
+  return { el: s.el, onBack: s.onBack };
 }
 
 /** Boutique du serveur de survie : acheter avec les pièces. */

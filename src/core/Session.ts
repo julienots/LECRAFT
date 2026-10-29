@@ -57,6 +57,7 @@ export interface DimState {
   spawners: Record<string, number>;
   furnaces?: Record<string, FurnaceState>;
   brewing?: Record<string, BrewingState>;
+  jukeboxes?: Record<string, JukeboxState>;
   mobs: SavedMob[];
 }
 import { clamp } from '../util/math';
@@ -68,6 +69,7 @@ import { ScriptHost } from '../scripting/ScriptHost';
 import { DroppedItemModels } from '../render/DroppedItems';
 import { ShadowMap } from '../render/ShadowMap';
 import { updatePowerAround } from '../world/Redstone';
+import { loadJukeboxes, playingJukeboxes, serializeJukeboxes, tickJukeboxes, type JukeboxState } from '../world/Jukebox';
 import { ServerNetwork } from '../server/ServerNetwork';
 import { TileRegistry } from '../render/TileRegistry';
 import { SmpServer } from '../server/SmpServer';
@@ -89,6 +91,8 @@ export interface WorldState {
   gamerules?: Partial<GameRules>;
   furnaces?: Record<string, FurnaceState>;
   brewing?: Record<string, BrewingState>;
+  /** Juke-box : disque et avancement de la piste. */
+  jukeboxes?: Record<string, JukeboxState>;
   mobs: SavedMob[];
   /** Dimension où se trouve le joueur (les champs coffres/fourneaux/créatures la concernent). */
   dimension?: Dimension;
@@ -680,6 +684,7 @@ export class Session implements GameContext {
     Object.assign(this.gamerules, s.gamerules ?? {});
     for (const [k, f] of Object.entries(s.furnaces ?? {})) this.world.furnaces.set(k, f);
     for (const [k, b] of Object.entries(s.brewing ?? {})) this.world.brewing.set(k, b);
+    loadJukeboxes(this.world, s.jukeboxes);
     if (s.mobs) this.pendingMobs = s.mobs;
     for (const [k, v] of Object.entries(s.scripting?.dynProps ?? {})) this.worldProps.set(k, v);
     this.scoreboard.load(s.scripting?.scoreboard);
@@ -720,6 +725,7 @@ export class Session implements GameContext {
       progression: this.progression.serialize(),
       furnaces: Object.fromEntries(this.world.furnaces),
       brewing: Object.fromEntries(this.world.brewing),
+      jukeboxes: serializeJukeboxes(this.world),
       gamerules: { ...this.gamerules },
       // créatures pas encore réapparues (chunks non chargés) : conservées telles quelles
       mobs: [...this.entities.serialize(), ...(this.pendingMobs ?? [])],
@@ -1092,6 +1098,7 @@ export class Session implements GameContext {
     if (!this.meta.remote) this.ticker.tick(this);
     this.tickFurnaces(dt);
     this.tickBrewing(dt);
+    this.tickJukeboxes(dt);
     if (!this.meta.remote) this.machines.update(this, dt);
     this.explosions.update(this, this.entities, dt);
     // fonctions « tick » des add-ons
@@ -1200,6 +1207,23 @@ export class Session implements GameContext {
       if (this.weather.state !== 'clear') this.weather.load({ state: 'clear', timer: 300 + Math.random() * 600 });
       this.progression.inc('nightsSlept');
     });
+  }
+
+  private noteTimer = 0;
+  /**
+   * Juke-box : avancement des pistes (fin sans boucle, sortie redstone mise à jour) et une note de
+   * musique au-dessus de chaque juke-box en lecture toutes les secondes (20 ticks, jeu original).
+   */
+  private tickJukeboxes(dt: number) {
+    if (!this.world.jukeboxes.size) return;
+    const sound = (ox: number, oy: number, oz: number, open: boolean) => this.audio.play(open ? 'door_open' : 'door_close', { x: ox + 0.5, y: oy + 0.5, z: oz + 0.5 });
+    if (!this.meta.remote) tickJukeboxes(this.world, dt, (x, y, z) => updatePowerAround(this.world, x, y, z, sound));
+    this.noteTimer -= dt;
+    if (this.noteTimer > 0) return;
+    this.noteTimer = 1;
+    const p = this.player;
+    for (const j of playingJukeboxes(this.world))
+      if (Math.abs(j.x - p.x) < 48 && Math.abs(j.z - p.z) < 48) this.particles.note(j.x + 0.5, j.y + 1.2, j.z + 0.5, Math.floor(Math.random() * 4) / 24);
   }
 
   /** Alambics : infusion (20 s), son et bulles à la fin. */
@@ -1431,6 +1455,8 @@ export class Session implements GameContext {
     this.audio.setMusicMood(
       this.dimension === 'nether' ? 'nether' : this.dimension === 'end' ? 'end' : this.dimension === 'paper' ? 'paper' : underwater ? 'underwater' : underground ? 'cave' : p.creative ? 'creative' : night ? 'night' : 'day',
     );
+    // juke-box : son positionnel (avant la musique, qui se tait près d'un juke-box en lecture)
+    this.audio.updateRecords(playingJukeboxes(this.world));
     this.audio.updateMusic(dt);
     game.hud.update(this, dt);
   }
@@ -1652,6 +1678,7 @@ export class Session implements GameContext {
     this.iconTex.forEach((t) => t.dispose());
     this.scene.remove(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group);
     this.audio.stopAmbience();
+    this.audio.stopRecords();
   }
 }
 

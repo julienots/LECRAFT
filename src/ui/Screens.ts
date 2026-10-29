@@ -2,223 +2,35 @@ import type { Game } from '../core/Game';
 import type { Session } from '../core/Session';
 import { ACHIEVEMENTS } from '../core/Progression';
 import { ItemRegistry } from '../inventory/ItemRegistry';
-import { SAVE_VERSION, type Difficulty, type GameMode } from '../core/Config';
-import type { WorldMeta } from '../save/SaveManager';
 import type { Screen } from './UIManager';
 import { el, formatDuration } from './dom';
-import { drawLandscape, drawLogo } from './MenuArt';
-import { mcButton, mcCycle, mcInput, mcLabel, mcRow, mcScreen, mcToggle } from './Mc';
+import { mcButton, mcLabel, mcScreen } from './Mc';
+import { mainMenu as bmMainMenu, playScreen, createFromScreen, resetBedrockArt, loadingScreen as bmLoading } from './BedrockMenus';
+import { bmRow, bmScreen, bmSection } from './BedrockUI';
 
-let artCache: { logo: string; land: string } | null = null;
 export function resetMenuArt() {
-  artCache = null;
+  resetBedrockArt();
 }
 
-/** Phrases d'accueil (originales) affichées en jaune sur l'écran titre. */
-const SPLASHES = [
-  '100 % hors ligne !', 'Fait de blocs !', 'Maintenant avec des lits !', 'Attention aux araignées !', 'Creusez droit vers le bas... ou pas !',
-  'Des cubes partout !', 'Le blé pousse mieux près de l’eau !', 'Allez, encore une nuit !', 'Fabriqué sur téléphone !', 'Pierre, fer, diamant !',
-  'Ne creusez pas sous vos pieds !', 'Les moutons sont multicolores !', 'TNT : à manier avec soin !', 'Pixel par pixel !', 'Bonjour le monde !',
-  'Rien à télécharger !', 'Le sable tombe !', 'Plus de 120 blocs !', 'Des poules et des œufs !', 'Bon minage !',
-];
-
+/** Écran titre (voir BedrockMenus). */
 export function mainMenu(game: Game): Screen {
-  if (!artCache) artCache = { logo: drawLogo(game.textures), land: drawLandscape(game.textures) };
-  const splash = SPLASHES[Math.floor(Math.random() * SPLASHES.length)];
-  const root = el(
-    'div',
-    { class: 'screen mc-screen title-screen' },
-    el('div', { class: 'panorama', style: `background-image:url(${artCache.land})` }),
-    el('div', { class: 'logo-wrap' }, el('img', { class: 'logo', src: artCache.logo, alt: 'LeCraft' }), el('div', { class: 'splash' }, splash)),
-    mcButton('Solo', () => game.showWorlds()),
-    mcButton('Multijoueur', () => game.showServers()),
-    mcRow(mcButton('Aide', () => game.showHelp(), { w: 98 }), mcButton('Crédits', () => game.showCredits(), { w: 98 })),
-    el('div', { style: 'height:calc(var(--gs) * 8px)' }),
-    // « Quitter le jeu » : seulement dans l'application (un navigateur ne peut pas fermer son onglet)
-    game.platform.native ? mcRow(mcButton('Options...', () => game.showSettings(), { w: 98 }), mcButton('Quitter le jeu', () => game.back(), { w: 98 })) : mcButton('Options...', () => game.showSettings()),
-    el('div', { class: 'corner l' }, `LeCraft ${__APP_VERSION__}`),
-    el('div', { class: 'corner r' }, 'Jeu original, hors ligne'),
-  );
-  return { el: root, onBack: () => false };
+  return bmMainMenu(game);
 }
 
-function worldSub(w: WorldMeta) {
-  const d = new Date(w.lastPlayed);
-  return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-}
-
+/** Écran Jouer (onglet Mondes). */
 export function worldsScreen(game: Game): Screen {
-  const list = el('div', { class: 'col', style: 'align-items:center;gap:calc(var(--gs) * 2px)' }, mcLabel('Chargement…'));
-  let selected: WorldMeta | null = null;
-  let lastTap = 0;
-  const play = mcButton('Jouer au monde sélectionné', () => selected && game.playWorld(selected), { w: 150, disabled: true });
-  const edit = mcButton('Modifier', () => selected && game.ui.push(editWorldScreen(game, selected, refresh)), { w: 72, disabled: true });
-  const del = mcButton('Supprimer', async () => {
-    if (!selected) return;
-    const w = selected;
-    if (await game.ui.confirm('Voulez-vous vraiment supprimer ce monde ?', `« ${w.name} » sera perdu à jamais ! (Très longtemps !)`, 'Supprimer')) {
-      await game.saves.deleteSave(w.id);
-      selected = null;
-      refresh();
-    }
-  }, { w: 72, disabled: true });
-  const recreate = mcButton('Recréer', () => selected && game.recreateWorld(selected), { w: 72, disabled: true });
-  const select = (w: WorldMeta | null) => {
-    selected = w;
-    for (const b of [play, edit, del, recreate]) b.disabled = !w;
-  };
-  const refresh = async () => {
-    const worlds = await game.saves.listWorlds().catch(() => []);
-    list.replaceChildren();
-    select(null);
-    if (!worlds.length) list.append(mcLabel('Aucun monde. Créez-en un !'));
-    for (const w of worlds) {
-      const old = (w.version ?? 1) < SAVE_VERSION;
-      const entry = el(
-        'div',
-        { class: 'world-entry' },
-        w.thumbnail ? el('img', { src: w.thumbnail, alt: '' }) : el('div', { class: 'thumb' }),
-        el(
-          'div',
-          { style: 'min-width:0' },
-          el('div', { class: 'name' }, w.name),
-          el('div', { class: 'sub' }, `${worldSub(w)} · ${formatDuration(w.playTime)}`),
-          el('div', { class: `sub${old ? ' old' : ''}` }, old ? 'Ancienne version (incompatible)' : `Mode ${w.gameMode === 'creative' ? 'Créatif' : 'Survie'}, graine ${w.seed}`),
-        ),
-      );
-      entry.addEventListener('click', () => {
-        const now = performance.now();
-        if (selected === w && now - lastTap < 400) game.playWorld(w);
-        lastTap = now;
-        list.querySelectorAll('.world-entry').forEach((e) => e.classList.remove('sel'));
-        entry.classList.add('sel');
-        select(w);
-        game.audio.play('click', { volume: 0.3 });
-      });
-      list.append(entry);
-    }
-  };
-  void refresh();
-  return mcScreen({
-    title: 'Sélectionner un monde',
-    body: [list],
-    list: true,
-    footer: [
-      mcRow(play, mcButton('Créer un nouveau monde', () => game.showNewWorld(), { w: 150 })),
-      mcRow(edit, del, recreate, mcButton('Annuler', () => game.ui.back(), { w: 72 })),
-    ],
-  });
+  return playScreen(game, 'worlds');
 }
 
-function editWorldScreen(game: Game, w: WorldMeta, done: () => void): Screen {
-  const name = mcInput(w.name, { maxlength: 32 });
-  const status = mcLabel('');
-  let cheats = w.cheats ?? true;
-  return mcScreen({
-    title: 'Modifier le monde',
-    body: [
-      mcLabel('Nom du monde', 'left'),
-      name,
-      el('div', { style: 'height:calc(var(--gs) * 6px)' }),
-      mcButton('Faire une sauvegarde', async () => {
-        await game.saves.backupSave(w.id);
-        status.textContent = 'Copie de sauvegarde créée';
-        done();
-      }),
-      mcToggle('Activer les triches', cheats, (v) => (cheats = v), 200),
-      status,
-    ],
-    footer: [
-      mcRow(
-        mcButton('Enregistrer', async () => {
-          w.name = name.value.trim() || w.name;
-          // les triches ne changent qu'en enregistrant (« Annuler » ne modifie rien)
-          w.cheats = cheats;
-          await game.saves.updateMeta(w);
-          done();
-          game.ui.back();
-        }, { w: 98 }),
-        mcButton('Annuler', () => game.ui.back(), { w: 98 }),
-      ),
-    ],
-  });
-}
-
-const MODE_DESC: Record<GameMode, string> = {
-  survival: 'Cherchez des ressources, fabriquez, gagnez des niveaux, de la santé et de la faim',
-  creative: 'Ressources illimitées, vol libre et destruction instantanée des blocs',
-};
-
+/** Créer un nouveau monde : passe par « Créer à partir de… » comme le jeu de référence. */
 export function newWorldScreen(game: Game): Screen {
-  const name = mcInput('Nouveau monde', { maxlength: 32 });
-  const seed = mcInput('', { placeholder: 'Laisser vide pour une graine aléatoire', maxlength: 40 });
-  let mode: GameMode = 'survival';
-  let diff: Difficulty = game.settings.difficulty === 'peaceful' ? 'normal' : game.settings.difficulty;
-  let bonus = false;
-  let cheats = true;
-  let bots = false;
-  const desc = mcLabel(MODE_DESC[mode]);
-  return mcScreen({
-    title: 'Créer un nouveau monde',
-    body: [
-      mcLabel('Nom du monde', 'left'),
-      name,
-      mcRow(
-        mcCycle<GameMode>('Mode de jeu', [['survival', 'Survie'], ['creative', 'Créatif']], mode, (v) => {
-          mode = v;
-          desc.textContent = MODE_DESC[v];
-        }, 150),
-        mcCycle<Difficulty>('Difficulté', [['peaceful', 'Paisible'], ['easy', 'Facile'], ['normal', 'Normale'], ['hard', 'Difficile']], diff, (v) => (diff = v), 150),
-      ),
-      desc,
-      mcLabel('Graine pour le générateur de monde', 'left'),
-      seed,
-      mcRow(mcToggle('Coffre bonus', bonus, (v) => (bonus = v), 150), mcToggle('Activer les triches', cheats, (v) => (cheats = v), 150)),
-      mcLabel('Les triches autorisent les commandes comme /give, /tp, /time ou /gamemode.'),
-      mcToggle('Bots joueurs', bots, (v) => (bots = v), 300),
-      mcLabel('Des bots joueurs rejoignent votre monde : ils coupent du bois, minent, construisent leur maison, cultivent, vous aident contre les monstres et discutent.'),
-    ],
-    footer: [mcRow(mcButton('Créer un nouveau monde', () => game.createWorld(name.value, seed.value, mode, diff, bonus, cheats, bots), { w: 150 }), mcButton('Annuler', () => game.ui.back(), { w: 150 }))],
-  });
+  return createFromScreen(game);
 }
 
-export function pauseScreen(game: Game): Screen {
-  const status = mcLabel('');
-  const sc = mcScreen({
-    title: 'Menu du jeu',
-    bg: 'dim',
-    body: [
-      el('div', { style: 'flex:1' }),
-      mcButton('Retour au jeu', () => game.resume(), { w: 204 }),
-      // vue de la caméra (le jeu original la règle dans les options, pas de bouton à l'écran)
-      (() => {
-        const names = ['1re personne', '3e personne (dos)', '3e personne (face)'];
-        const b = mcButton(`Vue : ${names[game.session?.perspective ?? 0]}`, () => {
-          game.session?.cyclePerspective();
-          b.textContent = `Vue : ${names[game.session?.perspective ?? 0]}`;
-        }, { w: 204 });
-        return b;
-      })(),
-      mcRow(mcButton('Progrès', () => game.showProgress(), { w: 100 }), mcButton('Statistiques', () => game.showStats(), { w: 100 })),
-      mcRow(
-        mcButton('Options...', () => game.showSettings(), { w: 100 }),
-        mcButton('Sauvegarder', async () => {
-          status.textContent = 'Sauvegarde du monde…';
-          await game.saveNow();
-          status.textContent = `Sauvegardé à ${new Date().toLocaleTimeString('fr-FR')}`;
-        }, { w: 100 }),
-      ),
-      game.session && !game.session.meta.server && !game.session.meta.remote
-        ? mcButton(game.session.netHost ? `Multijoueur (${game.session.netHost.playerCount} joueurs)...` : 'Ouvrir au multijoueur...', () => game.showHostScreen(), { w: 204 })
-        : null,
-      mcButton(game.session?.meta.server || game.session?.meta.remote ? 'Se déconnecter' : 'Sauvegarder et quitter', () => game.quitToMenu(), { w: 204 }),
-      status,
-      el('div', { style: 'flex:1' }),
-    ],
-    onBack: () => (game.resume(), true),
-  });
-  return sc;
-}
+export { playScreen };
+
+/** Menu de pause : voir PauseUI.ts (interface de l'édition mobile). */
+export { pauseScreen } from './PauseUI';
 
 const CAUSES: Record<string, string> = {
   mob: 'a été tué par une créature',
@@ -272,27 +84,21 @@ export function deathScreen(game: Game, s: Session): Screen {
   });
 }
 
-export function loadingScreen(name: string) {
-  const fill = el('div');
-  const label = mcLabel('Génération du terrain…', 'white');
-  const screen = mcScreen({ title: '', body: [el('div', { style: 'flex:1' }), mcLabel(`Chargement de « ${name} »`, 'white'), label, el('div', { class: 'mc-progress' }, fill), el('div', { style: 'flex:1' })], onBack: () => true });
-  return {
-    screen,
-    progress(f: number) {
-      fill.style.width = `${Math.round(f * 100)}%`;
-      label.textContent = f < 1 ? `Préparation de la zone d'apparition : ${Math.round(f * 100)} %` : 'Prêt !';
-    },
-  };
+/** Écran de chargement du monde (logo, astuce, barre verte) sur le dernier décor affiché. */
+export function loadingScreen(game: Game, title: string, bg: string | null) {
+  return bmLoading(game, title, bg);
 }
 
 function textScreen(game: Game, title: string, blocks: [string, string[]][]): Screen {
-  const body: HTMLElement[] = [];
+  const rows: HTMLElement[] = [];
   for (const [h, lines] of blocks) {
-    if (h) body.push(mcLabel(h, 'yellow'));
-    for (const l of lines) body.push(el('div', { class: 'mc-label white', style: 'max-width:calc(var(--gs) * 300px);text-align:left' }, l));
-    body.push(el('div', { style: 'height:calc(var(--gs) * 4px)' }));
+    if (h) rows.push(...bmSection(h));
+    for (const l of lines) rows.push(bmRow(l));
   }
-  return mcScreen({ title, body, list: true, footer: [mcButton('Terminé', () => game.ui.back())] });
+  const right = el('div', { class: 'bm-right' }, ...rows);
+  right.style.flex = '1';
+  const s = bmScreen(game, { cls: 'bm-create', title, solid: true, body: [el('div', { class: 'bm-cols' }, right)] });
+  return { el: s.el, onBack: s.onBack };
 }
 
 export function helpScreen(game: Game): Screen {

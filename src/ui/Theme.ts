@@ -101,6 +101,11 @@ export function updateGuiScale() {
   const k = Math.min(window.innerWidth / 330, window.innerHeight / 230);
   const gs = Math.max(1.5, Math.min(4, Math.floor(k * 2) / 2));
   document.documentElement.style.setProperty('--gs', String(gs));
+  // unité des menus d'avant-partie : 1 u = 1 pixel d'une maquette de 720 × 332 (écran 20:9 en paysage)
+  const w = window.innerWidth, h = window.innerHeight;
+  const u = w >= h * 1.15 ? Math.min(h / 332, w / 640) : Math.max(0.8, w / 400);
+  document.documentElement.style.setProperty('--u', u.toFixed(4));
+  document.documentElement.classList.toggle('bm-portrait', w < h * 1.15);
   return gs;
 }
 

@@ -13,6 +13,11 @@ export function setWidgetClick(fn: () => void) {
   clickSound = fn;
 }
 
+/** Joue le son de clic des widgets (menus d'avant-partie). */
+export function playWidgetClick() {
+  clickSound?.();
+}
+
 export function mcButton(label: string | Node, onClick: () => void, opts: { w?: number; disabled?: boolean; cls?: string } = {}): HTMLButtonElement {
   const b = el('button', { class: `mc-btn ${opts.cls ?? ''}`.trim(), type: 'button', style: `--w:${opts.w ?? 200}` });
   b.append(typeof label === 'string' ? el('span', {}, t(label)) : label);

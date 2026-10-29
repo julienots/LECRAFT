@@ -10,6 +10,7 @@ import { skinAspect } from './MobModels';
 import { LoadedPack } from './ResourcePack';
 import { buildAtlas, hex } from './TextureGenerator';
 import { ATLAS_COLS, TILE_ANIMS, TILE_PX, TileRegistry } from './TileRegistry';
+import { discIcon } from './DiscIcons';
 
 const DEFAULT_GRASS = hex('#7cbd4a');
 const DEFAULT_FOLIAGE = hex('#5fa83a');
@@ -726,6 +727,16 @@ export class TextureManager implements SkinProvider {
     }
     // variantes de blocs (bougie allumée, rail activé, répéteur alimenté…) : texture d'objet de base ;
     // blocs cirés : texture de la version non cirée (comme le jeu original)
+    // disques de LeCraft (étiquette recolorée) et disques absents du pack : render/DiscIcons.ts
+    const disc = def ? discIcon(itemId, (path) => ((img) => (img ? this.view!.imageData(img, 16) : null))(this.view?.get(path))) : null;
+    if (disc) {
+      const tmp = document.createElement('canvas');
+      tmp.width = tmp.height = 16;
+      tmp.getContext('2d')!.putImageData(disc, 0, 0);
+      ctx.drawImage(tmp, 0, 0, 32, 32);
+      this.iconCanvasCache.set(itemId, c);
+      return c;
+    }
     const base = itemId.replace(/_(lit|on|off|powered|active|inactive|unlit|triggered|crafting|ejecting|ominous)$/, '').replace(/^waxed_/, '');
     const packImg = def && this.view?.first(...(ITEM_PATHS[itemId] ?? []), `item/${def.packTexture ?? itemId}.png`, ...(base !== itemId ? [`item/${base}.png`] : []));
     if (def && packImg) {

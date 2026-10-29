@@ -44,9 +44,9 @@ try {
   const guest = await open('Invite');
   const C = (f, a) => guest.evaluate(f, a);
   // liste des parties (écran Multijoueur › Parties en réseau)
-  await guest.getByText('Multijoueur', { exact: true }).click();
+  await guest.getByText('Jouer', { exact: true }).first().click();
+  await guest.locator('.bm-tab', { hasText: 'Realms' }).click();
   await wait(300);
-  await guest.getByText('Parties en réseau (vrais joueurs)...').click();
   await guest.waitForSelector(`.server-entry[data-room="${room}"]`, { timeout: 10000 });
   check('Invité : la partie apparaît dans la liste', true);
   await guest.screenshot({ path: `${OUT}/multi-01-liste.png` });

@@ -28,7 +28,8 @@ try {
   await page.addInitScript(() => localStorage.setItem('lecraft.settings.v1', JSON.stringify({ quality: 'MEDIUM', renderDistance: 3, autoQuality: false, gfxV: 2 })));
   await page.goto(URL);
   await page.waitForFunction(() => window.__lecraft?.state === 'menu', null, { timeout: 120000 });
-  await page.getByText('Multijoueur', { exact: true }).click();
+  await page.getByText('Jouer', { exact: true }).first().click();
+  await page.locator('.bm-tab', { hasText: 'Serveurs' }).click();
   await wait(300);
   await page.locator('.server-entry[data-server="HypXL"]').click();
   await page.getByText('Rejoindre le serveur').click();

@@ -1,5 +1,5 @@
 import { el } from './dom';
-import { mcButton, mcLabel, mcRow, mcScreen } from './Mc';
+import { bmModal } from './BedrockUI';
 
 export interface Screen {
   el: HTMLElement;
@@ -72,23 +72,27 @@ export class UIManager {
   confirm(title: string, message: string, okLabel = 'Confirmer', danger = true): Promise<boolean> {
     return new Promise((resolve) => {
       let done = false;
+      let own: Screen | null = null;
       const finish = (v: boolean) => {
         if (done) return;
         done = true;
-        this.remove(screen);
+        if (own) this.remove(own);
         resolve(v);
       };
       void danger;
-      const screen: Screen = {
-        ...mcScreen({
-          title,
-          bg: 'dim',
-          body: [el('div', { style: 'flex:1' }), mcLabel(message, 'white'), el('div', { style: 'flex:1' })],
-          footer: [mcRow(mcButton(okLabel, () => finish(true), { w: 150 }), mcButton('Annuler', () => finish(false), { w: 150 }))],
-        }),
-        onBack: () => (finish(false), true),
-      };
-      this.push(screen);
+      // la fenêtre s'affiche par-dessus l'écran actuel (qui reste visible, assombri) quand c'est un écran des menus
+      let host = this.top?.el;
+      if (!host?.classList.contains('bm-screen') || host.classList.contains('bm-loading')) {
+        host = el('div', { class: 'screen mc-screen bm-screen' });
+        own = { el: host, onBack: () => (finish(false), true) };
+        this.push(own);
+      }
+      bmModal(host, {
+        title,
+        body: [message],
+        buttons: [{ label: okLabel, tone: 'green', onClick: () => finish(true) }, { label: 'Annuler', onClick: () => finish(false) }],
+        onClose: () => finish(false),
+      });
     });
   }
 }

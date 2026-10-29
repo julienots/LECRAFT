@@ -92,6 +92,8 @@ export function javaItemProps(def: ItemDef): Partial<ItemDef> {
   const bt = javaBurnTime(k);
   if (bt !== undefined && def.burnTime !== bt) o.burnTime = bt;
   // dégâts et recharge d'attaque du jeu original (1 / vitesse d'attaque)
+  // objets-blocs fonctionnels (onglet « Blocs fonctionnels » du jeu original)
+  if (def.place === k && def.tab !== 'functional' && /(_bed|_banner|_skull|_head|^trapped_chest|copper_chest|^decorated_pot)$/.test(k)) o.tab = 'functional';
   const atk = JAVA_ATTACK[k];
   if (atk) {
     if (atk[0] !== undefined && def.damage !== atk[0]) o.damage = atk[0];

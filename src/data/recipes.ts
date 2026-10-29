@@ -18,6 +18,15 @@ export const TAGS: Record<string, string[]> = {
   soul_fire_base_blocks: [],
   /** #eggs (gâteau, tarte à la citrouille). */
   eggs: ['egg'],
+  /** #beds (teinture d'un lit), #decorated_pot_ingredients, #metal_nuggets, #small_flowers… (vanillaJava.ts). */
+  beds: ['red_bed'],
+  decorated_pot_ingredients: [],
+  metal_nuggets: [],
+  small_flowers: [],
+  sandstone_stairs_materials: [],
+  red_sandstone_stairs_materials: [],
+  sandstone_slab_materials: [],
+  red_sandstone_slab_materials: [],
 };
 
 let n = 0;
@@ -55,7 +64,7 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
   shaped('sandstone', 1, ['##', '##'], { '#': 'sand' }),
   shaped('glass_pane', 16, ['###', '###'], { '#': 'glass' }),
   shaped('white_wool', 1, ['##', '##'], { '#': 'string' }),
-  shaped('red_bed', 1, ['WWW', 'PPP'], { W: 'tag:wool', P: 'tag:planks' }),
+  shaped('red_bed', 1, ['WWW', 'PPP'], { W: 'red_wool', P: 'tag:planks' }),
   shaped('bookshelf', 1, ['###', 'BBB', '###'], { '#': 'tag:planks', B: 'book' }),
   shaped('tnt', 1, ['GSG', 'SGS', 'GSG'], { G: 'gunpowder', S: 'sand' }),
   shaped('lantern', 1, ['NNN', 'NTN', 'NNN'], { N: 'iron_nugget', T: 'torch' }),

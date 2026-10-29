@@ -5,6 +5,26 @@ import { AMBIENCE, buildAmbience, buildSounds, SynthContext } from './Synth';
 import { mapSound } from './SoundMap';
 
 import { composePiece, MusicLibrary, type MusicMood, type MusicNote, type TrackInfo } from './Music';
+import { buildRecordSfx, composeRecord, type RecordNote, type RecordPiece } from './Records';
+import { DISCS } from '../data/discs';
+
+/** Portée d'un juke-box (blocs), atténuation linéaire comme le jeu original. */
+export const RECORD_RANGE = 64;
+
+/** Disque en lecture dans un juke-box : bus positionnel, notes programmées, fichier du pack. */
+interface RecordPlayback {
+  disc: string;
+  /** Gain d'atténuation (distance) puis panoramique. */
+  out: GainNode;
+  pan: StereoPannerNode;
+  /** Instant (horloge audio) correspondant au début de la piste. */
+  t0: number;
+  piece: RecordPiece | null;
+  cursor: number;
+  sources: AudioScheduledSourceNode[];
+  /** Fichier sounds/records/<nom>.ogg du pack : en cours de décodage ou joué. */
+  file: 'loading' | AudioBufferSourceNode | null;
+}
 
 /**
  * Gestionnaire audio (WebAudio) : effets spatialisés (panoramique + atténuation),
@@ -42,6 +62,15 @@ export class AudioManager implements SoundFx {
   private packGroups = new Map<string, Blob[]>();
   private packDecoded = new Map<Blob[], AudioBuffer[]>();
   private packDecoding = new Set<Blob[]>();
+  /** Juke-box en lecture (clé de position → lecture). */
+  private records = new Map<string, RecordPlayback>();
+  private recordBus: GainNode | null = null;
+  private recordPieces = new Map<string, RecordPiece | null>();
+  private recordFiles = new Map<string, AudioBuffer | null>();
+  /** Un juke-box joue à portée d'oreille : la musique de fond se tait. */
+  private recordNear = false;
+  /** Disque audible le plus proche (« C418 - cat »), vide sinon. */
+  recordPlaying = '';
 
   constructor(private settings: Settings) {}
 
@@ -82,6 +111,8 @@ export class AudioManager implements SoundFx {
     this.sfx.gain.value = this.settings.sfxVolume;
     this.music.gain.value = this.settings.musicVolume * 0.6;
     this.amb.gain.value = this.settings.ambientVolume * 0.7;
+    // juke-box et blocs musicaux : bus des effets (catégorie « Juke-box / blocs musicaux » du jeu original)
+    if (this.recordBus) this.recordBus.gain.value = this.settings.sfxVolume;
   }
 
   suspend() {
@@ -346,12 +377,19 @@ export class AudioManager implements SoundFx {
       // les sources terminées sont oubliées
       if (cur.sources.length > 400) cur.sources.splice(0, cur.sources.length - 200);
     }
+    // juke-box proche : la musique de fond s'arrête et ne reprend qu'après le disque
+    if (this.recordNear) {
+      if (this.current) this.stopMusic(2);
+      this.musicTimer = Math.max(this.musicTimer, 20 + Math.random() * 40);
+      return;
+    }
     if (this.musicPlaying) return;
     this.musicTimer -= dt;
     if (this.musicTimer > 0) return;
     this.musicPlaying = true;
     const mood = this.musicMood;
-    const own = this.tracks.filter((t) => t.mood === mood || (t.mood === 'any' && mood !== 'nether' && mood !== 'end') || (t.mood === 'day' && (mood === 'night' || mood === 'creative')));
+    // les disques du pack (records/…) ne passent qu'au juke-box
+    const own = this.tracks.filter((t) => !/^records\//i.test(t.name)).filter((t) => t.mood === mood || (t.mood === 'any' && mood !== 'nether' && mood !== 'end') || (t.mood === 'day' && (mood === 'night' || mood === 'creative')));
     if (own.length && Math.random() < 0.75) void this.playImported(own[Math.floor(Math.random() * own.length)], mood);
     else this.playPiece(mood);
   }
@@ -359,19 +397,8 @@ export class AudioManager implements SoundFx {
   private musicBus(): GainNode {
     const c = this.ctx!;
     if (!this.reverb) {
-      // réverbération de salle (réponse impulsionnelle générée : bruit à décroissance exponentielle)
-      const len = Math.floor(c.sampleRate * 3.2);
-      const ir = c.createBuffer(2, len, c.sampleRate);
-      for (let ch = 0; ch < 2; ch++) {
-        const d = ir.getChannelData(ch);
-        let seed = 1234 + ch * 77;
-        for (let i = 0; i < len; i++) {
-          seed = (seed * 1664525 + 1013904223) >>> 0;
-          d[i] = ((seed / 4294967296) * 2 - 1) * Math.pow(1 - i / len, 3.2);
-        }
-      }
       this.reverb = c.createConvolver();
-      this.reverb.buffer = ir;
+      this.reverb.buffer = this.impulse(3.2);
       const wet = c.createGain();
       wet.gain.value = 0.32;
       this.reverb.connect(wet).connect(this.music);
@@ -381,6 +408,322 @@ export class AudioManager implements SoundFx {
     g.connect(this.music);
     g.connect(this.reverb);
     return g;
+  }
+
+  /** Réverbération de salle (réponse impulsionnelle générée : bruit à décroissance exponentielle). */
+  private impulse(seconds: number): AudioBuffer {
+    const c = this.ctx!;
+    const len = Math.floor(c.sampleRate * seconds);
+    const ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      let seed = 1234 + ch * 77;
+      for (let i = 0; i < len; i++) {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        d[i] = ((seed / 4294967296) * 2 - 1) * Math.pow(1 - i / len, 3.2);
+      }
+    }
+    return ir;
+  }
+
+  // ---------- juke-box ----------
+
+  /** Bus des juke-box (volume des effets) avec sa réverbération, et bruitages des disques. */
+  private ensureRecordBus(): GainNode {
+    const c = this.ctx!;
+    if (this.recordBus) return this.recordBus;
+    this.recordBus = c.createGain();
+    this.recordBus.connect(this.master);
+    const rev = c.createConvolver();
+    rev.buffer = this.impulse(2.4);
+    const wet = c.createGain();
+    wet.gain.value = 0.3;
+    // envoi : chaque juke-box alimente la réverbération via recordBus → rev (la réverbération ne repasse pas par le bus)
+    this.recordBus.connect(rev).connect(wet).connect(this.master);
+    const s = new SynthContext(c.sampleRate);
+    for (const [k, data] of Object.entries(buildRecordSfx(s))) {
+      const b = c.createBuffer(1, data.length, c.sampleRate);
+      b.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+      this.buffers.set(`rec:${k}`, b);
+    }
+    this.applyVolumes();
+    return this.recordBus;
+  }
+
+  /** Pièce composée d'un disque (mise en cache). */
+  private recordPiece(disc: string): RecordPiece | null {
+    if (!this.recordPieces.has(disc)) this.recordPieces.set(disc, composeRecord(disc));
+    return this.recordPieces.get(disc)!;
+  }
+
+  /** Fichier du pack (sounds/records/<nom>.ogg) importé dans la bibliothèque musicale, sinon null. */
+  private recordTrack(disc: string): TrackInfo | null {
+    const file = DISCS[disc]?.file;
+    if (!file) return null;
+    return this.tracks.find((t) => t.name.toLowerCase().replace(/\.(ogg|mp3|wav)$/, '') === `records/${file}`) ?? null;
+  }
+
+  private startRecord(key: string, disc: string, elapsed: number): RecordPlayback {
+    const c = this.ctx!;
+    const bus = this.ensureRecordBus();
+    const out = c.createGain();
+    out.gain.value = 0;
+    const pan = c.createStereoPanner();
+    out.connect(pan).connect(bus);
+    const rp: RecordPlayback = { disc, out, pan, t0: c.currentTime + 0.05 - elapsed, piece: null, cursor: 0, sources: [], file: null };
+    const track = this.recordTrack(disc);
+    if (track) {
+      const cached = this.recordFiles.get(track.name);
+      if (cached) this.startRecordFile(rp, cached);
+      else if (cached === undefined) {
+        rp.file = 'loading';
+        void MusicLibrary.get(track.name)
+          .then((b) => (b ? b.arrayBuffer() : null))
+          .then((a) => (a ? c.decodeAudioData(a) : null))
+          .catch(() => null)
+          .then((buf) => {
+            this.recordFiles.set(track.name, buf);
+            if (this.records.get(key) !== rp) return;
+            if (buf) this.startRecordFile(rp, buf);
+            else this.startRecordPiece(rp, c.currentTime - rp.t0);
+          });
+      } else this.startRecordPiece(rp, elapsed);
+    } else this.startRecordPiece(rp, elapsed);
+    this.records.set(key, rp);
+    return rp;
+  }
+
+  private startRecordFile(rp: RecordPlayback, buf: AudioBuffer) {
+    const c = this.ctx!;
+    const pos = Math.max(0, c.currentTime - rp.t0);
+    if (pos >= buf.duration) {
+      rp.file = null;
+      return;
+    }
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.connect(rp.out);
+    src.start(c.currentTime + 0.02, pos);
+    rp.file = src;
+    rp.sources.push(src);
+  }
+
+  private startRecordPiece(rp: RecordPlayback, elapsed: number) {
+    rp.file = null;
+    rp.piece = this.recordPiece(rp.disc);
+    const notes = rp.piece?.notes ?? [];
+    // reprise au milieu de la piste (chargement du monde, retour à portée) : notes déjà passées sautées
+    let i = 0;
+    while (i < notes.length && notes[i].t < elapsed - 0.02) i++;
+    rp.cursor = i;
+  }
+
+  private stopRecord(key: string, fade = 0.3) {
+    const rp = this.records.get(key);
+    if (!rp || !this.ctx) return;
+    this.records.delete(key);
+    const now = this.ctx.currentTime;
+    rp.out.gain.cancelScheduledValues(now);
+    rp.out.gain.setValueAtTime(rp.out.gain.value, now);
+    rp.out.gain.linearRampToValueAtTime(0, now + fade);
+    setTimeout(() => {
+      for (const src of rp.sources)
+        try {
+          src.stop();
+        } catch {
+          /* déjà arrêté */
+        }
+      rp.out.disconnect();
+      rp.pan.disconnect();
+    }, fade * 1000 + 80);
+  }
+
+  /** Arrête tous les juke-box (quitter le monde, pause). */
+  stopRecords() {
+    for (const k of [...this.records.keys()]) this.stopRecord(k, 0.15);
+    this.recordNear = false;
+    this.recordPlaying = '';
+  }
+
+  /** Nombre de juke-box en cours de lecture (tests). */
+  get recordCount() {
+    return this.records.size;
+  }
+
+  /**
+   * Juke-box en lecture (appelé à chaque image) : démarre les nouveaux, arrête ceux qui ne jouent
+   * plus (disque éjecté, bloc cassé, fin de piste), recale sur le temps de jeu, atténue selon la
+   * distance (64 blocs) et programme les notes par petites fenêtres.
+   */
+  updateRecords(list: { key: string; x: number; y: number; z: number; disc: string; elapsed: number }[]) {
+    if (!this.ctx || !this.ready || this.ctx.state !== 'running') return;
+    const c = this.ctx;
+    const now = c.currentTime;
+    const L = this.listener;
+    const live = new Set<string>();
+    let near = false;
+    let best = Infinity;
+    let title = '';
+    for (const j of list) {
+      const info = DISCS[j.disc];
+      if (!info || j.elapsed >= info.length) continue;
+      const dx = j.x + 0.5 - L.x, dy = j.y + 0.5 - L.y, dz = j.z + 0.5 - L.z;
+      const d = Math.hypot(dx, dy, dz);
+      // hors de portée : pas de lecture (elle reprendra au bon endroit en revenant)
+      if (d > RECORD_RANGE + 8) continue;
+      live.add(j.key);
+      let rp = this.records.get(j.key);
+      if (rp && rp.disc !== j.disc) {
+        this.stopRecord(j.key, 0.1);
+        rp = undefined;
+      }
+      if (!rp) rp = this.startRecord(j.key, j.disc, j.elapsed);
+      // dérive entre l'horloge audio et le temps de jeu (pause, ralentissement) : on relance au bon endroit
+      if (rp.file !== 'loading' && Math.abs(now - rp.t0 - j.elapsed) > 0.75) {
+        this.stopRecord(j.key, 0.05);
+        rp = this.startRecord(j.key, j.disc, j.elapsed);
+      }
+      const vol = Math.max(0, 1 - d / RECORD_RANGE);
+      rp.out.gain.setTargetAtTime(vol, now, 0.08);
+      const rx = Math.cos(L.yaw), rz = -Math.sin(L.yaw);
+      rp.pan.pan.setTargetAtTime(d > 0.5 ? Math.max(-1, Math.min(1, (dx * rx + dz * rz) / d)) * 0.7 : 0, now, 0.08);
+      if (vol > 0.02) {
+        near = true;
+        if (d < best) {
+          best = d;
+          title = `${info.author} - ${info.title}`;
+        }
+      }
+      const notes = rp.piece?.notes;
+      if (notes && rp.file === null) {
+        const horizon = now + 2.5;
+        while (rp.cursor < notes.length && rp.t0 + notes[rp.cursor].t < horizon) {
+          const n = notes[rp.cursor++];
+          if (rp.t0 + n.t >= now - 0.05) this.recordVoice(n, rp.t0, rp.out, rp.sources);
+        }
+        if (rp.sources.length > 500) rp.sources.splice(0, rp.sources.length - 250);
+      }
+    }
+    for (const k of [...this.records.keys()]) if (!live.has(k)) this.stopRecord(k);
+    this.recordNear = near;
+    this.recordPlaying = title;
+  }
+
+  /** Instruments des disques : voix de la musique, pincé, solo, orgue, nappe grave, bruitages. */
+  private recordVoice(n: RecordNote, t0: number, out: AudioNode, sources: AudioScheduledSourceNode[]) {
+    const c = this.ctx!;
+    const at = Math.max(c.currentTime, t0 + n.t);
+    if (n.voice === 'sfx') {
+      const buf = this.buffers.get(`rec:${n.sfx}`);
+      if (!buf) return;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = n.rate ?? 1;
+      const g = c.createGain();
+      g.gain.value = 0.7 * n.vel;
+      let node: AudioNode = src.connect(g);
+      if (n.pan) {
+        const p = c.createStereoPanner();
+        p.pan.value = Math.max(-1, Math.min(1, n.pan));
+        node = node.connect(p);
+      }
+      node.connect(out);
+      // une note plus courte que le tampon (grésillement de fin) est coupée à sa durée
+      src.start(at);
+      if (n.dur < buf.duration / (n.rate ?? 1)) src.stop(at + n.dur);
+      src.onended = () => src.disconnect();
+      sources.push(src);
+      return;
+    }
+    if (n.voice === 'piano' || n.voice === 'pad' || n.voice === 'bass' || n.voice === 'bell') {
+      this.voice({ t: n.t, n: n.n, dur: n.dur, vel: n.vel, voice: n.voice }, t0, out, sources);
+      return;
+    }
+    const f = 440 * Math.pow(2, (n.n - 69) / 12);
+    const g = c.createGain();
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    g.connect(lp).connect(out);
+    const mine: OscillatorNode[] = [];
+    const osc = (type: OscillatorType, freq: number, gain: number, detune = 0) => {
+      const o = c.createOscillator();
+      o.type = type;
+      o.frequency.value = freq;
+      o.detune.value = detune;
+      const og = c.createGain();
+      og.gain.value = gain;
+      o.connect(og).connect(g);
+      mine.push(o);
+      return o;
+    };
+    let stopAt = at + n.dur + 0.2;
+    if (n.voice === 'pluck') {
+      // corde pincée : attaque sèche, filtre qui se referme
+      const v = 0.1 * n.vel;
+      const dec = Math.max(0.5, 1.6 - (n.n - 60) * 0.02);
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(v, at + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dec);
+      lp.frequency.setValueAtTime(Math.min(8000, f * 10), at);
+      lp.frequency.exponentialRampToValueAtTime(Math.max(300, f * 1.5), at + dec * 0.6);
+      osc('triangle', f, 1);
+      osc('sawtooth', f, 0.25, 5);
+      stopAt = at + dec + 0.05;
+    } else if (n.voice === 'lead') {
+      // solo : dent de scie et carré filtrés, vibrato
+      const v = 0.05 * n.vel;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(v, at + 0.04);
+      g.gain.setValueAtTime(v * 0.8, at + Math.max(0.05, n.dur * 0.8));
+      g.gain.linearRampToValueAtTime(0, at + n.dur + 0.25);
+      lp.frequency.value = Math.min(4000, f * 5);
+      const a = osc('sawtooth', f, 0.6, -4);
+      const b = osc('square', f, 0.3, 4);
+      const lfo = c.createOscillator();
+      lfo.frequency.value = 5.5;
+      const depth = c.createGain();
+      depth.gain.setValueAtTime(0, at);
+      depth.gain.linearRampToValueAtTime(f * (n.wob ?? 0.005), at + 0.35);
+      lfo.connect(depth);
+      depth.connect(a.frequency);
+      depth.connect(b.frequency);
+      mine.push(lfo);
+      stopAt = at + n.dur + 0.3;
+    } else if (n.voice === 'organ') {
+      const v = 0.045 * n.vel;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(v, at + 0.02);
+      g.gain.setValueAtTime(v, at + n.dur);
+      g.gain.linearRampToValueAtTime(0, at + n.dur + 0.12);
+      lp.frequency.value = 5000;
+      osc('sine', f, 1);
+      osc('sine', f * 2, 0.5);
+      osc('sine', f * 3, 0.25);
+      osc('sine', f * 4, 0.12);
+      stopAt = at + n.dur + 0.15;
+    } else {
+      // nappe grave et lente (ambiances inquiétantes), légèrement désaccordée
+      const v = 0.06 * n.vel;
+      const att = Math.min(4, n.dur * 0.3);
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(v, at + att);
+      g.gain.setValueAtTime(v, at + Math.max(att, n.dur - att));
+      g.gain.linearRampToValueAtTime(0, at + n.dur);
+      lp.frequency.setValueAtTime(220, at);
+      lp.frequency.linearRampToValueAtTime(520, at + n.dur * 0.5);
+      lp.frequency.linearRampToValueAtTime(200, at + n.dur);
+      osc('sawtooth', f, 0.5, -9);
+      osc('sawtooth', f, 0.5, 8);
+      osc('sine', f / 2, 0.9);
+      osc('triangle', f * 1.498, 0.15);
+      stopAt = at + n.dur + 0.05;
+    }
+    for (const o of mine) {
+      sources.push(o);
+      o.start(at);
+      o.stop(stopAt);
+      o.onended = () => o.disconnect();
+    }
   }
 
   private playPiece(mood: MusicMood) {
@@ -495,6 +838,7 @@ export class AudioManager implements SoundFx {
   }
 
   dispose() {
+    this.stopRecords();
     this.stopAmbience();
     this.ctx?.close().catch(() => {});
     this.ctx = null;

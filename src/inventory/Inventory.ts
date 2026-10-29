@@ -6,6 +6,9 @@ export const HOTBAR_SIZE = 9;
 export const MAIN_SIZE = 27;
 export const ARMOR_SLOTS: ArmorSlot[] = ['head', 'chest', 'legs', 'feet'];
 
+/** Munitions de l'arc et de l'arbalète. */
+export const ARROWS = ['arrow', 'spectral_arrow', 'tipped_arrow'];
+
 export function makeStack(id: string, count = 1): ItemStack {
   const s: ItemStack = { id, count };
   const dur = ItemRegistry.maxDurability(id);
@@ -93,6 +96,11 @@ export class Inventory {
     }
     this.changed();
     return true;
+  }
+
+  /** Première case contenant des flèches (normales, spectrales ou à effet), barre d'objets d'abord comme le jeu original ; -1 sinon. */
+  arrowSlot(): number {
+    return this.slots.findIndex((s) => !!s && ARROWS.includes(s.id));
   }
 
   /** Retire n objets d'un slot précis. */

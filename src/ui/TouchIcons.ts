@@ -1,3 +1,4 @@
+import { pixelIcon } from './Bedrock';
 /**
  * Icônes en pixel art des boutons tactiles (comme l'édition mobile) : chaque « # » est un pixel blanc,
  * avec une ombre portée sombre d'un pixel pour rester lisible sur tous les fonds.
@@ -122,4 +123,104 @@ export function touchIcon(name: string): string {
   url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
   cache.set(name, url);
   return url;
+}
+
+/**
+ * Pictogrammes de l'interface mobile (boutons du haut, sauter, s'accroupir, courir) : traits bleu
+ * nuit sur boutons gris, chevrons blancs pour la course, comme le jeu original.
+ */
+const N = '#1d2638';
+const BH: Record<string, { rows: string[]; pal: Record<string, string> }> = {
+  // sauter : flèche vers le haut au-dessus d'un socle
+  bh_jump: {
+    rows: [
+      '.......#.......',
+      '......###......',
+      '.....#####.....',
+      '....#######....',
+      '.......#.......',
+      '.......#.......',
+      '..#....#....#..',
+      '..#....#....#..',
+      '..#.........#..',
+      '...............',
+      '..###########..',
+    ],
+    pal: { '#': N },
+  },
+  // s'accroupir / descendre : flèche vers le bas, traits au-dessus
+  bh_sneak: {
+    rows: [
+      '..#.........#..',
+      '..#....#....#..',
+      '..#....#....#..',
+      '.......#.......',
+      '.......#.......',
+      '....#######....',
+      '.....#####.....',
+      '......###......',
+      '.......#.......',
+      '...............',
+      '..###########..',
+    ],
+    pal: { '#': N },
+  },
+  // courir : double chevron blanc ombré de bleu clair
+  bh_sprint: {
+    rows: [
+      '##..##.....',
+      '###.###....',
+      '.###.###...',
+      '..###.###..',
+      '...###.###.',
+      '..###.###..',
+      '.###.###...',
+      '###.###....',
+      '##..##.....',
+    ],
+    pal: { '#': '#ffffff' },
+  },
+  // menu : trois barres
+  bh_menu: {
+    rows: ['..............', '.############.', '.############.', '..............', '.############.', '.############.', '..............', '.############.', '.############.'],
+    pal: { '#': N },
+  },
+  // tchat : bulle à trois points
+  bh_chat: {
+    rows: [
+      '..##########..',
+      '.#..........#.',
+      '#............#',
+      '#..##.##.##..#',
+      '#..##.##.##..#',
+      '#............#',
+      '.#..........#.',
+      '..####..#####.',
+      '.....#..#.....',
+      '......##......',
+    ],
+    pal: { '#': N },
+  },
+  // gestes : petit personnage aux bras écartés
+  bh_emote: {
+    rows: [
+      '...#####....',
+      '...#####....',
+      '...#.#.#....',
+      '.#.#####.#..',
+      '###.###.##..',
+      '.#..###..#..',
+      '....###.....',
+      '...##.##....',
+      '...#...#....',
+      '..##...##...',
+    ],
+    pal: { '#': N },
+  },
+};
+
+/** Pictogramme de l'interface mobile : `url(...)` CSS. */
+export function bhTouchIcon(name: string): string {
+  const s = BH[name] ?? BH.bh_jump;
+  return pixelIcon(`touch:${name}`, s.rows, s.pal);
 }

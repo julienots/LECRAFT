@@ -83,23 +83,22 @@ try {
   await shot('e2e-01-menu');
 
   // ---------- paramètres depuis le menu ----------
-  await page.getByText('Options...').first().click();
-  await page.getByText('Commandes...').click();
+  await page.getByText('Paramètres', { exact: true }).first().click();
+  await page.locator('[data-nav="touch"]').click();
   await wait(200);
-  check('Écran Options → Commandes', (await page.locator('.mc-screen').last().locator('.mc-btn, .mc-slider').count()) > 8);
-  await page.getByText('Terminé').last().click();
-  await wait(100);
-  await page.getByText('Terminé').last().click();
+  check('Écran Paramètres → Toucher', (await page.locator('.bh-pane .bh-row').count()) > 8);
+  await page.locator('.bh-bar .bh-back').click();
   await wait(100);
 
   // ---------- nouveau monde ----------
-  await page.getByText('Solo').click();
+  await page.getByText('Jouer', { exact: true }).first().click();
   await page.getByText('Créer un nouveau monde').first().click();
+  await page.locator('.bm-from .bm-side .bm-btn').first().click();
   await wait(200);
   const form = page.locator('.mc-screen').last();
   await form.locator('input').first().fill(`Test E2E ${Date.now() % 100000}`);
   await form.locator('input').nth(1).fill('839274928');
-  await page.locator('.mc-footer').last().getByText('Créer un nouveau monde').click();
+  await page.locator('.bm-left .bm-btn.go').click();
   await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
   await wait(2500);
   const info0 = await G(() => { const s = window.__lecraft.session; return { seed: s.world.seed, x: s.player.x, y: s.player.y, z: s.player.z, chunks: s.world.chunks.size, ground: s.player.body.onGround }; });
@@ -316,7 +315,7 @@ try {
   // ---------- pause / retour Android ----------
   await page.keyboard.press('Escape');
   await wait(300);
-  check('Pause (retour)', (await state()) === 'paused' && (await page.getByText('Retour au jeu').count()) === 1);
+  check('Pause (retour)', (await state()) === 'paused' && (await page.getByText('Reprendre le jeu').count()) === 1);
   await shot('e2e-07-pause');
   const simT = await G(() => window.__lecraft.session.dayCycle.time);
   await wait(700);
@@ -329,19 +328,21 @@ try {
   const snap = await G(() => { const s = window.__lecraft.session, p = s.player; return { x: p.x, y: p.y, z: p.z, planks: p.inventory.count('oak_planks'), placed: s.world.getBlock(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) }; });
   await page.keyboard.press('Escape');
   await wait(200);
-  await page.getByText('Sauvegarder', { exact: true }).click();
-  await page.waitForFunction(() => document.body.innerText.includes('Sauvegardé à'), null, { timeout: 15000 });
+  await page.getByText('Paramètres', { exact: true }).click();
+  await page.locator('[data-nav="world"]').click();
+  await page.locator('.bh-pane').getByText('Sauvegarder', { exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('.toasts')?.textContent?.includes('Partie sauvegardée'), null, { timeout: 15000 });
   check('Sauvegarde manuelle', true);
-  await page.getByText('Sauvegarder et quitter').click();
+  await page.locator('.bh-bar .bh-back').click();
+  await page.getByText('Sauv. et quitter').click();
   await page.waitForFunction(() => window.__lecraft.state === 'menu');
   await page.reload();
   await page.waitForFunction(() => window.__lecraft?.state === 'menu', null, { timeout: 30000 });
-  await page.getByText('Solo').click();
+  await page.getByText('Jouer', { exact: true }).first().click();
   await wait(600);
   check('Liste des mondes (miniature, nom)', (await page.locator('.world-entry', { hasText: 'Test E2E' }).count()) >= 1 && (await page.locator('.world-entry img').count()) >= 1);
   await shot('e2e-08-worlds');
   await page.locator('.world-entry').first().click();
-  await page.getByText('Jouer au monde sélectionné').click();
   await page.waitForFunction(() => window.__lecraft?.state === 'playing', null, { timeout: 120000 });
   await wait(1500);
   const re = await G(() => { const p = window.__lecraft.session.player; return { x: p.x, y: p.y, z: p.z, planks: p.inventory.count('oak_planks') }; });
