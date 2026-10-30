@@ -1,6 +1,6 @@
 import type { Game } from '../core/Game';
 import { applyQuality } from '../core/Settings';
-import type { QualityLevel, Difficulty } from '../core/Config';
+import { MIN_RENDER_DISTANCE, type QualityLevel, type Difficulty } from '../core/Config';
 import type { Screen } from './UIManager';
 import { button, el } from './dom';
 import { bhButton, bhSegments, bhSelect, bhSlider, bhToggle, bhIconEl, bhSetLabel } from './Bedrock';
@@ -287,7 +287,7 @@ const PANES: Record<string, Pane> = {
         toggleRow('Balancement de la vue', 'La caméra oscille légèrement quand vous marchez.', s.viewBobbing, (v) => ((s.viewBobbing = v), apply())),
         head('GRAPHISME, PERFORMANCES ET CONFIGURATION', 'Contrôlez l’apparence et les performances du jeu'),
         selectRow(ctx, 'Qualité graphique', 'Profil de réglages (distance, ombres, eau, nuages…).', [['LOW', 'Basse'], ['MEDIUM', 'Moyenne'], ['HIGH', 'Haute']] as [QualityLevel, string][], s.quality, (v) => (applyQuality(s, v), apply(true))),
-        sliderRow('Distance d’affichage', 'Nombre de tronçons de terrain affichés autour de vous.', 2, 16, 1, s.renderDistance, (v) => `${v} tronçons`, (v) => ((s.renderDistance = v), apply())),
+        sliderRow('Distance d’affichage', 'Nombre de tronçons de terrain affichés autour de vous.', MIN_RENDER_DISTANCE, 16, 1, s.renderDistance, (v) => `${v} tronçons`, (v) => ((s.renderDistance = v), apply())),
         sliderRow('Résolution', 'Définition du rendu 3D (moins = plus fluide).', 0.75, 1, 0.05, s.resolutionScale, pct, (v) => ((s.resolutionScale = v), apply())),
         selectRow(ctx, 'Limite d’images par seconde', undefined, [[30, '30'], [45, '45'], [60, '60']] as [number, string][], s.fpsCap, (v) => ((s.fpsCap = v as 30 | 45 | 60), apply())),
         toggleRow('Qualité automatique', 'Ajuste la résolution et la distance selon la fluidité.', s.autoQuality, (v) => ((s.autoQuality = v), apply())),

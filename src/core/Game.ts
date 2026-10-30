@@ -15,7 +15,7 @@ import { loadInstalledPack, loadBundledPack, type LoadedPack } from '../render/R
 import { installPixelFont } from '../ui/FontBuilder';
 import { applyTheme } from '../ui/Theme';
 import { setWidgetClick } from '../ui/Mc';
-import { SAVE_VERSION } from './Config';
+import { MIN_RENDER_DISTANCE, SAVE_VERSION } from './Config';
 import { MenuPanorama } from '../render/MenuPanorama';
 import { ChatUI } from '../ui/ChatUI';
 import { loadEnabledAddons, type AddonLoadResult } from '../addons/AddonManager';
@@ -727,7 +727,7 @@ export class Game {
     this.audio.applyVolumes();
     this.touch.applyLayout();
     if (this.session) {
-      this.session.chunks.opts.renderDistance = this.settings.renderDistance;
+      this.session.chunks.opts.renderDistance = Math.max(MIN_RENDER_DISTANCE, this.settings.renderDistance);
       this.session.particles.limit = this.session.particleLimit();
       this.session.player.difficulty = this.settings.difficulty;
       if (remesh) this.session.chunks.remeshAll();
@@ -737,7 +737,7 @@ export class Game {
   private adjustQuality(dir: -1 | 1) {
     if (!this.settings.autoQuality || !this.session) return;
     if (dir < 0) {
-      if (!this.renderer.adjustDynamicScale(-1) && this.settings.renderDistance > 2) {
+      if (!this.renderer.adjustDynamicScale(-1) && this.settings.renderDistance > MIN_RENDER_DISTANCE) {
         this.settings.renderDistance--;
         this.applySettings();
       }

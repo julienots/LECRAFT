@@ -35,6 +35,9 @@ export interface QualityProfile {
   foliageAnimation: boolean;
 }
 
+/** Distance d'affichage minimale (tronçons) : ni le réglage ni la qualité automatique ne descendent dessous. */
+export const MIN_RENDER_DISTANCE = 5;
+
 export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
   LOW: {
     renderDistance: 6,

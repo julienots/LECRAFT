@@ -1,4 +1,4 @@
-import { QUALITY_PROFILES, type Difficulty, type QualityLevel } from './Config';
+import { MIN_RENDER_DISTANCE, QUALITY_PROFILES, type Difficulty, type QualityLevel } from './Config';
 
 export interface ControlLayout {
   [button: string]: { x: number; y: number }; // position en % de l'écran (coin du bouton)
@@ -124,6 +124,8 @@ export function loadSettings(fallbackQuality: QualityLevel): { settings: Setting
       if (parsed.renderDistance === old[settings.quality]) settings.renderDistance = QUALITY_PROFILES[settings.quality].renderDistance;
       (settings as Settings & { gfxV?: number }).gfxV = 3;
     }
+    // anciennes sauvegardes : la distance d'affichage ne descend pas sous le minimum
+    settings.renderDistance = Math.max(MIN_RENDER_DISTANCE, settings.renderDistance);
     return { settings, fresh: false };
   } catch {
     return { settings: def, fresh: true };

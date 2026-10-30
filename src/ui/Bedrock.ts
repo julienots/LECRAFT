@@ -12,10 +12,14 @@ export function setBedrockClick(fn: () => void) {
   clickSound = fn;
 }
 
-/** Échelle entière de l'interface mobile : 3 en 1568 × 720, 2 sur un petit écran. */
+/**
+ * Échelle de l'interface mobile : 3 en 1568 × 720. Arrondie vers le BAS par quarts (un arrondi
+ * à l'entier supérieur agrandissait trop les écrans et coupait le bas des menus sur les téléphones
+ * dont la hauteur utile n'est pas un multiple de 240).
+ */
 export function bedrockScale(): number {
   const h = Math.min(window.innerHeight, window.innerWidth > window.innerHeight ? window.innerHeight : window.innerHeight * 0.46);
-  return Math.max(1, Math.round(h / 240));
+  return Math.max(0.75, Math.floor((h / 240) * 4) / 4);
 }
 
 let started = false;

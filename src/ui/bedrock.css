@@ -197,7 +197,7 @@ input.bm-input::placeholder { color: #8a8a8a; }
 .bm-seg > button.on::after { content: ''; position: absolute; left: 50%; bottom: calc(var(--u) * 6 * 1px); width: calc(var(--u) * 36 * 1px); height: calc(var(--u) * 1 * 1px); background: #fff; transform: translateX(-50%); }
 .bm-seg > button:hover:not(.on) { background: #e6e6e9; }
 .bm-seg > button:disabled { background: #7b7b7b; color: #a0a0a0; box-shadow: none; }
-.bm-seg > button .ic { width: calc(var(--u) * 14 * 1px); height: calc(var(--u) * 14 * 1px); flex: none; }
+.bm-seg > button .ic, .bm-seg > button svg { width: calc(var(--u) * 14 * 1px); height: calc(var(--u) * 14 * 1px); flex: none; }
 .bm-seg.two > button + button { margin-left: calc(var(--u) * 1 * 1px); }
 
 /* interrupteur */

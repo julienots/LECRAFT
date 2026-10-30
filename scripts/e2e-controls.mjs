@@ -61,7 +61,8 @@ try {
   check('Manette détectée : mode manette + curseur virtuel', gpOn.active && gpOn.cls && gpOn.cursor, JSON.stringify(gpOn));
   check('Stick gauche → curseur jusqu’au bouton « Jouer »', await cursorTo('.bm-btn', 'Jouer'));
   await tap(A);
-  await wait(300);
+  // l'écran Jouer s'ouvre avec une animation : on attend son bouton (rendu logiciel lent)
+  await page.getByText('Créer un nouveau monde').first().waitFor({ timeout: 5000 }).catch(() => {});
   const onWorlds = await page.getByText('Créer un nouveau monde').count();
   check('A : clic sur le bouton (liste des mondes)', onWorlds > 0);
   await tap(B);
