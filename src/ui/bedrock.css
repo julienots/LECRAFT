@@ -241,9 +241,9 @@ input.bm-input::placeholder { color: #8a8a8a; }
 .bm-dialog .df .bm-btn { min-height: calc(var(--u) * 30 * 1px); width: 100%; }
 
 /* ---------- chargement du monde ---------- */
-.bm-loading { align-items: center; justify-content: flex-start; background-size: cover; background-position: center; }
+.screen.bm-screen.bm-loading { align-items: center; justify-content: center; background-size: cover; background-position: center; }
 .bm-loading .bg { position: absolute; inset: 0; z-index: -1; background: #2b2b2b center / cover; image-rendering: auto; }
-.bm-loading .bm-logo { margin-top: calc(var(--u) * 6 * 1px); width: calc(var(--u) * 370 * 1px); image-rendering: pixelated; }
+.bm-loading .bm-logo { margin-top: 0; width: calc(var(--u) * 370 * 1px); max-width: calc(100% - 20px); height: auto; flex: none; image-rendering: pixelated; }
 .bm-lbox { margin-top: calc(var(--u) * 6 * 1px); width: calc(var(--u) * 443 * 1px); max-width: calc(100% - 20px); padding: calc(var(--u) * 3 * 1px); background: #c6c6c6; border: calc(var(--u) * 2 * 1px) solid #131114;
   box-shadow: inset calc(var(--u) * 2 * 1px) calc(var(--u) * 2 * 1px) 0 #fff, inset calc(var(--u) * -2 * 1px) calc(var(--u) * -2 * 1px) 0 #5a5a5a, 0 calc(var(--u) * 2 * 1px) 0 rgba(0, 0, 0, 0.35); }
 .bm-lbox .lt { text-align: center; color: #3c3c3c; padding: calc(var(--u) * 4 * 1px) 0 calc(var(--u) * 5 * 1px); font-size: calc(var(--u) * 10.5 * 1px); }
