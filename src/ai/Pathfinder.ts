@@ -2,8 +2,11 @@
  * Recherche de chemin A* sur la grille de blocs (comme la navigation des créatures du jeu
  * original) : marche à plat, montée d'un bloc (saut), descente jusqu'à 3 blocs, nage ; évite la
  * lave, le feu, les cactus et les barrières (trop hautes pour sauter). Les portes, portillons et
- * trappes ouverts se traversent. Nombre de nœuds borné ; si la cible est inaccessible, le chemin
- * mène au point atteignable le plus proche (comportement du jeu original).
+ * trappes ouverts se traversent ; les portes en bois fermées aussi pour les créatures qui les ouvrent
+ * ou les brisent (option `doors`). Les cases voisines de la lave, du feu ou d'un cactus coûtent plus
+ * cher (malus « danger » du jeu Java), la toile d'araignée aussi, les feux de camp sont interdits.
+ * Nombre de nœuds borné ; si la cible est inaccessible, le chemin mène au point atteignable le plus
+ * proche (comportement du jeu original).
  */
 import { BlockRegistry, SHAPES } from '../blocks/BlockRegistry';
 import { WORLD_HEIGHT } from '../core/Config';
@@ -20,16 +23,33 @@ export interface PathOptions {
   maxDrop?: number;
   /** Les créatures qui craignent l'eau l'évitent (coût élevé). */
   waterCost?: number;
+  /** Portes en bois fermées : 'open' (villageois…) ou 'break' (zombies en difficile) les rendent franchissables. */
+  doors?: 'none' | 'open' | 'break';
 }
 
 const SHAPE = (k: string) => SHAPES.indexOf(k as (typeof SHAPES)[number]) + 1;
 let OPENABLE: Set<number> | null = null;
 let TALL: Set<number> | null = null;
+let DOOR = 0;
+let WEB = -1;
+let CAMPFIRES: Set<number> = new Set();
+/** Mode des portes de la recherche en cours (la recherche est synchrone). */
+let DOOR_MODE: 'none' | 'open' | 'break' = 'none';
 function shapeSets() {
   if (!OPENABLE) {
     OPENABLE = new Set([SHAPE('door'), SHAPE('fence_gate'), SHAPE('trapdoor')]);
     TALL = new Set([SHAPE('fence'), SHAPE('fence_gate'), SHAPE('wall')]);
+    DOOR = SHAPE('door');
   }
+  // blocs d'add-ons enregistrés après coup : recherche à chaque appel (quelques accès à une table)
+  WEB = BlockRegistry.has('cobweb') ? BlockRegistry.byName('cobweb').id : -1;
+  CAMPFIRES = new Set(['campfire', 'soul_campfire'].filter((k) => BlockRegistry.has(k)).map((k) => BlockRegistry.byName(k).id));
+}
+
+/** Porte en bois (ni fer, ni porte à carte) : les mêmes créatures ne peuvent pas ouvrir les autres. */
+function woodDoor(b: number): boolean {
+  const d = BlockRegistry.get(b);
+  return d.key !== 'iron_door' && !d.def.keyItem;
 }
 
 /** Cellule traversable (air, plantes, liquides non dangereux, ouvrants ouverts). */
@@ -39,9 +59,12 @@ function passable(w: PathWorld, x: number, y: number, z: number): boolean {
   if (b === 0) return true;
   if (b < 0) return false;
   const R = BlockRegistry;
-  if (R.liquid[b] === 2 || R.blocks[b].contactDamage > 0) return false;
+  if (R.liquid[b] === 2 || R.blocks[b].contactDamage > 0 || CAMPFIRES.has(b)) return false;
   if (!R.solid[b]) return true;
-  if (OPENABLE!.has(R.shape[b])) return (w.getMeta(x, y, z) & 4) !== 0;
+  if (OPENABLE!.has(R.shape[b])) {
+    if ((w.getMeta(x, y, z) & 4) !== 0) return true;
+    return DOOR_MODE !== 'none' && R.shape[b] === DOOR && woodDoor(b);
+  }
   return false;
 }
 
@@ -54,6 +77,32 @@ function support(w: PathWorld, x: number, y: number, z: number): boolean {
   if (TALL!.has(R.shape[b])) return false;
   return R.solid[b] === 1;
 }
+
+/** Surcoût d'une case : voisine de lave / feu / cactus (+4), toile (+6), porte à ouvrir (+1) ou à briser (+8). */
+function cellPenalty(w: PathWorld, x: number, y: number, z: number, h: number): number {
+  const R = BlockRegistry;
+  let c = 0;
+  // voisinage horizontal, au niveau des pieds et du sol (checkNeighbourBlocks : lave, feu, cactus)
+  scan: for (const [dx, dz] of CROSS)
+    for (let dy = -1; dy <= 0; dy++) {
+      const b = w.getBlock(x + dx, y + dy, z + dz);
+      if (b > 0 && (R.liquid[b] === 2 || (R.blocks[b].contactDamage > 0 && R.liquid[b] === 0))) {
+        c += 4;
+        break scan;
+      }
+    }
+  if (WEB >= 0 && (w.getBlock(x, y, z) === WEB || w.getBlock(x, y + 1, z) === WEB)) c += 6;
+  if (DOOR_MODE !== 'none')
+    for (let k = 0; k < h; k++) {
+      const b = w.getBlock(x, y + k, z);
+      if (b > 0 && R.shape[b] === DOOR && R.solid[b] && (w.getMeta(x, y + k, z) & 4) === 0) {
+        c += DOOR_MODE === 'break' ? 8 : 1;
+        break;
+      }
+    }
+  return c;
+}
+const CROSS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 const isWater = (w: PathWorld, x: number, y: number, z: number) => {
   const b = w.getBlock(x, y, z);
@@ -112,6 +161,7 @@ const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -
  */
 export function findPath(w: PathWorld, sx: number, sy: number, sz: number, tx: number, ty: number, tz: number, o: PathOptions): [number, number, number][] | null {
   shapeSets();
+  DOOR_MODE = o.doors ?? 'none';
   const maxNodes = o.maxNodes ?? 500, maxDrop = o.maxDrop ?? 3, h = Math.max(1, o.height), waterCost = o.waterCost ?? 2;
   if (!standable(w, sx, sy, sz, h)) {
     // départ légèrement décalé (créature en l'air ou dans un bloc bas) : on cherche juste en dessous
@@ -187,7 +237,7 @@ export function findPath(w: PathWorld, sx: number, sy: number, sz: number, tx: n
           if (!passable(w, nx, y - d, nz)) break;
         }
       if (ny < 0) continue;
-      const cost = g[i] + step + (ny > y ? 0.5 : 0) + (isWater(w, nx, ny, nz) ? waterCost : 0);
+      const cost = g[i] + step + (ny > y ? 0.5 : 0) + (isWater(w, nx, ny, nz) ? waterCost : 0) + cellPenalty(w, nx, ny, nz, h);
       if (add(nx, ny, nz, i, cost) < 0) break;
     }
   }

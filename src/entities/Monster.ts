@@ -3,6 +3,10 @@ import { AIState } from '../ai/StateMachine';
 import type { MobDef } from '../data/mobs';
 import { Mob, type EntitySpawner } from './Mob';
 import { newMonsterUpdate } from './NewMobs';
+import { creeperSwellDir, reinforcementChance, reinforcementSpot, rollReinforcementBonus } from '../ai/Behaviors';
+
+/** Zombies qui appellent des renforts quand on les frappe (famille Zombie de Java, difficile). */
+const REINFORCERS = new Set(['zombie', 'husk', 'drowned', 'zombie_villager']);
 
 /** Durée de la mèche du creeper (1,5 s comme le jeu de référence). */
 const CREEPER_FUSE = 1.5;
@@ -141,14 +145,41 @@ export class Monster extends Mob {
     }
   }
 
-  /** Mèche : s'allume à moins de 3 blocs du joueur visible, s'éteint s'il s'éloigne à plus de 7 blocs. */
+  /**
+   * Renforts du zombie (Zombie#hurt) : en difficile, un zombie blessé a une petite chance d'appeler un
+   * autre zombie à 7-40 blocs ; chacun perd 0,05 de chance après l'appel.
+   */
+  onHurt(ctx: GameContext) {
+    if (this.dead || !REINFORCERS.has(this.def.key) || ctx.player.dead || ctx.gamerules.doMobSpawning === false) return;
+    let bonus = this.dynProps.get('__reinf') as number | undefined;
+    if (bonus === undefined) {
+      bonus = rollReinforcementBonus(Math.random);
+      this.dynProps.set('__reinf', bonus);
+    }
+    if (Math.random() >= reinforcementChance(ctx.player.difficulty, bonus)) return;
+    const spot = reinforcementSpot(ctx.world, this.x, this.y, this.z, ctx.player.x, ctx.player.z, Math.random);
+    if (!spot) return;
+    const z = this.spawner.spawnMob('zombie', spot[0] + 0.5, spot[1], spot[2] + 0.5);
+    if (!z) return;
+    z.dynProps.set('__reinf', 0);
+    this.dynProps.set('__reinf', bonus - 0.05);
+    z.ai.lastSeenX = ctx.player.x;
+    z.ai.lastSeenZ = ctx.player.z;
+    z.ai.lastSeenY = ctx.player.y;
+    z.ai.fsm.set(AIState.SEARCH);
+  }
+
+  /**
+   * Mèche (SwellGoal) : s'allume à moins de 3 blocs d'une cible visible, continue tant qu'elle est
+   * visible à moins de 7 blocs, sinon se dégonfle ; le creeper s'arrête pendant qu'il gonfle.
+   */
   private creeperUpdate(ctx: GameContext, dt: number) {
     const p = ctx.player;
-    const close = !p.dead && !p.creative && this.ai.canSee && this.distToPlayer < 3;
-    if (close || (this.fuse > 0 && this.distToPlayer < 7 && !p.dead)) {
+    const targetable = !p.dead && !p.creative;
+    if (targetable && creeperSwellDir(this.fuse > 0, this.distToPlayer, this.ai.canSee) > 0) {
       if (this.fuse === 0) ctx.audio.play('fuse', { x: this.x, y: this.y + 1, z: this.z });
       this.fuse += dt;
-      // immobile pendant la mèche
+      this.ai.hold = 0.15;
       this.body.vx *= 0.5;
       this.body.vz *= 0.5;
     } else this.fuse = Math.max(0, this.fuse - dt);

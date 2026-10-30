@@ -22,6 +22,7 @@ import { Projectile, type ProjectileKind, type ProjectileDef } from './Projectil
 import { ItemRegistry } from '../inventory/ItemRegistry';
 import { makeStack } from '../inventory/Inventory';
 import { onMobHurtByMob } from './MobRelations';
+import { AIController, PATH_NODE_BUDGET } from '../ai/AIController';
 import { Allay, Sniffer } from './NewMobs';
 import { enchLevel } from '../inventory/Enchantments';
 import { applyArrow } from '../inventory/Potions';
@@ -225,6 +226,8 @@ export class EntityManager implements EntitySpawner {
     const prof = ctx.profile;
     const simDist = ctx.profile.simulationDistance * CHUNK_SIZE + 8;
     this.lodTick++;
+    // budget de recherche de chemin du tick : les recalculs sont étalés sur plusieurs ticks
+    AIController.pathBudget = PATH_NODE_BUDGET;
     this.trackRest(ctx, dt);
     const mobs: Mob[] = [];
     const items = this.entities.filter((e): e is ItemEntity => e.kind === 'item' && !e.removed);

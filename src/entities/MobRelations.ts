@@ -91,6 +91,19 @@ function matches(h: HuntRule, hunter: Mob, t: Mob): boolean {
 /** Balayage périodique : proie, fuite, protection des petits, charge de la chèvre. */
 export function scanRelations(mob: Mob, ctx: GameContext) {
   const m = mob as Rel;
+  // petit : suit l'adulte de son espèce le plus proche dans 8 blocs (FollowParentGoal)
+  if (m.baby && !m.dead && !m.net && m.def.category !== 'hostile') {
+    let par: Mob | null = null, pd = 8;
+    for (const o of mobsOf(m)) {
+      if (o === m || o.baby || o.dead || o.def.key !== m.def.key) continue;
+      const d = Math.hypot(o.x - m.x, o.z - m.z);
+      if (d < pd && Math.abs(o.y - m.y) < 4) {
+        pd = d;
+        par = o;
+      }
+    }
+    if (par || (m.parentMob && Math.hypot(m.parentMob.x - m.x, m.parentMob.z - m.z) > 16)) m.parentMob = par;
+  }
   if (m.dead || m.baby || m.net || m.tamed || m.def.category === 'boss') return;
   const st = m.ai.state;
   const free = st === AIState.IDLE || st === AIState.WANDER || st === AIState.RETURN;

@@ -3,7 +3,8 @@ import type { MobDef } from '../data/mobs';
 import { Animal } from './Animal';
 import type { EntitySpawner, Mob } from './Mob';
 import { AIState } from '../ai/StateMachine';
-import { B, BlockRegistry } from '../blocks/BlockRegistry';
+import { B, BlockRegistry, SHAPES } from '../blocks/BlockRegistry';
+import { findBed, villagerWantsBed, type Cell } from '../ai/Behaviors';
 import { raycastBlocks } from '../util/Raycast';
 import { ENCHANT_BY_ID, randomEnchantedBook } from '../inventory/Enchantments';
 
@@ -164,6 +165,7 @@ export class Wolf extends Animal {
   sitting = false;
   target: Mob | null = null;
   private biteTimer = 0;
+  private following = false;
 
   constructor(def: MobDef, index: number, x: number, y: number, z: number, spawner: EntitySpawner) {
     super(def, index, x, y, z, spawner);
@@ -250,7 +252,7 @@ export class Wolf extends Animal {
     if (this.target) {
       const t = this.target;
       const d = Math.hypot(t.x - this.x, t.z - this.z);
-      if (d > 1.3) this.ai.moveTowards(t.x, t.z, 1.2, false);
+      if (d > 1.3) this.ai.navigateTo(t.x, t.y, t.z, 1.2);
       else {
         this.ai.stop();
         this.yaw = Math.atan2(t.x - this.x, t.z - this.z);
@@ -263,12 +265,19 @@ export class Wolf extends Animal {
       return;
     }
     const d = this.distToPlayer;
-    if (d > 14 && !p.dead) {
+    // FollowOwnerGoal(1.0, 10, 2) : suit à partir de 10 blocs jusqu'à 2 blocs ; téléportation au-delà de 12
+    if (d > 12 && !p.dead) {
       // trop loin : se téléporte près du maître
       const x = Math.floor(p.x + (Math.random() - 0.5) * 3), z = Math.floor(p.z + (Math.random() - 0.5) * 3);
       if (ctx.world.isSolid(x, Math.floor(p.y) - 1, z) && ctx.world.getBlock(x, Math.floor(p.y), z) === B.AIR) this.body.setPos(x + 0.5, Math.floor(p.y), z + 0.5);
-    } else if (d > 3.5) this.ai.moveTowards(p.x, p.z, 1.1);
-    else this.ai.stop();
+      this.following = false;
+    } else if (d > 10 || (this.following && d > 2)) {
+      this.following = true;
+      this.ai.navigateTo(p.x, p.y, p.z, 1.1);
+    } else {
+      this.following = false;
+      this.ai.stop();
+    }
   }
 }
 
@@ -289,6 +298,10 @@ export const PROFESSIONS: Record<string, { name: string; trades: Trade[] }> = {
   leatherworker: { name: 'Maroquinier', trades: [{ give: ['leather', 6], get: ['emerald', 1] }, { give: ['emerald', 3], get: ['leather_chestplate', 1] }, { give: ['emerald', 5], get: ['leather_helmet', 1] }, { give: ['flint', 26], get: ['emerald', 1] }, { give: ['emerald', 6], get: ['saddle', 1] }] },
   weaponsmith: { name: 'Forgeron d’armes', trades: [{ give: ['coal', 15], get: ['emerald', 1] }, { give: ['emerald', 3], get: ['iron_axe', 1] }, { give: ['iron_ingot', 4], get: ['emerald', 1] }, { give: ['emerald', 7], get: ['iron_sword', 1] }, { give: ['diamond', 1], get: ['emerald', 1] }, { give: ['emerald', 17], get: ['diamond_sword', 1] }] },
 };
+
+/** Lits réservés (clé de case → identifiant du villageois). */
+const BED_CLAIMS = new Map<string, number>();
+const bedKey = (c: Cell) => `${c[0]},${c[1]},${c[2]}`;
 
 /** Villageois : erre dans le village, regarde le joueur, propose des échanges selon sa profession. */
 export class Villager extends Animal {
@@ -326,10 +339,94 @@ export class Villager extends Animal {
     return p;
   }
 
+  /** Lit réservé (clé de case) et état de sommeil. */
+  private bed: Cell | null = null;
+  sleeping = false;
+  private bedSearch = Math.random() * 3;
+
   protected customUpdate(ctx: GameContext, dt: number) {
     super.customUpdate(ctx, dt);
+    if (this.dead) return this.releaseBed();
+    if (this.routine(ctx, dt)) return;
     // reste près de son village (point d'origine)
-    if (Math.hypot(this.x - this.homeX, this.z - this.homeZ) > 24 && this.ai.state === AIState.WANDER) this.ai.moveTowards(this.homeX, this.homeZ, 0.6);
+    if (Math.hypot(this.x - this.homeX, this.z - this.homeZ) > 24 && this.ai.state === AIState.WANDER) this.ai.navigateTo(this.homeX, this.y, this.homeZ, 0.6);
     if (this.distToPlayer < 4 && !ctx.player.dead && this.ai.state === AIState.IDLE) this.ai.facePlayer();
+  }
+
+  private releaseBed() {
+    if (this.bed && BED_CLAIMS.get(bedKey(this.bed)) === this.id) BED_CLAIMS.delete(bedKey(this.bed));
+    this.bed = null;
+    this.sleeping = false;
+  }
+
+  /**
+   * Routine de la nuit (Activity.REST du jeu Java) : le villageois rejoint un lit libre du village et s'y
+   * couche jusqu'au jour ; une panique, un coup ou un monstre proche le réveille. Vrai s'il garde la main.
+   */
+  private routine(ctx: GameContext, dt: number): boolean {
+    const w = ctx.world;
+    const panicking = this.fleeTimer > 0 || this.hurtTimer > 0 || this.ai.state === AIState.FLEE;
+    const wants = ctx.dimension === 'overworld' && villagerWantsBed(ctx.dayCycle.isNight, panicking);
+    if (!wants) {
+      if (this.bed) {
+        const wasAsleep = this.sleeping;
+        this.releaseBed();
+        if (wasAsleep) this.ai.fsm.set(AIState.IDLE);
+      }
+      return false;
+    }
+    this.bedSearch -= dt;
+    if (!this.bed) {
+      if (this.bedSearch > 0) return false;
+      this.bedSearch = 3 + Math.random() * 3;
+      const near = Math.hypot(this.x - this.homeX, this.z - this.homeZ) < 40;
+      if (!near) return false;
+      // les lits proches du villageois, libres (réservés par un autre = exclus)
+      const spot = findBed(w, this.x, this.y, this.z, 24, (k) => {
+        const c = BED_CLAIMS.get(k);
+        return c !== undefined && c !== this.id;
+      });
+      if (!spot) return false;
+      this.bed = spot;
+      BED_CLAIMS.set(bedKey(spot), this.id);
+    }
+    const [bx, by, bz] = this.bed;
+    // lit détruit : on en cherchera un autre
+    const cur = w.getBlock(bx, by, bz);
+    if (cur <= 0 || BlockRegistry.shape[cur] !== SHAPES.indexOf('bed') + 1) {
+      this.releaseBed();
+      return false;
+    }
+    if (this.sleeping) {
+      this.ai.fsm.set(AIState.IDLE);
+      this.idleTime = 1e9;
+      this.ai.stop();
+      this.body.vx = this.body.vz = 0;
+      return true;
+    }
+    const d = Math.hypot(bx + 0.5 - this.x, bz + 0.5 - this.z);
+    if (d < 1.1 && Math.abs(by - this.y) < 1.6) {
+      this.sleeping = true;
+      this.body.setPos(bx + 0.5, by + 0.5625, bz + 0.5);
+      return true;
+    }
+    this.ai.fsm.set(AIState.IDLE);
+    this.idleTime = 1e9;
+    this.ai.navigateTo(bx + 0.5, by, bz + 0.5, 0.7);
+    // chemin impossible vers ce lit : il l'abandonne après quelques essais
+    if (this.ai.stuckCount >= 3) {
+      this.releaseBed();
+      this.bedSearch = 10;
+    }
+    return true;
+  }
+
+  render(ctx: GameContext, alpha: number, t: number) {
+    super.render(ctx, alpha, t);
+    // couché dans son lit : corps à l'horizontale
+    if (this.sleeping) {
+      this.model.group.rotation.x = -Math.PI / 2;
+      this.model.group.position.y += 0.15;
+    } else this.model.group.rotation.x = 0;
   }
 }

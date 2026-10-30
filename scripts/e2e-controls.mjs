@@ -54,9 +54,14 @@ try {
   await wait(500);
 
   // ---------- manette dans les menus ----------
+  // l'écran de démarrage couvre le menu quelques secondes : il avalerait l'appui sur A
+  await page.waitForFunction(() => !document.querySelector('.bm-intro'), null, { timeout: 30000 }).catch(() => {});
+  // le stick est lu à chaque image : on le maintient jusqu'à la détection (rendu logiciel parfois très lent)
   await pad({ b: [] , axes: [0.6, 0, 0, 0] });
-  await wait(200);
+  await page.waitForFunction(() => window.__lecraft.gamepad.active, null, { timeout: 8000 }).catch(() => {});
   await pad();
+  // la manette est lue à chaque image : on laisse le temps de la détecter (rendu logiciel lent)
+  await page.waitForFunction(() => window.__lecraft.gamepad.active, null, { timeout: 8000 }).catch(() => {});
   const gpOn = await G(() => ({ active: window.__lecraft.gamepad.active, cls: document.documentElement.classList.contains('gamepad'), cursor: !document.querySelector('.gp-cursor').classList.contains('hidden') }));
   check('Manette détectée : mode manette + curseur virtuel', gpOn.active && gpOn.cls && gpOn.cursor, JSON.stringify(gpOn));
   check('Stick gauche → curseur jusqu’au bouton « Jouer »', await cursorTo('.bm-btn', 'Jouer'));
@@ -111,18 +116,24 @@ try {
   // regarder le sol devant soi, LT : poser un bloc, RT : le casser
   const target = await G(() => {
     const s = window.__lecraft.session, p = s.player;
-    p.pitch = -1.1; p.yaw = 0;
+    p.pitch = -0.7; p.yaw = 0; // vise le sol à ~2 blocs : le bloc posé ne chevauche pas le joueur
     return null;
   });
   void target;
-  await wait(300);
+  // le joueur a avancé au stick : on le recule d'un bloc pour que le bloc visé au sol ne chevauche pas son corps
+  await G(() => { const p = window.__lecraft.session.player; p.body.setPos(p.x, p.y, p.z + 1); p.body.vx = p.body.vz = 0; });
+  // une créature devant le viseur recevrait l'« utilisation » au lieu du bloc : on écarte celles qui sont proches
+  await G(() => { const s = window.__lecraft.session, p = s.player; for (const m of [...s.entities.mobs]) if (Math.hypot(m.x - p.x, m.z - p.z) < 12) s.combat.damageMob(m, 9999, { kind: 'player', fromPlayer: true }); });
+  // le joueur finit de glisser après la marche au stick : on attend qu'il soit immobile et que la cible soit stable
+  await wait(500);
+  await G(() => new Promise((r) => { let last = '', same = 0; const t = setInterval(() => { const s = window.__lecraft.session, tg = s.interaction.target, b = s.player.body; const k = tg ? `${tg.x},${tg.y},${tg.z},${tg.nx},${tg.ny},${tg.nz},${b.vx.toFixed(2)},${b.vz.toFixed(2)}` : ''; same = k && k === last ? same + 1 : 0; last = k; if (same >= 5) { clearInterval(t); r(); } }, 100); setTimeout(() => { clearInterval(t); r(); }, 6000); }));
   const spot = await G(() => { const t = window.__lecraft.session.interaction.target; return t && { x: t.x + t.nx, y: t.y + t.ny, z: t.z + t.nz }; });
   const before = spot && (await G((q) => window.__lecraft.session.world.getBlock(q.x, q.y, q.z), spot));
-  await tap(LT, 200);
+  await tap(LT, 450);
   // la pose a lieu à la mise à jour suivante (une image peut être longue avec le rendu logiciel)
-  for (let i = 0; i < 15 && spot && (await G((q) => window.__lecraft.session.world.getBlock(q.x, q.y, q.z), spot)) === 0; i++) await wait(100);
+  for (let i = 0; i < 40 && spot && (await G((q) => window.__lecraft.session.world.getBlock(q.x, q.y, q.z), spot)) === 0; i++) await wait(100);
   const placed = spot && (await G((q) => window.__lecraft.session.world.getBlock(q.x, q.y, q.z), spot));
-  check('LT : poser un bloc', !!spot && before === 0 && placed === (await G(() => window.I?.('stone') ?? window.__lecraft.debug.blockId('stone'))), `${JSON.stringify(spot)} : ${before} → ${placed}`);
+  check('LT : poser un bloc', !!spot && before === 0 && placed === (await G(() => window.I?.('stone') ?? window.__lecraft.debug.blockId('stone'))), `${JSON.stringify(spot)} : ${before} → ${placed}${await G(() => { const s = window.__lecraft.session, i = s.interaction, p = s.player; return ' ; main ' + JSON.stringify(p.inventory.selectedStack) + ' ; aperçu ' + JSON.stringify(i.preview) + ' ; cible ' + JSON.stringify(i.target) + ' ; joueur ' + [p.x, p.y, p.z, p.pitch, p.yaw].map((v) => v.toFixed(2)).join(','); })}`);
   const tg = await G(() => { const t = window.__lecraft.session.interaction.target; return t && { x: t.x, y: t.y, z: t.z, b: t.block }; });
   await pad({ b: [RT] });
   await wait(500);

@@ -57,6 +57,8 @@ export class Mob extends Entity {
   revenge = false;
   relHunt: import('./MobRelations').HuntRule | null = null;
   fleeFrom: { x: number; z: number } | null = null;
+  /** Petit : adulte de la même espèce qu'il suit (mis à jour par scanRelations). */
+  parentMob: Mob | null = null;
   private relTimer = Math.random();
   /** Abeille : dard perdu après une piqûre (elle meurt peu après). */
   private stingDeath = 0;
@@ -281,6 +283,8 @@ export class Mob extends Entity {
         ctx.combat.damageMob(this, 1, { kind: 'environment', fire: true });
       }
       if (Math.random() < dt * 12) ctx.particles.burst('fire', this.x, this.y + this.body.height * (0.3 + Math.random() * 0.6), this.z, 1);
+      // PanicGoal (« isOnFire ») : un animal en feu s'affole et cherche de l'eau (voir AIController.fleeStep)
+      if (this.fireTime > 0 && this.fleeTimer <= 0 && this.def.category !== 'hostile' && this.def.category !== 'boss' && !this.has('fireImmune') && !this.net) this.fleeTimer = 4;
     }
     // brûlure au soleil (jeu Java) : à découvert en plein jour, la créature prend feu pour 8 s
     // (1 dégât par seconde) ; l'eau, la pluie et un casque la protègent

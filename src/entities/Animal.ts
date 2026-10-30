@@ -80,7 +80,7 @@ export class Animal extends Mob {
         }
       }
       if (foe) {
-        if (best > 2.2) this.ai.moveTowards(foe.x, foe.z, 1.1, true);
+        if (best > 2.2) this.ai.navigateTo(foe.x, foe.y, foe.z, 1.1);
         else if (this.guardTimer <= 0) {
           this.guardTimer = 1.2;
           this.attackAnim = 1;
@@ -89,7 +89,7 @@ export class Animal extends Mob {
           foe.body.vy = 7;
           ctx.audio.play('stone_hit', { x: this.x, y: this.y, z: this.z });
         }
-      } else if (Math.hypot(this.homeX - this.x, this.homeZ - this.z) > 24) this.ai.moveTowards(this.homeX, this.homeZ, 0.6, true);
+      } else if (Math.hypot(this.homeX - this.x, this.homeZ - this.z) > 24) this.ai.navigateTo(this.homeX, this.y, this.homeZ, 0.6);
     }
     // la laine repousse en broutant l'herbe
     if (this.sheared && Math.random() < dt / 40) {
@@ -124,7 +124,7 @@ export class Animal extends Mob {
         if (this.distToPlayer > 12 && !p.dead) {
           const x = Math.floor(p.x + (Math.random() - 0.5) * 3), z = Math.floor(p.z + (Math.random() - 0.5) * 3);
           if (ctx.world.isSolid(x, Math.floor(p.y) - 1, z) && ctx.world.getBlock(x, Math.floor(p.y), z) === B.AIR) this.body.setPos(x + 0.5, Math.floor(p.y), z + 0.5);
-        } else if (this.distToPlayer > 5 && !p.dead) this.ai.moveTowards(p.x, p.z, 1);
+        } else if (this.distToPlayer > 5 && !p.dead) this.ai.navigateTo(p.x, p.y, p.z, 1);
       }
     }
   }
@@ -177,7 +177,7 @@ export class Animal extends Mob {
       const d = Math.hypot(o.x - this.x, o.z - this.z);
       if (d > 8) continue;
       if (d > 1.6) {
-        this.ai.moveTowards(o.x, o.z, 0.8);
+        this.ai.navigateTo(o.x, o.y, o.z, 0.8);
         return;
       }
       this.loveTimer = o.loveTimer = 0;

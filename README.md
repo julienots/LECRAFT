@@ -273,6 +273,25 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     joueurs, étoile pour les lobbys, gadget).
   - **Tableau latéral** : rang, niveau, pièces, victoires, cosmétiques, lobby et joueurs.
   - **Commandes** : `/menu`, `/cosmetiques`, `/profil`, `/lobby <n>`, `/play <jeu>`.
+- **IA des mobs plus proche de Java (v2.33)**
+  - **Portes** : villageois, marchands, pillards, sorcières, piglins et bots ouvrent les portes en
+    bois et les referment ; les zombies, husks et noyés les brisent en difficile (12 s) ; les
+    portes en fer et à carte résistent.
+  - **Chemins** : cases dangereuses évitées (lave, feu, cactus, baies, toile d'araignée, feux de
+    camp), détour préféré à une porte à briser, créatures coincées détectées puis dégagées,
+    budget de recherche par tick pour garder la fluidité.
+  - **Combat** : poursuite pendant 3 s après la perte de vue ; mèche du creeper comme Java
+    (amorcée à moins de 3 blocs, entretenue jusqu'à 7 avec vue, sinon dégonflée, immobile) ;
+    renforts de zombie en difficile.
+  - **Animaux et compagnons** : fuite par chemin et panique en feu vers l'eau, petits qui suivent
+    leur parent, loup apprivoisé / chat / perroquet / golem de fer qui suivent par chemin
+    (téléportation du loup au-delà de 12 blocs).
+  - **Villageois** : la nuit ils rejoignent un lit libre et s'y couchent.
+  - Non fait : raids, cloche et postes de travail, escalade des araignées par le pathfinding,
+    échelles dans le pathfinding, abeilles/renards/lapins/chevaux/dauphins non audités.
+  - Vérifié par `npm run e2e:ai` (20 vérifications) et 19 tests unitaires.
+- **Corrections d'interface** : distance d'affichage jamais sous 5 tronçons, menus à l'échelle de
+  l'écran (la pause n'est plus coupée), icônes des permissions du multijoueur, chargement centré.
 - **Interface identique à Minecraft Bedrock mobile, objets Java et disques (v2.32)**
   - **Menus** : écran de démarrage et chargement, menu principal (Jouer, Paramètres, Realms,
     Magasin, Social, Profil, Vestiaire), écran Jouer (Mondes, Realms, Serveurs), création de
