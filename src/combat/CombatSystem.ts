@@ -6,46 +6,23 @@ import type { Mob } from '../entities/Mob';
 import type { DamageSystem } from './DamageSystem';
 
 /**
- * Combat du joueur : cadence d'attaque (cooldown), dégâts de l'objet tenu, coups critiques
- * (en chute), recul, usure de l'arme. Les dégâts reçus par le joueur sont gérés par Player.damage().
+ * Combat du joueur, règles de Minecraft Bedrock : pas de recharge d'attaque (chaque coup porte
+ * ses dégâts complets, la cadence n'est limitée que par l'invulnérabilité de la cible), pas de
+ * balayage d'épée, coup critique ×1,5 en chute, coup de sprint (recul), usure de l'arme.
+ * Les dégâts reçus par le joueur sont gérés par Player.damage().
  */
-/** Délai d'attaque par défaut (main nue, objets sans vitesse d'attaque) : 4 attaques/s. */
-export const HAND_COOLDOWN = 0.25;
-/** Délais d'attaque (s) d'objets dont les données n'en fournissent pas (1 / vitesse d'attaque Java). */
-const COOLDOWNS: Record<string, number> = { trident: 1 / 1.1 };
+/** Intervalle minimal entre deux coups (s) : un toucher frappe aussitôt. */
+export const TAP_INTERVAL = 0.05;
+/** Attaque maintenue (mobile) : un coup toutes les 0,25 s, comme le geste répété de Bedrock. */
+export const HELD_INTERVAL = 0.25;
 
-/** Délai d'attaque (s) de l'objet tenu. */
-export function attackDelay(itemId: string | undefined, defCooldown?: number): number {
-  return defCooldown ?? (itemId ? COOLDOWNS[itemId] : undefined) ?? HAND_COOLDOWN;
-}
-
-/** Charge d'attaque (Player.getAttackStrengthScale(0,5)) : temps depuis la dernière attaque / délai, en ticks. */
-export function attackCharge(sinceAttack: number, delay: number): number {
-  return Math.max(0, Math.min(1, (sinceAttack * 20 + 0.5) / Math.max(1e-6, delay * 20)));
-}
-
-/** Multiplicateur des dégâts de base selon la charge : 0,2 + 0,8·charge² (Java 1.9+). */
-export function chargeScale(charge: number): number {
-  return 0.2 + charge * charge * 0.8;
-}
-
-/**
- * Combat du joueur (Player.attack, Java 1.21) : charge d'attaque (dégâts ×(0,2 + 0,8·charge²),
- * enchantements ×charge), coup critique ×1,5 (en chute, sans sprint, charge > 0,9), coup de
- * sprint (recul), balayage de l'épée, usure de l'arme. Les dégâts reçus par le joueur sont gérés
- * par Player.damage().
- *
- * Commandes : un appui frappe aussitôt avec la charge du moment (comme un clic du jeu de
- * référence) ; maintenir l'attaque (mobile) frappe à chaque charge complète.
- */
 export class CombatSystem {
-  /** Temps restant avant la charge complète (s) ; utilisé aussi par le sceptre. */
+  /** Recharge d'un objet à usage propre (sceptre) ; la mêlée Bedrock n'en a pas. */
   cooldown = 0;
   /** Dernier coup (animation de l'objet en main). */
   swing = 0;
-  /** Temps écoulé depuis la dernière attaque (s) et délai de l'arme utilisée. */
+  /** Temps écoulé depuis la dernière attaque (s). */
   sinceAttack = 10;
-  delay = HAND_COOLDOWN;
   private clock = 0;
   private lastCall = -1;
 
@@ -66,28 +43,18 @@ export class CombatSystem {
     return this.cooldown <= 0;
   }
 
-  /** Charge d'attaque actuelle (0..1) pour l'objet tenu. */
-  charge(itemId?: string, defCooldown?: number): number {
-    return attackCharge(this.sinceAttack, attackDelay(itemId, defCooldown));
-  }
-
   /** Attaque de mêlée du joueur. Retourne vrai si un coup a été porté. */
   playerAttack(ctx: GameContext, m: Mob): boolean {
     if (m.dead) return false;
     const p = ctx.player;
     const stack = p.inventory.selectedStack;
     const def = stack ? ItemRegistry.get(stack.id) : undefined;
-    const delay = attackDelay(stack?.id, def?.attackCooldown);
-    const charge = attackCharge(this.sinceAttack, delay);
-    // appel continu (attaque maintenue) : on attend la charge complète
+    // appel continu (attaque maintenue) : un coup toutes les 0,25 s ; un toucher frappe aussitôt
     const held = this.clock - this.lastCall < 0.12;
     this.lastCall = this.clock;
-    if (held && charge < 1) return false;
-    // le sceptre (cooldown propre) bloque aussi la mêlée
-    if (this.cooldown > 0 && this.sinceAttack >= this.delay) return false;
-    const full = charge > 0.9;
-    let base = Math.max(0, (def?.damage ?? 1) + p.effects.attackBonus()) * chargeScale(charge);
-    const ench = bonusDamage(stack, m.def.key) * charge;
+    if (this.sinceAttack < (held ? HELD_INTERVAL : TAP_INTERVAL)) return false;
+    let base = Math.max(0, (def?.damage ?? 1) + p.effects.attackBonus());
+    const ench = bonusDamage(stack, m.def.key);
     let bonus = 0;
     // masse : attaque écrasante — dégâts selon la hauteur de chute (comme le jeu original :
     // +4 par bloc pour les 3 premiers, +2 pour les 5 suivants, +1 au-delà ; Densité +0,5 par bloc)
@@ -100,14 +67,12 @@ export class CombatSystem {
     }
     // Empalement (trident) : bonus contre les créatures aquatiques
     let impale = 0;
-    if (stack?.id === 'trident' && (m.has('aquatic') || m.body.inWater)) impale = 2.5 * enchLevel(stack, 'impaling') * charge;
+    if (stack?.id === 'trident' && (m.has('aquatic') || m.body.inWater)) impale = 2.5 * enchLevel(stack, 'impaling');
     this.sinceAttack = 0;
-    this.delay = delay;
-    this.cooldown = delay;
     this.swing = 1;
-    const sprintHit = p.sprinting && full;
-    // coup critique : charge > 0,9, en chute, ni au sol, ni sur une échelle, ni dans l'eau, ni aveuglé, ni en sprint
-    const crit = full && (p.body.fallDistance ?? 0) > 0 && p.body.vy < 0 && !p.body.onGround && !p.body.onLadder && !p.body.inWater && !p.effects.level('blindness') && !p.sprinting;
+    const sprintHit = p.sprinting;
+    // coup critique : en chute, ni au sol, ni sur une échelle, ni dans l'eau, ni aveuglé, ni en sprint
+    const crit = (p.body.fallDistance ?? 0) > 0 && p.body.vy < 0 && !p.body.onGround && !p.body.onLadder && !p.body.inWater && !p.effects.level('blindness') && !p.sprinting;
     // le ×1,5 du critique (appliqué par DamageSystem à tout le montant) ne porte que sur la base
     base += crit ? (ench + impale + bonus) / 1.5 : ench + impale + bonus;
     const dx = m.x - p.x, dz = m.z - p.z, d = Math.hypot(dx, dz) || 1;
@@ -137,21 +102,6 @@ export class CombatSystem {
           p.body.vy = 9 + 3.5 * wb;
           ctx.particles.burst('poof', p.x, p.y, p.z, 16);
         }
-      } else if (/_sword$/.test(stack?.id ?? '') && full && p.body.onGround && !sprintHit && !crit && Math.hypot(p.body.vx, p.body.vz) < 3.4) {
-        // balayage de l'épée (Java : charge > 0,9, au sol, presque immobile, sans critique ni coup de sprint) :
-        // 1 + base × Affilage/(Affilage+1) aux créatures proches de la cible, à moins de 3 blocs du joueur
-        const sw = enchLevel(stack, 'sweeping_edge');
-        const sweepDmg = 1 + Math.max(0, (def?.damage ?? 1) + p.effects.attackBonus()) * chargeScale(charge) * (sw / (sw + 1));
-        let swept = 0;
-        for (const o of near) {
-          if (Math.hypot(o.x - p.x, o.y - p.y, o.z - p.z) > 3) continue;
-          const ox = o.x - p.x, oz = o.z - p.z, od = Math.hypot(ox, oz) || 1;
-          this.damage.damageMob(o, sweepDmg, { kind: 'player', itemId: stack?.id, knockX: (ox / od) * 3, knockZ: (oz / od) * 3, fromPlayer: true });
-          swept++;
-        }
-        // l'arc de balayage apparaît à chaque coup d'épée au sol (comme le jeu original)
-        ctx.particles.burst('sweep', p.x + (dx / d) * 1.2, p.y + 1, p.z + (dz / d) * 1.2, 1);
-        if (swept) ctx.audio.play('hit', { x: m.x, y: m.y, z: m.z, pitch: 1.3 });
       }
       ctx.audio.play(crit ? 'crit' : 'hit', { x: m.x, y: m.y, z: m.z });
       // étincelles beiges du coup critique (comme le jeu original)

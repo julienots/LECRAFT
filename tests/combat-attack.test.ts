@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { CombatSystem, attackCharge, chargeScale } from '../src/combat/CombatSystem';
+import { CombatSystem } from '../src/combat/CombatSystem';
 import { Player } from '../src/player/Player';
 import { makeStack } from '../src/inventory/Inventory';
 import type { DamageSystem } from '../src/combat/DamageSystem';
 import type { GameContext } from '../src/core/GameContext';
 import type { Mob } from '../src/entities/Mob';
 
-/** Attaque du joueur comparée au jeu de référence (Player.attack, Java 1.21). */
+/** Attaque du joueur selon les règles de Minecraft Bedrock (pas de recharge d'attaque). */
 function setup(item?: string) {
   const hits: { amount: number; crit: boolean; kb: number }[] = [];
   const dmg = {
@@ -27,36 +27,25 @@ function setup(item?: string) {
   return { combat, p, ctx, mob, hits, wait };
 }
 
-describe('Attaque du joueur (Java 1.21)', () => {
-  it('charge : (ticks + 0,5) / délai, dégâts × (0,2 + 0,8·charge²)', () => {
-    expect(attackCharge(0, 0.625)).toBeCloseTo(0.5 / 12.5, 5);
-    expect(attackCharge(0.625, 0.625)).toBe(1);
-    expect(chargeScale(0)).toBeCloseTo(0.2);
-    expect(chargeScale(1)).toBe(1);
-    expect(chargeScale(0.5)).toBeCloseTo(0.4);
-  });
-  it('épée en diamant : 7 dégâts à pleine charge, coup affaibli juste après', () => {
+describe('Attaque du joueur (Bedrock)', () => {
+  it('épée en diamant : 7 dégâts à chaque coup, même enchaînés', () => {
     const { combat, ctx, mob, hits, wait } = setup('diamond_sword');
-    wait(1);
     expect(combat.playerAttack(ctx, mob)).toBe(true);
     expect(hits[0].amount).toBeCloseTo(7, 5);
-    // nouveau clic 0,2 s plus tard (4 ticks sur 12,5) : dégâts réduits
     wait(0.2);
     combat.playerAttack(ctx, mob);
-    const c = (4 + 0.5) / 12.5;
-    expect(hits[1].amount).toBeCloseTo(7 * (0.2 + 0.8 * c * c), 5);
+    expect(hits[1].amount).toBeCloseTo(7, 5);
   });
-  it('attaque maintenue : frappe seulement à pleine charge (main nue 0,25 s)', () => {
+  it('attaque maintenue : un coup plein toutes les 0,25 s', () => {
     const { combat, ctx, mob, hits } = setup();
     let n = 0;
     for (let k = 0; k < 60; k++) {
       combat.update(1 / 60);
       if (combat.playerAttack(ctx, mob)) n++;
     }
-    // 1 s de maintien : un coup immédiat puis un toutes les 0,25 s
     expect(n).toBeGreaterThanOrEqual(4);
     expect(n).toBeLessThanOrEqual(5);
-    for (const h of hits.slice(1)) expect(h.amount).toBeCloseTo(1, 5);
+    for (const h of hits) expect(h.amount).toBeCloseTo(1, 5);
   });
   it('critique ×1,5 en chute (pas en sprint, pas au sol)', () => {
     const { combat, p, ctx, mob, hits, wait } = setup('iron_sword');
@@ -85,15 +74,11 @@ describe('Attaque du joueur (Java 1.21)', () => {
     expect(p.sprinting).toBe(false);
     expect(p.body.vz).toBeCloseTo(-3, 5);
   });
-  it('délais : épée 0,625 s, hache en bois 1,25 s, trident 0,91 s', () => {
-    expect(setup('diamond_sword').combat.charge('diamond_sword', 0.625)).toBe(1);
+  it('pas de recharge : hache et trident frappent sans délai', () => {
     const { combat, ctx, mob, wait } = setup('wooden_axe');
-    wait(1.5);
     combat.playerAttack(ctx, mob);
-    expect(combat.cooldown).toBeCloseTo(1.25, 5);
-    const t = setup('trident');
-    t.wait(1);
-    t.combat.playerAttack(t.ctx, t.mob);
-    expect(t.combat.cooldown).toBeCloseTo(1 / 1.1, 5);
+    expect(combat.cooldown).toBe(0);
+    wait(0.15);
+    expect(combat.playerAttack(ctx, mob)).toBe(true);
   });
 });

@@ -1093,16 +1093,12 @@ export class InventoryUI {
     const en = language() === 'en';
     if (def.description && !en) lines.push([def.description, '#aaaaaa']);
     const num = (n: number) => (Math.round(n * 10) / 10).toString().replace('.', en ? '.' : ',');
-    // attributs : ligne vide, « Dans la main principale : », puis valeurs en vert foncé
-    if (def.damage && def.tool) {
-      const speed = 1 / (def.attackCooldown ?? 0.4);
-      lines.push(['', '#aaaaaa'], [tr('Dans la main principale :'), '#aaaaaa']);
-      lines.push([en ? ` ${num(def.damage)} Attack Damage` : ` ${num(def.damage)} de dégâts d'attaque`, '#00aa00']);
-      lines.push([en ? ` ${num(speed)} Attack Speed` : ` ${num(speed)} de vitesse d'attaque`, '#00aa00']);
-    }
+    // attribut à la manière de Bedrock : « +8 de dégâts d'attaque » en bleu, sans vitesse d'attaque
+    if (def.damage && def.tool) lines.push([en ? `+${num(def.damage)} Attack Damage` : `+${num(def.damage)} de dégâts d'attaque`, '#5555ff']);
     if (def.armor) {
       const where = { head: 'Sur la tête :', chest: 'Sur le corps :', legs: 'Sur les jambes :', feet: 'Sur les pieds :' }[def.armor.slot];
-      lines.push(['', '#aaaaaa'], [tr(where), '#aaaaaa'], [en ? `+${def.armor.defense} Armor` : `+${def.armor.defense} d'armure`, '#5555ff']);
+      void where;
+      lines.push([en ? `+${def.armor.defense} Armor` : `+${def.armor.defense} d'armure`, '#5555ff']);
     }
     if (st.durability !== undefined && st.durability < ItemRegistry.maxDurability(st.id)) lines.push([en ? `Durability: ${st.durability} / ${ItemRegistry.maxDurability(st.id)}` : `Durabilité : ${st.durability} / ${ItemRegistry.maxDurability(st.id)}`, '#ffffff']);
     const k = this.scale;

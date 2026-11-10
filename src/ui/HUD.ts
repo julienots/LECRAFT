@@ -57,7 +57,6 @@ export class HUD implements HudApi {
   private crosshair: HTMLElement;
   private attackBg: HTMLElement;
   private attackFill: HTMLElement;
-  private attackMax = 0.4;
   private packKey: unknown = undefined;
   private hotbarDirty = true;
   private nameTimer = 0;
@@ -532,12 +531,8 @@ export class HUD implements HudApi {
     this.renderArmor(p.inventory.defense(), 36 + (rows - 1) * rowH + 10.5);
     this.air.style.setProperty('--b', String(36 + (rows - 1) * rowH + 10.5));
     this.renderAir(Math.max(0, p.air), p.air < 300 || this.underwaterNow);
-    // recharge de l'attaque : petite barre sous le réticule tant que l'attaque n'est pas prête
-    const cd = s.entities?.combat?.cooldown ?? 0;
-    if (cd > this.attackMax || cd <= 0) this.attackMax = Math.max(0.05, cd);
-    const showAtk = cd > 0.05 && !creative;
-    this.attackBg.classList.toggle('hidden', !showAtk);
-    if (showAtk) this.attackFill.style.width = `${Math.floor((1 - cd / this.attackMax) * 17) / 16 * 100}%`;
+    // Bedrock n'a pas d'indicateur de recharge d'attaque sous le réticule
+    this.attackBg.classList.add('hidden');
     if (p.xp !== L.xp || p.level !== L.lvl) {
       L.xp = p.xp;
       L.lvl = p.level;
