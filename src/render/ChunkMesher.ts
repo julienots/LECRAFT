@@ -10,6 +10,8 @@ import { BlockRegistry, SHAPES } from '../blocks/BlockRegistry';
 import { modelBoxes } from '../blocks/Shapes';
 import { CHUNK_SIZE, WORLD_HEIGHT, LIGHT_PADDING } from '../core/Config';
 import { TileRegistry } from './TileRegistry';
+import { rsKind, K, wireConnections, wireColor, type RsReader } from '../world/RedstoneLogic';
+import { FACING_DIR } from '../blocks/Shapes';
 
 export const FLAG_SWAY = 1;
 export const FLAG_ANIM = 4;
@@ -124,6 +126,8 @@ export interface MeshInput {
   grassTint: Uint8Array;
   foliageTint: Uint8Array;
   maxY: number;
+  /** Méta d'une case en coordonnées locales du chunk central (voisins compris : -1..16). */
+  metaOf?: (x: number, y: number, z: number) => number;
 }
 
 const P = LIGHT_PADDING;
@@ -198,7 +202,12 @@ export class ChunkMesher {
           const li = (x + z * CHUNK_SIZE + y * 256);
           const bm = meta[li];
           let tile = block.faceTiles[d];
-          if (block.orientable && d !== 2 && d !== 3) tile = orientTile(block.faceTiles, d, bm);
+          const ok = rsKind(b);
+          if ((ok === K.OBSERVER || ok === K.OBSERVER_ON) && (bm & 7) >= 4) {
+            // observateur vertical : face avant en haut (4) ou en bas (5), dos à l'opposé, côtés partout ailleurs
+            const front = (bm & 7) === 4 ? 2 : 3;
+            tile = d === front ? block.faceTiles[4] : d === (front ^ 1) ? block.faceTiles[5] : block.faceTiles[0];
+          } else if (block.orientable && d !== 2 && d !== 3) tile = orientTile(block.faceTiles, d, bm);
           else if (block.metaTiles && d === 2) tile = block.metaTiles[Math.min(bm, block.metaTiles.length - 1)];
           const flags = (block.sway && R.renderType[b] === 2 ? FLAG_SWAY : 0) | (TileRegistry.animFrames[tile] > 1 ? FLAG_ANIM : 0);
           const layer = rt === 5 ? 1 : 0;
@@ -368,6 +377,7 @@ export class ChunkMesher {
     const { blocks, sky, blk } = inp;
     const m = inp.meta[x + z * 16 + y * 256];
     const kind = SHAPES[R.shape[b] - 1];
+    if (rsKind(b) === K.WIRE) return this.wire(inp, x, y, z, pi, b, m);
     if (kind === 'custom' || block.visuals) return this.custom(inp, x, y, z, pi, b, m);
     const nb = (dx: number, dy: number, dz: number) => {
       const yy = y + dy;
@@ -427,6 +437,68 @@ export class ChunkMesher {
         const ids = c.map((p, k) => builder.vertex(p[0], p[1], p[2], uv[k][0], uv[k][1], tile, flags, sl, bl, tr, tg, tb, shade));
         builder.quad(ids[0], ids[1], ids[2], ids[3], false);
       }
+    }
+  }
+
+  /**
+   * Poudre de redstone : point central, branches vers les raccordements (lignes droites prolongées,
+   * croix si isolée), montées le long des blocs voisins ; teinte selon la puissance (méta 0..15).
+   */
+  private wire(inp: MeshInput, x: number, y: number, z: number, pi: number, b: number, m: number) {
+    const { blocks, sky, blk } = inp;
+    const block = BlockRegistry.blocks[b];
+    const r: RsReader = {
+      getBlock: (wx, wy, wz) => (wy < 0 || wy >= WORLD_HEIGHT ? 0 : blocks[pi + (wx - x) + (wy - y) * AREA + (wz - z) * W]),
+      getMeta: (wx, wy, wz) => (wx >= 0 && wx < 16 && wz >= 0 && wz < 16 && wy >= 0 && wy < WORLD_HEIGHT ? inp.meta[wx + wz * 16 + wy * 256] : inp.metaOf ? inp.metaOf(wx, wy, wz) : 0),
+    };
+    const c = wireConnections(r, x, y, z);
+    const side = (h: number) => (c >> (h * 2)) & 3;
+    // orientation : 0 sud (+Z), 1 ouest (-X), 2 nord (-Z), 3 est (+X)
+    const S = side(0) !== 0, Wt = side(1) !== 0, N = side(2) !== 0, E = side(3) !== 0;
+    const count = +S + +Wt + +N + +E;
+    const col = wireColor(m & 15);
+    const cr = (col >> 16) & 255, cg = (col >> 8) & 255, cb = col & 255;
+    const sl = sky[pi] * 16, bl = blk[pi] * 16;
+    const dot = block.faceTiles[2], line = block.faceTiles[0], lineX = TileRegistry.index('redstone_dust_line1');
+    const o = this.opaque;
+    const shade = 255;
+    // quad horizontal (x0..x1, z0..z1 en pixels) ; `swap` : la ligne de la texture suit l'axe X
+    const flat = (x0: number, z0: number, x1: number, z1: number, tile: number, h: number, swap: boolean) => {
+      const Y = y + h;
+      const X0 = x + x0 / 16, X1 = x + x1 / 16, Z0 = z + z0 / 16, Z1 = z + z1 / 16;
+      const pts = [[X0, Z1, x0, z1], [X1, Z1, x1, z1], [X1, Z0, x1, z0], [X0, Z0, x0, z0]];
+      const t2 = swap && tile === line ? lineX : tile;
+      const ids = pts.map(([px, pz, ux, uz]) => o.vertex(px, Y, pz, ux, 16 - uz, t2, 0, sl, bl, cr, cg, cb, shade));
+      o.quad(ids[0], ids[1], ids[2], ids[3], false);
+    };
+    // les positions sont stockées au 1/16 de bloc : 1 px au-dessus du sol (sinon même plan que lui)
+    const h = 1 / 16;
+    if (count === 0) {
+      // isolée : croix (alimente les quatre côtés)
+      flat(0, 0, 16, 16, line, h, false);
+      flat(0, 0, 16, 16, line, h, true);
+      flat(0, 0, 16, 16, dot, h, false);
+    } else if ((N || S) && !E && !Wt) flat(0, 0, 16, 16, line, h, false);
+    else if ((E || Wt) && !N && !S) flat(0, 0, 16, 16, line, h, true);
+    else {
+      flat(0, 0, 16, 16, dot, h, false);
+      if (N) flat(0, 0, 16, 8, line, h, false);
+      if (S) flat(0, 8, 16, 16, line, h, false);
+      if (Wt) flat(0, 0, 8, 16, line, h, true);
+      if (E) flat(8, 0, 16, 16, line, h, true);
+    }
+    // montées : ligne verticale contre la face du bloc voisin
+    const e = 1 / 16;
+    for (let hd = 0; hd < 4; hd++) {
+      if (side(hd) !== 2) continue;
+      const [dx, dz] = FACING_DIR[hd];
+      let pts: number[][];
+      if (dx > 0) { const X = x + 1 - e; pts = [[X, y, z, 0, 0], [X, y, z + 1, 16, 0], [X, y + 1, z + 1, 16, 16], [X, y + 1, z, 0, 16]]; }
+      else if (dx < 0) { const X = x + e; pts = [[X, y, z + 1, 16, 0], [X, y, z, 0, 0], [X, y + 1, z, 0, 16], [X, y + 1, z + 1, 16, 16]]; }
+      else if (dz > 0) { const Z = z + 1 - e; pts = [[x + 1, y, Z, 16, 0], [x, y, Z, 0, 0], [x, y + 1, Z, 0, 16], [x + 1, y + 1, Z, 16, 16]]; }
+      else { const Z = z + e; pts = [[x, y, Z, 0, 0], [x + 1, y, Z, 16, 0], [x + 1, y + 1, Z, 16, 16], [x, y + 1, Z, 0, 16]]; }
+      const ids = pts.map(([px, py, pz, u, v]) => o.vertex(px, py, pz, u, v, line, 0, sl, bl, cr, cg, cb, Math.round(255 * 0.85)));
+      o.quad(ids[0], ids[1], ids[2], ids[3], false);
     }
   }
 

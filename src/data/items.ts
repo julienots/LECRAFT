@@ -58,7 +58,7 @@ export const ITEM_DEFS: ItemDef[] = [
   { key: 'diamond', name: 'Diamant', icon: sprite('gem', '#4fe0d6', '#d8fffd'), tab: 'ingredients' },
   { key: 'emerald', name: 'Émeraude', icon: sprite('gem', '#17dd62', '#9dffb8'), tab: 'ingredients' },
   { key: 'lapis_lazuli', name: 'Lapis-lazuli', icon: sprite('lump', '#1f4ea0', '#4b75d0'), tab: 'ingredients' },
-  { key: 'redstone', name: 'Poudre de redstone', icon: sprite('dust', '#c81a0a', '#ff4a2a'), tab: 'ingredients' },
+  { key: 'redstone', name: 'Poudre de redstone', icon: sprite('dust', '#c81a0a', '#ff4a2a'), place: 'redstone_wire', tab: 'ingredients' },
   { key: 'amethyst_shard', name: "Éclat d'améthyste", icon: sprite('gem', '#a87fe0', '#e8d8ff'), tab: 'ingredients' },
   { key: 'flint', name: 'Silex', icon: sprite('lump', '#2e2e32', '#5a5a62'), tab: 'ingredients' },
   { key: 'leather', name: 'Cuir', icon: sprite('leather', '#8a5a32', '#a8743f'), tab: 'ingredients' },

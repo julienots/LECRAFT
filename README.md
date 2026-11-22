@@ -179,7 +179,29 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   chêne noir, cerisier, palétuvier, chêne pâle, carmin, biscornu, bambou) avec leurs recettes ;
   **porte et trappe en fer** qui ne s'ouvrent qu'avec la redstone : **levier**, **boutons** (pierre et
   bois, relâchés après 1 / 1,5 s) et **plaques de pression** (joueur et créatures ; objets aussi sur
-  le bois) alimentent les ouvrants dans un rayon d'un bloc.
+  le bois).
+- **Redstone complète (v2.34)** — moteur `src/world/Redstone.ts` + règles `src/world/RedstoneLogic.ts`,
+  au tick près comme le jeu de référence :
+  - **poudre** posée avec l'objet redstone : puissance 0–15 (–1 par bloc), teinte selon la puissance,
+    raccords automatiques (lignes, angles, T, croix si isolée), **montées et descentes** le long des
+    blocs (coupées par un bloc conducteur au-dessus) ;
+  - **alimentation forte / faible** : un bloc sous la poudre ou pointé par elle est faiblement alimenté
+    (il active lampes, pistons, torches…), un bloc touché par un répéteur, un comparateur, une torche
+    dessous, un levier / bouton fixé ou une plaque posée est fortement alimenté (il alimente aussi la
+    poudre) ; un bloc de redstone n'alimente que ses voisins directs ;
+  - **torche de redstone** inverseuse (2 ticks), alimente fortement le bloc au-dessus, **grille** dans
+    une horloge trop rapide (8 extinctions en 3 s) ;
+  - **répéteur** : délai 1 à 4 (toucher pour changer), prolonge les impulsions courtes, **verrouillé**
+    par un répéteur / comparateur latéral (barre affichée) ;
+  - **comparateur** : comparaison / soustraction (toucher), entrées latérales, **lecture des conteneurs**
+    (coffres, tonneaux, entonnoirs, distributeurs, fourneaux, alambics, juke-box, gâteau, composteur),
+    aussi à travers un bloc plein ;
+  - **observateur** (6 orientations) : impulsion de 2 ticks quand le bloc observé change ;
+  - **lampe** (s'éteint après 4 ticks), **ampoules en cuivre** (bascule sur front montant),
+    **bloc musical** (25 notes, toucher pour accorder), **rails de propulsion** (jusqu'à 8 rails),
+    **détecteur de lumière** (normal / inversé), **TNT**, portes / trappes / portillons, pistons
+    (une impulsion d'observateur les fait sortir puis rentrer), distributeurs, droppers, entonnoirs ;
+  - état recalculé au chargement des chunks ; tests : `tests/redstone.test.ts`.
 - **Distance de vue** : profils à 4 / 6 / 10 tronçons (jusqu'à 12), brouillard du jeu original
   limité à la fin de la distance (on voit beaucoup plus loin), textures avec **mipmaps** (moins de
   scintillement au loin, niveau choisi sans couture entre tuiles).
@@ -1245,7 +1267,7 @@ Ces éléments ne sont **pas** réalisés (ou partiellement) — ils ne sont pas
 - **TODO — LOD des chunks lointains et instancing** : la distance de rendu + le brouillard en tiennent lieu ;
   les créatures sont peu nombreuses (pool de modèles au lieu d'instancing).
 - **Non reproduits du jeu de référence** (volontairement ou faute de temps) : Creeper et autres créatures
-  à design protégé, Nether, End, circuits de redstone, effets des enchantements (ils sont stockés sur
+  à design protégé, Nether, End, effets des enchantements (ils sont stockés sur
   les objets pour les scripts mais n'agissent pas), alambics, villageois et commerce, feu qui se
   propage, mode multijoueur, Realms. Le briquet n'allume que la TNT. Les blocs de fonction de la
   palette élargie (tonneau, juke-box, métier à tisser…) sont décoratifs.

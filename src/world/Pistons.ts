@@ -6,7 +6,7 @@ import type { GameContext } from '../core/GameContext';
 import type { Entity } from '../entities/Entity';
 import type { EntitySpawner } from '../entities/Mob';
 import { isRailKey } from './Rails';
-import { sourceActive } from './Redstone';
+import { DOWN, dirOf, inputPower } from './RedstoneLogic';
 import type { World } from './World';
 
 /**
@@ -185,29 +185,15 @@ export function computePushList(w: BlockReader, px: number, py: number, pz: numb
   return { ok: true, dir, push: toPush, destroy };
 }
 
-/** Le piston est-il alimenté ? (sources voisines, sauf sa face avant ; case du dessus comprise) */
+/**
+ * Le piston est-il alimenté ? Signal reçu sur toutes ses faces sauf l'avant (règles de
+ * RedstoneLogic : sources, poudre pointée vers lui, blocs alimentés), plus la quasi-connectivité :
+ * alimenté comme s'il occupait aussi la case du dessus.
+ */
 export function pistonPowered(w: BlockReader, x: number, y: number, z: number, facing: number): boolean {
   const [fx, fy, fz] = PISTON_DIRS[facing];
-  const { rsBlock, rsTorch } = I();
-  const around = (cx: number, cy: number, cz: number, skipX: number, skipY: number, skipZ: number) => {
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dz = -1; dz <= 1; dz++)
-        for (let dx = -1; dx <= 1; dx++) {
-          if (!dx && !dy && !dz) continue;
-          const ax = cx + dx, ay = cy + dy, az = cz + dz;
-          if (ax === skipX && ay === skipY && az === skipZ) continue;
-          if (sourceActive(w as World, ax, ay, az)) return true;
-          // bloc et torche de redstone : faces adjacentes seulement
-          if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) === 1) {
-            const id = w.getBlock(ax, ay, az);
-            if (id > 0 && (id === rsBlock || id === rsTorch)) return true;
-          }
-        }
-    return false;
-  };
-  if (around(x, y, z, x + fx, y + fy, z + fz)) return true;
-  // quasi-connectivité : alimenté comme s'il occupait aussi la case du dessus
-  return around(x, y + 1, z, x, y, z);
+  if (inputPower(w, x, y, z, dirOf(fx, fy, fz)) > 0) return true;
+  return inputPower(w, x, y + 1, z, DOWN) > 0;
 }
 
 /** Bloc cassé par un piston : objets lâchés, moitié jumelle (porte, lit, plante haute) retirée. */
@@ -309,18 +295,18 @@ function pushEntities(ctx: GameContext, entities: Entity[], cells: Vec[], dir: V
  * Branché sur WorldTicker (20 Hz).
  */
 export class PistonSystem {
-  /** Pistons à actionner : « x,y,z » → ticks restants. */
-  private pending = new Map<string, number>();
+  /** Pistons à actionner : « x,y,z » → ticks restants et état voulu (sorti ou rentré). */
+  private pending = new Map<string, { t: number; want: boolean }>();
   tick(ctx: GameContext, spawner: EntitySpawner) {
     if (!this.pending.size) return;
-    for (const [k, t] of [...this.pending]) {
-      if (t > 1) {
-        this.pending.set(k, t - 1);
+    for (const [k, p] of [...this.pending]) {
+      if (p.t > 1) {
+        p.t--;
         continue;
       }
       this.pending.delete(k);
       const [x, y, z] = k.split(',').map(Number);
-      this.actuate(ctx, spawner, x, y, z);
+      this.actuate(ctx, spawner, x, y, z, p.want);
     }
   }
 
@@ -344,18 +330,27 @@ export class PistonSystem {
       ctx.particles.blockBreak(x, y, z, id);
       return;
     }
-    if (pistonPowered(w, x, y, z, f) !== extended && !this.pending.has(`${x},${y},${z}`)) this.pending.set(`${x},${y},${z}`, PISTON_DELAY);
+    const powered = pistonPowered(w, x, y, z, f);
+    if (powered !== extended && !this.pending.has(`${x},${y},${z}`)) this.pending.set(`${x},${y},${z}`, { t: PISTON_DELAY, want: powered });
   }
 
-  private actuate(ctx: GameContext, spawner: EntitySpawner, x: number, y: number, z: number) {
+  /**
+   * Sortie / rentrée décidée à la réception du signal (comme le jeu de référence : une impulsion de
+   * 2 ticks d'un observateur fait sortir le piston, qui rentre ensuite).
+   */
+  private actuate(ctx: GameContext, spawner: EntitySpawner, x: number, y: number, z: number, want?: boolean) {
     const w = ctx.world;
     const id = w.getBlock(x, y, z);
     if (!isPistonBase(id)) return;
     const meta = w.getMeta(x, y, z);
     const f = pistonFacing(meta);
     const extended = (meta & PISTON_EXTENDED) !== 0;
-    const powered = pistonPowered(w, x, y, z, f);
+    const powered = want ?? pistonPowered(w, x, y, z, f);
     if (powered === extended) return;
+    // signal déjà retombé : l'état inverse suit après le délai
+    const after = () => {
+      if (isPistonBase(w.getBlock(x, y, z)) && pistonPowered(w, x, y, z, f) !== powered && !this.pending.has(`${x},${y},${z}`)) this.pending.set(`${x},${y},${z}`, { t: PISTON_DELAY, want: !powered });
+    };
     const entities = (spawner as EntitySpawner & { entities?: Entity[] }).entities ?? [];
     const [dx, dy, dz] = PISTON_DIRS[f];
     const pos = { x: x + 0.5, y: y + 0.5, z: z + 0.5, pitch: 0.6 + Math.random() * 0.25 };
@@ -370,5 +365,6 @@ export class PistonSystem {
       pushEntities(ctx, entities, plan.push.map((p) => add(p, plan.dir)), plan.dir);
       ctx.audio.play('piston_in', pos);
     }
+    after();
   }
 }

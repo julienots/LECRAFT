@@ -7,6 +7,7 @@ import type { EntitySpawner } from '../entities/Mob';
 import { buildTree } from './Trees';
 import { FluidSimulator } from './FluidSimulator';
 import { isPistonBase, isPistonHead, PistonSystem } from './Pistons';
+import { RedstoneEngine } from './Redstone';
 import { idx } from './ChunkData';
 import { updatedConnectionMeta } from '../addons/BlockRuntime';
 import type { TreeType } from '../data/biomes';
@@ -99,6 +100,8 @@ export class WorldTicker {
       seen.add(k);
       this.neighborUpdate(ctx, x, y, z);
     }
+    // 1b) redstone : ticks programmés et propagation
+    RedstoneEngine.for(w).tick();
     // 2) liquides
     this.fluids.tick(w);
     // 2b) décomposition des feuilles (quelques vérifications par tick)
@@ -141,6 +144,8 @@ export class WorldTicker {
       this.pistons.neighborUpdate(ctx, this.spawner, x, y, z, id);
       return;
     }
+    // (les pistons reçoivent déjà la mise à jour ci-dessus : pas de boucle moteur → piston)
+    RedstoneEngine.for(w).notify(x, y, z);
     const b = BlockRegistry.get(id);
     if (b.liquid) {
       this.fluids.schedule(x, y, z, id);

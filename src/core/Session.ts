@@ -68,7 +68,8 @@ import { enchLevel } from '../inventory/Enchantments';
 import { ScriptHost } from '../scripting/ScriptHost';
 import { DroppedItemModels } from '../render/DroppedItems';
 import { ShadowMap } from '../render/ShadowMap';
-import { updatePowerAround } from '../world/Redstone';
+import { RedstoneEngine, updatePowerAround } from '../world/Redstone';
+import { setDaylightPower } from '../world/RedstoneLogic';
 import { loadJukeboxes, playingJukeboxes, serializeJukeboxes, tickJukeboxes, type JukeboxState } from '../world/Jukebox';
 import { ServerNetwork } from '../server/ServerNetwork';
 import { TileRegistry } from '../render/TileRegistry';
@@ -337,6 +338,22 @@ export class Session implements GameContext {
     this.chestLids = new ChestLids(game.textures);
     this.falling = new FallingBlocks(game.textures);
     this.ticker.onFall = (x, y, z, id) => this.falling.spawn(this, x, y, z, id);
+    // redstone : sons, TNT, détecteurs de lumière, observateurs et chunks chargés
+    {
+      const rs = RedstoneEngine.for(this.world);
+      rs.host = {
+        sound: (n, x, y, z, pitch) => this.audio.play(n, { x, y, z, pitch }),
+        primeTnt: (x, y, z) => this.explosions.prime(this, x, y, z),
+      };
+      setDaylightPower((r, x, y, z, inverted) => {
+        const l = this.world.getLight(x, y, z).sky;
+        const day = this.dimension === 'overworld' ? this.dayCycle.daylight : 0;
+        const v = Math.max(0, Math.min(15, Math.round(l * Math.max(0, (day - 0.2) / 0.8))));
+        return inverted ? 15 - v : v;
+      });
+      this.world.events.on('blockChanged', (e) => rs.blockChanged(e));
+      this.chunks.onChunkLoaded = (c) => rs.chunkLoaded(c);
+    }
     this.dropped = new DroppedItemModels(game.textures, (id) => this.iconTexture(id));
     this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group, this.chestLids.group);
     this.controller = new PlayerController(this.player, game.input, game.settings);

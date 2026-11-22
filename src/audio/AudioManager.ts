@@ -231,7 +231,8 @@ export class AudioManager implements SoundFx {
       pan = d > 0.5 ? Math.max(-1, Math.min(1, (dx * rx + dz * rz) / d)) * 0.8 : 0;
     }
     if (vol < 0.01) return;
-    this.output(buf, vol, pan, (opts.pitch ?? 1) * (0.92 + Math.random() * 0.16));
+    // bloc musical : hauteur exacte
+    this.output(buf, vol, pan, (opts.pitch ?? 1) * (name === 'note' ? 1 : 0.92 + Math.random() * 0.16));
   }
 
   private playBuffer(buf: AudioBuffer, opts: { x?: number; y?: number; z?: number; volume?: number; pitch?: number }) {

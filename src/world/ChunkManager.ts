@@ -41,6 +41,8 @@ export class ChunkManager {
   stats = { meshMs: 0, meshCount: 0, generated: 0, loadedFromSave: 0 };
   private locateCallbacks = new Map<number, (r: { x: number; z: number; found: boolean }) => void>();
   onSpecials: (s: SpecialBlock[]) => void = () => {};
+  /** Chunk reçu du worker (composants de redstone à recalculer…). */
+  onChunkLoaded?: (c: Chunk) => void;
   onError: (msg: string) => void = (m) => console.error('[worker]', m);
   private centerCX = 0;
   private centerCZ = 0;
@@ -226,6 +228,7 @@ export class ChunkManager {
           }
         c.specialKeys = m.specials.map((s) => `${s.x},${s.y},${s.z}`);
         this.onSpecials(m.specials);
+        this.onChunkLoaded?.(c);
         break;
       }
       case 'mesh': {

@@ -178,6 +178,10 @@ export function buildJavaVisuals(model: JModel): BedrockVisual[] {
     }
     return out;
   }
+  if (model.variants && model.expand) {
+    const built = model.variants.map((v) => buildJavaVisual(v, 0));
+    return Array.from({ length: model.expand }, (_, i) => built[i % built.length]);
+  }
   if (model.variants) return model.variants.map((v) => buildJavaVisual(v, 0));
   return model.facing ? [0, 1, 2, 3].map((m) => buildJavaVisual(model, m)) : [buildJavaVisual(model, 0)];
 }

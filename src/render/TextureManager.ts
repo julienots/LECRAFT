@@ -21,7 +21,7 @@ const DEFAULT_FOLIAGE = hex('#5fa83a');
  * localement : aucun téléchargement.
  */
 /** Tuiles en niveaux de gris teintées par le biome dans le jeu vanilla. */
-const GRAY_TINTED = /^(grass_block_top|short_grass|fern|sugar_cane|tall_grass_bottom|tall_grass_top|large_fern_bottom|large_fern_top|lily_pad|(?!cherry|azalea|flowering_azalea|pale_oak)\w*_leaves)$/;
+const GRAY_TINTED = /^(redstone_dust_dot|redstone_dust_line0|redstone_dust_line1|grass_block_top|short_grass|fern|sugar_cane|tall_grass_bottom|tall_grass_top|large_fern_bottom|large_fern_top|lily_pad|(?!cherry|azalea|flowering_azalea|pale_oak)\w*_leaves)$/;
 /** Tuiles sans équivalent direct dans un pack (dessinées par le jeu). */
 const PACK_SKIP = new Set(['missing', 'altar_top', 'altar_side', 'bed_foot', 'bed_side', 'bed_head']);
 export const PACK_RENAME: Record<string, string> = {

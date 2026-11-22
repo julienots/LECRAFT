@@ -13,6 +13,7 @@ import { hex, registerPainter, paint, type Tile } from '../render/TextureGenerat
 import { MORE_BLOCKS, MORE_ITEMS, MORE_RECIPES, MORE_SMELTING } from './vanillaMore';
 import { PAPER_BLOCKS, PAPER_ITEMS, PAPER_RECIPES, PAPER_SMELTING } from './paperContent';
 import { applyPackFaces, PACK_BLOCK_DEFS, PACK_ITEM_DEFS, PACK_RECIPES } from './packContent';
+import { patchRedstoneDefs, REDSTONE_WIRE_DEF } from './redstoneDefs';
 import { DISC_ITEMS } from './discs';
 import { SMELT_XP, VANILLA_RECIPES, VANILLA_SMELTING } from './vanillaRecipes';
 import { applyJavaBlockProps } from './javaBlockProps';
@@ -748,7 +749,9 @@ for (const r of [...R, ...MORE_RECIPES]) {
 const JAVA = buildJavaContent([...BLOCK_DEFS, ...ASSEMBLED], [...CRAFTING_RECIPES, ...R, ...MORE_RECIPES, ...PACK_RECIPES, ...VANILLA_RECIPES]);
 applyJavaBlockProps(JAVA.blocks);
 for (const [t, list] of Object.entries(JAVA.tags)) (EXTRA_TAGS[t] ??= []).push(...list);
-export const EXTRA_BLOCKS: BlockDef[] = [...ASSEMBLED, ...JAVA.blocks];
+// poudre de redstone posée : tout à la fin (identifiants des mondes existants inchangés)
+export const EXTRA_BLOCKS: BlockDef[] = [...ASSEMBLED, ...JAVA.blocks, REDSTONE_WIRE_DEF];
+patchRedstoneDefs(EXTRA_BLOCKS);
 const MORE_KEYS = new Set([...I, ...MORE_ITEMS, ...PAPER_ITEMS].map((i) => i.key));
 export const EXTRA_ITEMS: ItemDef[] = [...I, ...MORE_ITEMS, ...PAPER_ITEMS, ...PACK_ITEM_DEFS.filter((i) => !MORE_KEYS.has(i.key)), ...DISC_ITEMS];
 // objets Java : à la fin, sauf la flèche à effet rangée juste après la flèche spectrale (inventaire créatif)

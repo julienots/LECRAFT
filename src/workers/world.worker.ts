@@ -107,7 +107,11 @@ function mesh(cx: number, cz: number, job: number) {
   const maxY = buildPadded((x, z) => chunks.get(chunkKey(x, z)), cx, cz, padded);
   light.compute(padded);
   computeTints(cx, cz);
-  const out = mesher.mesh({ blocks: padded, meta: center.meta, sky: light.sky, blk: light.blk, grassTint, foliageTint, maxY });
+  const metaOf = (x: number, y: number, z: number) => {
+    const c = chunks.get(chunkKey(cx + Math.floor(x / 16), cz + Math.floor(z / 16)));
+    return c ? c.meta[(x & 15) + (z & 15) * 16 + y * 256] : 0;
+  };
+  const out = mesher.mesh({ blocks: padded, meta: center.meta, sky: light.sky, blk: light.blk, grassTint, foliageTint, maxY, metaOf });
   // lumière du chunk central (nibbles ciel<<4 | bloc) pour le jeu (apparitions, éclairage des entités)
   const lightOut = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT);
   for (let y = 0; y < WORLD_HEIGHT; y++)

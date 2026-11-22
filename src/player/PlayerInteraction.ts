@@ -1,6 +1,6 @@
 import type { ItemStack } from '../inventory/Item';
 import { isRailKey } from '../world/Rails';
-import { setOpen, updatePowerAround } from '../world/Redstone';
+import { RedstoneEngine, setOpen, updatePowerAround } from '../world/Redstone';
 import { applyPotion, makePotion, potionColor, potionOf } from '../inventory/Potions';
 import { fishingLoot } from '../inventory/Loot';
 import type { Projectile } from '../entities/Projectile';
@@ -471,6 +471,7 @@ export class PlayerInteraction {
     // 2) blocs interactifs
     if (!repeat && t && !p.sneaking) {
       const b = BlockRegistry.get(t.block);
+      if (this.useRedstoneBlock(t.x, t.y, t.z, b.key)) return;
       // juke-box : insère le disque tenu (retiré de la main en survie), ou éjecte le disque au-dessus
       if (b.key === 'jukebox') {
         const r = useJukebox(ctx.world, t.x, t.y, t.z, held, false);
@@ -809,6 +810,14 @@ export class PlayerInteraction {
       const vertical = Math.abs(sp) > Math.max(Math.abs(Math.sin(p.yaw) * cp), Math.abs(Math.cos(p.yaw) * cp));
       return this.validate(mk(x, y, z, vertical ? (sp < 0 ? 4 : 5) : opposite(look)));
     }
+    // répéteur, comparateur : sortie dans le sens du regard
+    if (/^(repeater|comparator)(_on)?$/.test(b.key)) return this.validate(mk(x, y, z, look));
+    // observateur : face avant vers le joueur, aussi vers le haut ou le bas (comme le piston)
+    if (b.key === 'observer') {
+      const p = this.ctx.player, cp = Math.cos(p.pitch), sp = Math.sin(p.pitch);
+      const vertical = Math.abs(sp) > Math.max(Math.abs(Math.sin(p.yaw) * cp), Math.abs(Math.cos(p.yaw) * cp));
+      return this.validate(mk(x, y, z, vertical ? (sp < 0 ? 4 : 5) : opposite(look)));
+    }
     return this.validate(mk(x, y, z, b.orientable ? opposite(look) : b.key.endsWith('_leaves') ? 1 : 0));
   }
 
@@ -888,6 +897,40 @@ export class PlayerInteraction {
     setOpen(w, x, y, z, open);
     this.ctx.audio.play(open ? 'door_open' : 'door_close', { x: x + 0.5, y: y + 0.5, z: z + 0.5, pitch: 1.15 });
     this.entities.combat.swing = 0.7;
+  }
+
+  /**
+   * Composants réglables : répéteur (délai 1 → 4 ticks), comparateur (comparaison / soustraction),
+   * détecteur de lumière (normal / inversé), bloc musical (note suivante, jouée). Vrai si traité.
+   */
+  private useRedstoneBlock(x: number, y: number, z: number, key: string): boolean {
+    const w = this.ctx.world;
+    const m = w.getMeta(x, y, z);
+    const id = w.getBlock(x, y, z);
+    const at = { x: x + 0.5, y: y + 0.5, z: z + 0.5 };
+    const engine = RedstoneEngine.for(w);
+    if (key === 'repeater' || key === 'repeater_on') {
+      const delay = (((m >> 2) & 3) + 1) & 3;
+      w.setBlock(x, y, z, id, (m & ~12) | (delay << 2), false);
+      this.ctx.audio.play('click', { ...at, pitch: 0.55 });
+    } else if (key === 'comparator' || key === 'comparator_on') {
+      w.setBlock(x, y, z, id, m ^ 4, false);
+      this.ctx.audio.play('click', { ...at, pitch: m & 4 ? 0.5 : 0.55 });
+    } else if (key === 'daylight_detector' || key === 'daylight_detector_inverted') {
+      const other = key === 'daylight_detector' ? 'daylight_detector_inverted' : 'daylight_detector';
+      if (!BlockRegistry.has(other)) return false;
+      w.setBlock(x, y, z, BlockRegistry.byName(other).id, m, false);
+      this.ctx.audio.play('click', { ...at, pitch: 0.6 });
+    } else if (key === 'noteblock' || key === 'note_block') {
+      const note = ((m & 31) + 1) % 25;
+      w.setBlock(x, y, z, id, (m & ~31) | note, false);
+      engine.playNote(x, y, z, note);
+      this.ctx.particles.burst('magic', at.x, y + 1.2, at.z, 3);
+    } else return false;
+    engine.notifyAround(x, y, z);
+    engine.flush();
+    this.entities.combat.swing = 0.7;
+    return true;
   }
 
   /** Levier : bascule et alimente les ouvrants voisins. */

@@ -203,6 +203,8 @@ export function buildSounds(s: SynthContext): Record<string, Float32Array> {
   out.chest_close = s.mix({ buf: s.tone(0.18, 150, 100, { wave: 'saw', decay: 8, gain: 0.12, vibrato: 0.1, vibRate: 30 }) }, { buf: mat.wood(0.14, 0.8, 5), at: 0.12 });
   out.deny = s.tone(0.12, 200, 160, { wave: 'square', decay: 15, gain: 0.12 });
   out.click = s.tone(0.04, 1200, 900, { wave: 'tri', decay: 60, gain: 0.25 });
+  // bloc musical (fa dièse, hauteur réglée à la lecture)
+  out.note = s.tone(0.9, 370, 370, { wave: 'tri', decay: 5, attack: 0.004, gain: 0.32 });
   out.levelup = s.mix(...[523, 659, 784, 1046].map((f, i) => ({ buf: s.tone(0.35, f, f, { wave: 'tri', decay: 6, gain: 0.25 }), at: i * 0.09 })));
   out.achievement = s.mix(...[784, 988, 1175, 1568].map((f, i) => ({ buf: s.tone(0.6, f, f, { decay: 4, gain: 0.2 }), at: i * 0.07 })));
   out.thunder = s.mix({ buf: s.noise(3.5, { lp: 180, decay: 1.1, attack: 0.02, gain: 2.2, seed: 99 }) }, { buf: s.noise(1.2, { lp: 900, decay: 4, gain: 0.8, seed: 98 }) });

@@ -262,6 +262,9 @@ function registerExtraContent(byId: Map<number, BlockDef>) {
   for (const d of byId.values()) if (EXTRA_BLOCKS.includes(d) && !ItemRegistry.has(d.key) && BlockRegistry.has(d.key)) ItemRegistry.register({ key: d.key, name: d.name, icon: { block: d.key }, place: d.key, tab: d.render === 'cross' ? 'nature' : 'building' });
   for (const it of EXTRA_ITEMS) if (!ItemRegistry.has(it.key)) ItemRegistry.register(it);
   hideTechnicalBlocks();
+  // poudre posée : on la pose avec l'objet « redstone » (comme le jeu original)
+  const wire = ItemRegistry.get('redstone_wire');
+  if (wire) wire.hidden = true;
   for (const [t, list] of Object.entries(EXTRA_TAGS)) {
     const cur = (RecipeRegistry.tags as Record<string, string[]>)[t];
     if (cur) for (const k of list) if (!cur.includes(k) && ItemRegistry.has(k)) cur.push(k);

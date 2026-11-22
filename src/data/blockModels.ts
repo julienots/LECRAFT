@@ -35,6 +35,8 @@ export interface JModel {
   variants?: JModel[];
   /** Variantes décrites face vers le haut, tournées dans les 6 directions : méta = orientation (0..5) + 8 × variante (pistons). */
   six?: boolean;
+  /** Variantes répétées jusqu'à cette longueur (visuel n° méta & (longueur des variantes - 1)). */
+  expand?: number;
 }
 
 type Tex = string | Partial<Record<FaceName | 'side' | 'all', string>>;
@@ -263,9 +265,40 @@ def('composter_compost', composter('composter_compost', 12));
 def(['daylight_detector'], { els: [box([0, 0, 0], [16, 6, 16], { up: 'daylight_detector_top', all: 'daylight_detector_side' }, { uv: { side: [0, 10, 16, 16] } })] });
 def(['daylight_detector_inverted'], { els: [box([0, 0, 0], [16, 6, 16], { up: 'daylight_detector_inverted_top', all: 'daylight_detector_side' }, { uv: { side: [0, 10, 16, 16] } })] });
 const torchStub = (x: number, z: number, t: string) => box([x, 2, z], [x + 2, 7, z + 2], t, { uv: { side: [7, 6, 9, 11], up: [7, 6, 9, 8] }, skip: ['down'] });
+/** Quarts de tour (vue de dessus) pour une sortie 0 sud, 1 ouest, 2 nord, 3 est (modèle tourné vers le nord). */
+const DIODE_STEPS = [2, 3, 0, 1];
 for (const on of ['', '_on']) {
-  def(`repeater${on}`, { facing: true, els: [box([0, 0, 0], [16, 2, 16], { up: `repeater${on}`, all: 'smooth_stone' }, { uv: { side: [0, 14, 16, 16] } }), torchStub(7, 2, on ? 'redstone_torch' : 'redstone_torch_off'), torchStub(7, 6, on ? 'redstone_torch' : 'redstone_torch_off')] });
-  def(`comparator${on}`, { facing: true, els: [box([0, 0, 0], [16, 2, 16], { up: `comparator${on}`, all: 'smooth_stone' }, { uv: { side: [0, 14, 16, 16] } }), torchStub(4, 11, 'redstone_torch_off'), torchStub(10, 11, 'redstone_torch_off'), torchStub(7, 2, on ? 'redstone_torch' : 'redstone_torch_off')] });
+  const t = on ? 'redstone_torch' : 'redstone_torch_off';
+  // répéteur : variante = sortie (bits 0-1) + délai - 1 (bits 2-3) + verrouillé (bit 4) ; torche mobile recule avec le délai
+  const rep: JModel[] = [];
+  for (let i = 0; i < 32; i++) {
+    const delay = (i >> 2) & 3, locked = (i >> 4) & 1;
+    const z = 6 + delay * 2;
+    rep.push({
+      steps: DIODE_STEPS[i & 3],
+      els: [
+        box([0, 0, 0], [16, 2, 16], { up: `repeater${on}`, all: 'smooth_stone' }, { uv: { side: [0, 14, 16, 16] } }),
+        torchStub(7, 2, t),
+        locked ? box([2, 2, z], [14, 4, z + 2], 'bedrock', { uv: { all: [2, 7, 14, 9] } }) : torchStub(7, z, t),
+      ],
+    });
+  }
+  def(`repeater${on}`, { els: [], variants: rep, expand: 256 });
+  // comparateur : variante = sortie (bits 0-1) + soustraction (bit 2) ; torche avant allumée en soustraction
+  const cmp: JModel[] = [];
+  for (let i = 0; i < 8; i++) {
+    const sub = (i >> 2) & 1;
+    cmp.push({
+      steps: DIODE_STEPS[i & 3],
+      els: [
+        box([0, 0, 0], [16, 2, 16], { up: `comparator${on}`, all: 'smooth_stone' }, { uv: { side: [0, 14, 16, 16] } }),
+        torchStub(4, 11, t),
+        torchStub(10, 11, t),
+        box([7, 2, 2], [9, 5, 4], sub ? 'redstone_torch' : 'redstone_torch_off', { uv: { side: [7, 6, 9, 9], up: [7, 6, 9, 8] }, skip: ['down'] }),
+      ],
+    });
+  }
+  def(`comparator${on}`, { els: [], variants: cmp, expand: 256 });
 }
 def('scaffolding', {
   els: [
