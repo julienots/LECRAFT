@@ -208,7 +208,9 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
   herbes, bibliothèques, tapis, foin… valeurs officielles), TNT qui s'enflamme, **pluie** qui
   l'éteint, biomes humides qui la ralentissent, extinction sans support ou en vieillissant, feu
   **éternel** sur netherrack / magma (et bedrock dans l'End), feu des âmes sur sable / terre des âmes,
-  **lave** qui enflamme les blocs proches, règle `doFireTick` ; tests : `tests/fire.test.ts`.
+  **lave** qui enflamme les blocs proches, règle `doFireTick` ; les créatures prennent feu dans le
+  feu (8 s) et après la lave (15 s), et donnent de la **viande cuite** si elles meurent en brûlant ;
+  tests : `tests/fire.test.ts`.
 - **Distance de vue** : profils à 4 / 6 / 10 tronçons (jusqu'à 12), brouillard du jeu original
   limité à la fin de la distance (on voit beaucoup plus loin), textures avec **mipmaps** (moins de
   scintillement au loin, niveau choisi sans couture entre tuiles).

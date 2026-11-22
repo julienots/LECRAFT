@@ -14,6 +14,9 @@ import { creeperDiscDrop } from '../data/discs';
  * Application des dégâts aux créatures : faiblesses, coups critiques, invincibilité temporaire,
  * recul, réactions d'IA (fuite/colère/poursuite), mort, butin, XP, statistiques.
  */
+/** Viande crue → cuite (créatures tuées en feu). */
+const COOKED: Record<string, string> = { beef: 'cooked_beef', porkchop: 'cooked_porkchop', chicken: 'cooked_chicken', mutton: 'cooked_mutton', rabbit: 'cooked_rabbit', cod: 'cooked_cod', salmon: 'cooked_salmon' };
+
 export class DamageSystem {
   onBossDefeated: (boss: Boss) => void = () => {};
   onKill: (m: Mob) => void = () => {};
@@ -144,7 +147,9 @@ export class DamageSystem {
       for (const d of m.def.drops) {
         if (d.chance !== undefined && Math.random() > d.chance + looting * 0.01) continue;
         const n = d.min + Math.floor(Math.random() * (d.max - d.min + 1)) + (looting ? Math.floor(Math.random() * (looting + 1)) : 0);
-        if (n > 0) this.spawner.spawnItem(d.item, n, m.x, m.y + 0.5, m.z);
+        // créature morte en feu : viande cuite (comme le jeu original)
+        const cooked = (m.fireTime > 0 || src.fire) && COOKED[d.item] && ItemRegistry.has(COOKED[d.item]) ? COOKED[d.item] : d.item;
+        if (n > 0) this.spawner.spawnItem(cooked, n, m.x, m.y + 0.5, m.z);
       }
       // creeper tué par un squelette (flèche) : un disque de musique, comme le jeu original
       const killer = src.attacker as { kind?: string; def?: { key: string } } | null | undefined;

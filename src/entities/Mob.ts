@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import { B } from '../blocks/BlockRegistry';
+import { B, BlockRegistry } from '../blocks/BlockRegistry';
 import { AnimPlayer, ENTITY_ANIMS } from '../addons/BedrockAnimation';
 import { PROJECTILE_DEFS, type ProjectileDef, type Projectile } from './Projectile';
 import type { GameContext } from '../core/GameContext';
@@ -12,6 +12,8 @@ import { scanRelations } from './MobRelations';
 import { EFFECT_COLORS } from './Effects';
 import type { ProjectileKind } from './Projectile';
 import { BABY_GROW_SECONDS } from './SpawnRules';
+
+const FIRE_KEYS = /^(soul_)?fire$/;
 
 /** Services fournis par l'EntityManager aux entités. */
 export interface EntitySpawner {
@@ -32,6 +34,17 @@ export class Mob extends Entity {
   /** Secondes restantes en feu (Aura de feu, Flamme). */
   fireTime = 0;
   private fireTick = 0;
+  private fireContact = 0;
+  /** Le corps touche-t-il un bloc de feu (feu ou feu des âmes) ? */
+  private inFireBlock(ctx: GameContext): boolean {
+    const b = this.body, w = ctx.world;
+    for (let y = Math.floor(b.y); y <= Math.floor(b.y + b.height - 0.01); y++)
+      for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const id = w.getBlock(Math.floor(b.x + ox * b.halfWidth * 0.9), y, Math.floor(b.z + oz * b.halfWidth * 0.9));
+        if (id > 0 && FIRE_KEYS.test(BlockRegistry.get(id).key)) return true;
+      }
+    return false;
+  }
   deathTimer = 0;
   hurtTimer = 0;
   iframes = 0;
@@ -273,7 +286,21 @@ export class Mob extends Entity {
     }
     this.body.step(ctx.world, dt);
     // dégâts de contact (lave, cactus)
-    if (this.body.inLava && !this.has('fireImmune')) ctx.combat.damageMob(this, 4 * dt * 2, { kind: 'environment', fire: true });
+    if (this.body.inLava && !this.has('fireImmune')) {
+      ctx.combat.damageMob(this, 4 * dt * 2, { kind: 'environment', fire: true });
+      // en feu 15 s après la lave (jeu original)
+      this.fireTime = Math.max(this.fireTime, 15);
+    }
+    // dans un bloc de feu : en feu 8 s et 1 dégât par demi-seconde
+    if (!this.has('fireImmune') && !this.body.inWater && this.inFireBlock(ctx)) {
+      if (this.fireTime <= 0) this.fireTick = 0;
+      this.fireTime = Math.max(this.fireTime, 8);
+      this.fireContact -= dt;
+      if (this.fireContact <= 0) {
+        this.fireContact = 0.5;
+        ctx.combat.damageMob(this, 1, { kind: 'environment', fire: true });
+      }
+    }
     // en feu (Aura de feu, flèche enflammée) : 1 point par seconde, l'eau éteint
     if (this.fireTime > 0) {
       this.fireTime = this.body.inWater ? 0 : this.fireTime - dt;
