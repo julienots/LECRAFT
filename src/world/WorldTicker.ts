@@ -8,6 +8,7 @@ import { buildTree } from './Trees';
 import { FluidSimulator } from './FluidSimulator';
 import { isPistonBase, isPistonHead, PistonSystem } from './Pistons';
 import { RedstoneEngine } from './Redstone';
+import type { FireSystem } from './Fire';
 import { idx } from './ChunkData';
 import { updatedConnectionMeta } from '../addons/BlockRuntime';
 import type { TreeType } from '../data/biomes';
@@ -31,6 +32,8 @@ export class WorldTicker {
   readonly fluids = new FluidSimulator();
   readonly pistons = new PistonSystem();
   randomTicksPerChunk = 12;
+  /** Feu (propagation, combustion), branché par la session. */
+  fire: FireSystem | null = null;
 
   /** Feuilles à vérifier (décomposition après la coupe d'un tronc), avec délai aléatoire. */
   private decay: { x: number; y: number; z: number; t: number }[] = [];
@@ -102,6 +105,8 @@ export class WorldTicker {
     }
     // 1b) redstone : ticks programmés et propagation
     RedstoneEngine.for(w).tick();
+    // 1c) feu
+    this.fire?.tick();
     // 2) liquides
     this.fluids.tick(w);
     // 2b) décomposition des feuilles (quelques vérifications par tick)
@@ -215,6 +220,10 @@ export class WorldTicker {
     if (hooks.randomTick && BlockRegistry.get(id).def.bedrock?.custom.length) hooks.randomTick(x, y, z, id);
     const w = ctx.world;
     const rain = ctx.raining();
+    if (id === B.LAVA) {
+      this.fire?.lavaTick(x, y, z);
+      return;
+    }
     if (IS_LEAVES[id]) {
       if (Math.random() < 0.25) this.tryDecay(ctx, x, y, z);
       return;

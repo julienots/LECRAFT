@@ -39,6 +39,7 @@ export interface GameRules {
   doImmediateRespawn: boolean;
   commandBlockOutput: boolean;
   mobGriefing: boolean;
+  doFireTick: boolean;
 }
 
 export const DEFAULT_RULES: GameRules = {
@@ -53,6 +54,7 @@ export const DEFAULT_RULES: GameRules = {
   doImmediateRespawn: false,
   mobGriefing: true,
   commandBlockOutput: true,
+  doFireTick: true,
 };
 
 export type Target = { kind: 'player' } | { kind: 'entity'; e: Entity };

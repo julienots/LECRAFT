@@ -60,6 +60,7 @@ const RULE_NAMES: [keyof GameRules, string, string][] = [
   ['doMobSpawning', 'Apparition des créatures', 'Les créatures apparaissent naturellement.'],
   ['mobGriefing', 'Destruction par les créatures', 'Les créatures peuvent modifier les blocs.'],
   ['tntExplodes', 'La TNT explose', 'La TNT enflammée explose.'],
+  ['doFireTick', 'Propagation du feu', 'Le feu se propage et brûle les blocs inflammables.'],
   ['naturalRegeneration', 'Régénération naturelle', 'La santé se régénère quand la faim est pleine.'],
   ['fallDamage', 'Dégâts de chute', 'Les chutes de haut infligent des dégâts.'],
   ['doImmediateRespawn', 'Réapparition immédiate', "Pas d'écran de mort : réapparition instantanée."],

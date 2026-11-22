@@ -70,6 +70,7 @@ import { DroppedItemModels } from '../render/DroppedItems';
 import { ShadowMap } from '../render/ShadowMap';
 import { RedstoneEngine, updatePowerAround } from '../world/Redstone';
 import { setDaylightPower } from '../world/RedstoneLogic';
+import { FireSystem } from '../world/Fire';
 import { loadJukeboxes, playingJukeboxes, serializeJukeboxes, tickJukeboxes, type JukeboxState } from '../world/Jukebox';
 import { ServerNetwork } from '../server/ServerNetwork';
 import { TileRegistry } from '../render/TileRegistry';
@@ -352,7 +353,21 @@ export class Session implements GameContext {
         return inverted ? 15 - v : v;
       });
       this.world.events.on('blockChanged', (e) => rs.blockChanged(e));
-      this.chunks.onChunkLoaded = (c) => rs.chunkLoaded(c);
+      // feu : âge, propagation, combustion, pluie, lave (world/Fire.ts)
+      const fire = new FireSystem(this.world, {
+        raining: () => this.raining(),
+        difficulty: () => ({ peaceful: 0, easy: 1, normal: 2, hard: 3 } as Record<string, number>)[String(this.player.difficulty)] ?? 2,
+        primeTnt: (x, y, z) => this.explosions.prime(this, x, y, z),
+        enabled: () => this.gamerules.doFireTick !== false,
+        humid: (x, z) => /jungle|swamp|mangrove|mushroom/.test(this.world.biomeAt(x, z).key),
+        end: () => this.dimension === 'end',
+      });
+      this.ticker.fire = fire;
+      this.world.events.on('blockChanged', (e) => fire.blockChanged(e));
+      this.chunks.onChunkLoaded = (c) => {
+        rs.chunkLoaded(c);
+        fire.chunkLoaded(c);
+      };
     }
     this.dropped = new DroppedItemModels(game.textures, (id) => this.iconTexture(id));
     this.scene.add(this.chunks.group, this.entities.group, this.particles.points, this.weatherFx.mesh, this.highlight.group, this.explosions.group, this.falling.group, this.chestLids.group);
@@ -842,7 +857,6 @@ export class Session implements GameContext {
     const p = this.player;
     this.controller.update(this.world, dt);
     this.updatePortal(dt);
-    this.updateFires();
     if (this.dimension === 'end' && this.endState.dragonKilled && !this.endState.exitBuilt) this.buildExitPortal();
     // vide (l'End) : dégâts sous l'île, mort assurée bien plus bas
     if (p.y < -16 && !p.dead) {
@@ -939,19 +953,6 @@ export class Session implements GameContext {
     this.hud.setPortal(this.portalTime / (p.creative ? 1 : 4));
   }
 
-  /** Feux posés hors du Nether : s'éteignent au bout de quelques secondes (sauf sur netherrack / magma). */
-  private fires = new Map<string, number>();
-  private updateFires() {
-    if (!this.fires.size) return;
-    const now = this.elapsed;
-    const fire = BlockRegistry.has('fire') ? BlockRegistry.byName('fire').id : -1;
-    for (const [k, t] of this.fires) {
-      if (now < t) continue;
-      this.fires.delete(k);
-      const [x, y, z] = k.split(',').map(Number);
-      if (this.world.getBlock(x, y, z) === fire) this.world.setBlock(x, y, z, B.AIR);
-    }
-  }
 
   /** Arrivée par un portail : portail existant proche (registre), sinon nouveau portail. */
   private arrive(a: { x: number; y: number; z: number; kind?: Portals.PortalKind }) {
@@ -1068,11 +1069,9 @@ export class Session implements GameContext {
     if (!list.some((q) => Math.abs(q.x - pos.x) < 3 && Math.abs(q.y - pos.y) < 4 && Math.abs(q.z - pos.z) < 3)) list.push(pos);
   }
 
-  /** Feu posé (briquet) : éphémère hors netherrack. */
+  /** Feu posé (briquet) : suivi par le système de feu (world/Fire.ts) via blockChanged. */
   noteFire(x: number, y: number, z: number) {
-    const below = this.world.getBlock(x, y - 1, z);
-    const eternal = (BlockRegistry.has('netherrack') && below === BlockRegistry.byName('netherrack').id) || (BlockRegistry.has('magma') && below === BlockRegistry.byName('magma').id);
-    if (!eternal) this.fires.set(`${x},${y},${z}`, this.elapsed + 4 + Math.random() * 4);
+    this.ticker.fire?.schedule(x, y, z);
   }
 
   private selectSlot(i: number) {

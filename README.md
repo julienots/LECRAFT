@@ -202,6 +202,13 @@ Les éléments **non réalisés** sont listés honnêtement dans [Limites connue
     **détecteur de lumière** (normal / inversé), **TNT**, portes / trappes / portillons, pistons
     (une impulsion d'observateur les fait sortir puis rentrer), distributeurs, droppers, entonnoirs ;
   - état recalculé au chargement des chunks ; tests : `tests/redstone.test.ts`.
+- **Feu (v2.35)** — `src/world/Fire.ts`, règles du jeu de référence : âge 0–15, mise à jour toutes les
+  1,5–2 s, **propagation** vers les cases d'air qui touchent un bloc inflammable (jusqu'à 4 blocs
+  au-dessus), **combustion** des blocs selon leur inflammabilité (planches, bûches, feuilles, laine,
+  herbes, bibliothèques, tapis, foin… valeurs officielles), TNT qui s'enflamme, **pluie** qui
+  l'éteint, biomes humides qui la ralentissent, extinction sans support ou en vieillissant, feu
+  **éternel** sur netherrack / magma (et bedrock dans l'End), feu des âmes sur sable / terre des âmes,
+  **lave** qui enflamme les blocs proches, règle `doFireTick` ; tests : `tests/fire.test.ts`.
 - **Distance de vue** : profils à 4 / 6 / 10 tronçons (jusqu'à 12), brouillard du jeu original
   limité à la fin de la distance (on voit beaucoup plus loin), textures avec **mipmaps** (moins de
   scintillement au loin, niveau choisi sans couture entre tuiles).
@@ -1268,8 +1275,7 @@ Ces éléments ne sont **pas** réalisés (ou partiellement) — ils ne sont pas
   les créatures sont peu nombreuses (pool de modèles au lieu d'instancing).
 - **Non reproduits du jeu de référence** (volontairement ou faute de temps) : Creeper et autres créatures
   à design protégé, Nether, End, effets des enchantements (ils sont stockés sur
-  les objets pour les scripts mais n'agissent pas), alambics, villageois et commerce, feu qui se
-  propage, mode multijoueur, Realms. Le briquet n'allume que la TNT. Les blocs de fonction de la
+  les objets pour les scripts mais n'agissent pas), alambics, villageois et commerce, mode multijoueur, Realms. Les blocs de fonction de la
   palette élargie (tonneau, juke-box, métier à tisser…) sont décoratifs.
 - **Add-ons** : voir la liste des limites de l'API de script et des add-ons ci-dessus (redstone,
   chevauchement, événements d'entité, structures/biomes générés, contrôleurs de rendu, particules
