@@ -12,6 +12,9 @@ import { CHUNK_SIZE, WORLD_HEIGHT, LIGHT_PADDING } from '../core/Config';
 import { TileRegistry } from './TileRegistry';
 import { rsKind, K, wireConnections, wireColor, type RsReader } from '../world/RedstoneLogic';
 import { FACING_DIR } from '../blocks/Shapes';
+import { flammability } from '../world/Fire';
+
+const FIRE_RE = /^(soul_)?fire$/;
 
 export const FLAG_SWAY = 1;
 export const FLAG_ANIM = 4;
@@ -336,14 +339,18 @@ export class ChunkMesher {
 
   private cross(inp: MeshInput, x: number, y: number, z: number, pi: number, b: number) {
     const block = BlockRegistry.blocks[b];
+    if (FIRE_RE.test(block.key) && this.fireSides(inp, x, y, z, pi, block.faceTiles[0])) return;
     const m = inp.meta[x + z * 16 + y * 256];
     const tile = block.metaTiles ? block.metaTiles[Math.min(m, block.metaTiles.length - 1)] : block.faceTiles[0];
     const sl = inp.sky[pi] * 16, bl = inp.blk[pi] * 16;
     const tint = this.tintOf(inp, b, x, z);
     const r = (tint >> 16) & 255, g = (tint >> 8) & 255, bb = tint & 255;
-    const sway = block.sway ? FLAG_SWAY : 0;
+    // tuiles animées (feu) : même drapeau sur tous les sommets
+    const anim = TileRegistry.animFrames[tile] > 1 ? FLAG_ANIM : 0;
+    const swayOnly = block.sway ? FLAG_SWAY : 0;
+    const sway = swayOnly | anim;
     // moitié haute d'une plante haute : sa base suit le haut de la moitié basse
-    const swayLow = sway && block.def.doublePlant && m & 1 ? sway : 0;
+    const swayLow = (swayOnly && block.def.doublePlant && m & 1 ? swayOnly : 0) | anim;
     const o = 0.15, e = 0.85;
     const quads = [
       [x + o, z + o, x + e, z + e],
@@ -358,6 +365,35 @@ export class ChunkMesher {
       B.quad(a, c, d, f, false);
       B.quad(a, f, d, c, false);
     }
+  }
+
+  /**
+   * Feu sans sol plein : flammes plaquées sur les faces des blocs inflammables voisins (1,4 bloc de
+   * haut, comme le jeu de référence). Renvoie faux s'il faut dessiner le feu au sol (croix).
+   */
+  private fireSides(inp: MeshInput, x: number, y: number, z: number, pi: number, tile: number): boolean {
+    const { blocks } = inp;
+    if (y > 0 && BlockRegistry.solid[blocks[pi - AREA]]) return false;
+    const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => flammability(blocks[pi + dx + dz * W]) > 0);
+    if (!nb.length) return false;
+    const sl = inp.sky[pi] * 16, bl = inp.blk[pi] * 16;
+    const fl = TileRegistry.animFrames[tile] > 1 ? FLAG_ANIM : 0;
+    const o = this.opaque, e = 0.01, h = 1.4;
+    for (const [dx, dz] of nb) {
+      // plan contre la face du voisin, visible des deux côtés
+      let p: number[][];
+      if (dx > 0) p = [[x + 1 - e, z + 1], [x + 1 - e, z]];
+      else if (dx < 0) p = [[x + e, z], [x + e, z + 1]];
+      else if (dz > 0) p = [[x, z + 1 - e], [x + 1, z + 1 - e]];
+      else p = [[x + 1, z + e], [x, z + e]];
+      const a = o.vertex(p[0][0], y, p[0][1], 0, 0, tile, fl, sl, bl, 255, 255, 255, 230);
+      const c = o.vertex(p[1][0], y, p[1][1], 16, 0, tile, fl, sl, bl, 255, 255, 255, 230);
+      const d = o.vertex(p[1][0], y + h, p[1][1], 16, 16, tile, fl, sl, bl, 255, 255, 255, 230);
+      const f = o.vertex(p[0][0], y + h, p[0][1], 0, 16, tile, fl, sl, bl, 255, 255, 255, 230);
+      o.quad(a, c, d, f, false);
+      o.quad(a, f, d, c, false);
+    }
+    return true;
   }
 
   /** Couleur de teinte (biome ou fixe) d'un bloc dans une colonne. */
